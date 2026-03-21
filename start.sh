@@ -29,7 +29,7 @@ echo "  Syncing channel-server deps..."
 # --- 确保 WeeChat Python 能 import zenoh ---
 python3 -c "import zenoh" 2>/dev/null || {
   echo "  Installing eclipse-zenoh for system Python..."
-  pip install eclipse-zenoh --quiet
+  uv pip install --system eclipse-zenoh --quiet
 }
 
 # --- 安装 WeeChat 脚本 ---
