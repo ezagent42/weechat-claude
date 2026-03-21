@@ -366,6 +366,19 @@ def poll_queues_cb(data, remaining_calls):
             weechat.prnt(buf, f"<--\t{nick} left")
             channel_id = target.replace("channel:", "")
             _remove_nick(channel_id, nick)
+        elif msg_type == "nick":
+            try:
+                nick_info = json.loads(body)
+                old_nick = nick_info.get("old", "")
+                new_nick = nick_info.get("new", "")
+                if old_nick and new_nick and target.startswith("channel:"):
+                    channel_id = target.replace("channel:", "")
+                    _remove_nick(channel_id, old_nick)
+                    _add_nick(channel_id, new_nick)
+                    weechat.prnt(buf,
+                        f"--\t{old_nick} is now known as {new_nick}")
+            except (json.JSONDecodeError, KeyError):
+                pass
 
         # Signal 供其他脚本消费
         buffer_label = target_to_buffer_label(target, my_nick)
@@ -439,6 +452,33 @@ def zenoh_cmd_cb(data, buffer, args):
         my_nick = argv[1]
         weechat.config_set_plugin("nick", my_nick)
         weechat.prnt("", f"[zenoh] Nick changed: {old} → {my_nick}")
+
+        # Broadcast nick change to all joined channels
+        nick_body = json.dumps({"old": old, "new": my_nick})
+        for cid in channels:
+            _publish_event(f"channel:{cid}", "nick", nick_body)
+
+        # Update global liveliness token
+        if "_global" in liveliness_tokens:
+            liveliness_tokens["_global"].undeclare()
+        liveliness_tokens["_global"] = \
+            zenoh_session.liveliness().declare_token(f"wc/presence/{my_nick}")
+
+        # Update per-channel liveliness tokens
+        for cid in channels:
+            tok_key = f"channel:{cid}"
+            if tok_key in liveliness_tokens:
+                liveliness_tokens[tok_key].undeclare()
+            liveliness_tokens[tok_key] = \
+                zenoh_session.liveliness().declare_token(
+                    f"wc/channels/{cid}/presence/{my_nick}")
+
+        # Warn about open privates (pair keys contain old nick)
+        if privates:
+            weechat.prnt("",
+                f"[zenoh] Warning: {len(privates)} open private(s) still "
+                f"use pair keys with old nick '{old}'. "
+                f"Close and re-open them to update.")
 
     elif cmd == "list":
         weechat.prnt(buffer, "[zenoh] Channels:")
