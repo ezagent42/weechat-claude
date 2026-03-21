@@ -42,7 +42,7 @@
 
 | 组件 | 类型 | 用途 |
 |------|------|------|
-| **weechat-zenoh** | WeeChat Python 插件 | 基于 Zenoh 的 P2P 聊天室和私信。平等对待所有参与者，不感知 Claude 的存在。 |
+| **weechat-zenoh** | WeeChat Python 插件 | 基于 Zenoh 的 P2P channel 和 private buffer。平等对待所有参与者，不感知 Claude 的存在。 |
 | **weechat-channel-server** | Claude Code 插件 (MCP server) | 连接 Claude Code 与 Zenoh。不感知 WeeChat 的存在，只知道 Zenoh topic 和 MCP 协议。 |
 | **weechat-agent** | WeeChat Python 插件 | Agent 生命周期管理器。在 tmux pane 中启动/停止 Claude Code 实例。 |
 
@@ -86,11 +86,11 @@ cd weechat-claude
 
 | 命令 | 说明 |
 |------|------|
-| `/zenoh join #room` | 加入聊天室 |
-| `/zenoh join @nick` | 开启私信 |
-| `/zenoh leave [target]` | 离开当前或指定的聊天室/私信 |
+| `/zenoh join #channel` | 加入 channel |
+| `/zenoh join @nick` | 开启 private buffer |
+| `/zenoh leave [target]` | 离开当前或指定的 channel/private |
 | `/zenoh nick <name>` | 修改昵称 |
-| `/zenoh list` | 列出已加入的聊天室和私信 |
+| `/zenoh list` | 列出已加入的 channel 和 private |
 | `/zenoh status` | 显示 Zenoh session 状态 |
 
 **Agent 管理命令 (weechat-agent)**
@@ -101,7 +101,7 @@ cd weechat-claude
 | `/agent stop <name>` | 停止 agent（不能停止 agent0） |
 | `/agent restart <name>` | 重启 agent |
 | `/agent list` | 列出所有 agent 及其状态 |
-| `/agent join <agent> #room` | 让 agent 加入聊天室 |
+| `/agent join <agent> #channel` | 让 agent 加入 channel |
 
 ### 独立使用各组件
 
@@ -155,11 +155,11 @@ weechat
 
 ```
 wc/
-├── rooms/{room_id}/
-│   ├── messages                # 聊天室消息 (pub/sub)
+├── channels/{channel_id}/
+│   ├── messages                # Channel 消息 (pub/sub)
 │   └── presence/{nick}         # 成员在线状态 (liveliness)
-├── dm/{sorted_pair}/
-│   └── messages                # 私信消息（按字母序排列，如 alice_bob）
+├── private/{sorted_pair}/
+│   └── messages                # Private 消息（按字母序排列，如 alice_bob）
 └── presence/{nick}             # 全局在线状态 (liveliness)
 ```
 
@@ -212,7 +212,7 @@ pytest
 
 ## 路线图
 
-- **Agent 间通信** — agent 之间通过 DM topic 直接协作
+- **Agent 间通信** — agent 之间通过 private topic 直接协作
 - **zenohd + 存储后端** — 跨 session 的持久化消息历史
 - **飞书桥接** — 飞书作为 Zenoh 网络中的另一个节点
 - **Ed25519 签名** — 消息真实性验证，防止冒充

@@ -42,7 +42,7 @@ Scenario 3: Full deployment (all three components)
 
 | Component | Type | Purpose |
 |-----------|------|---------|
-| **weechat-zenoh** | WeeChat Python plugin | P2P rooms & DMs over Zenoh. Treats all participants equally — no Claude awareness. |
+| **weechat-zenoh** | WeeChat Python plugin | P2P channels & privates over Zenoh. Treats all participants equally — no Claude awareness. |
 | **weechat-channel-server** | Claude Code plugin (MCP server) | Bridges Claude Code ↔ Zenoh. No WeeChat awareness — only knows Zenoh topics & MCP. |
 | **weechat-agent** | WeeChat Python plugin | Agent lifecycle manager. Spawns/stops Claude instances in tmux panes. |
 
@@ -71,7 +71,7 @@ This will:
    - **Pane 0**: Claude Code (agent0) with the channel plugin
    - **Pane 1**: WeeChat with zenoh + agent plugins loaded
 
-Once running, DM the agent in WeeChat:
+Once running, message the agent in WeeChat:
 
 ```
 /zenoh join @agent0
@@ -86,11 +86,11 @@ hello agent0, what can you help me with?
 
 | Command | Description |
 |---------|-------------|
-| `/zenoh join #room` | Join a room |
-| `/zenoh join @nick` | Open a DM |
-| `/zenoh leave [target]` | Leave current or specified room/DM |
+| `/zenoh join #channel` | Join a channel |
+| `/zenoh join @nick` | Open a private buffer |
+| `/zenoh leave [target]` | Leave current or specified channel/private |
 | `/zenoh nick <name>` | Change nickname |
-| `/zenoh list` | List joined rooms and DMs |
+| `/zenoh list` | List joined channels and privates |
 | `/zenoh status` | Show Zenoh session status |
 
 **Agent Management (weechat-agent)**
@@ -101,11 +101,11 @@ hello agent0, what can you help me with?
 | `/agent stop <name>` | Stop an agent (cannot stop agent0) |
 | `/agent restart <name>` | Restart an agent |
 | `/agent list` | List all agents and their status |
-| `/agent join <agent> #room` | Tell an agent to join a room |
+| `/agent join <agent> #channel` | Tell an agent to join a channel |
 
 ### Using Components Independently
 
-**Person-to-person chat** (weechat-zenoh only):
+**Person-to-person chat** (weechat-zenoh only, channel buffers):
 
 ```bash
 # Terminal A
@@ -121,7 +121,7 @@ weechat
 /zenoh join #team
 ```
 
-**Single agent without agent manager** (weechat-zenoh + weechat-channel-server):
+**Single agent without agent manager** (weechat-zenoh + weechat-channel-server, private buffer):
 
 ```bash
 # Terminal A: Claude Code with channel plugin
@@ -155,11 +155,11 @@ All messages are JSON over Zenoh pub/sub:
 
 ```
 wc/
-├── rooms/{room_id}/
-│   ├── messages                # Room messages (pub/sub)
-│   └── presence/{nick}         # Room member presence (liveliness)
-├── dm/{sorted_pair}/
-│   └── messages                # DM messages (pair sorted alphabetically, e.g. alice_bob)
+├── channels/{channel_id}/
+│   ├── messages                # Channel messages (pub/sub)
+│   └── presence/{nick}         # Channel member presence (liveliness)
+├── private/{sorted_pair}/
+│   └── messages                # Private messages (pair sorted alphabetically, e.g. alice_bob)
 └── presence/{nick}             # Global online status (liveliness)
 ```
 
@@ -184,7 +184,8 @@ weechat-claude/
 │   ├── unit/                       # Fast, mocked tests
 │   └── integration/                # Real Zenoh peer tests
 └── docs/
-    └── PRD.md                      # Full design document
+    ├── PRD.md                      # Full design document
+    └── specs/                      # Implementation specs
 ```
 
 ## Testing
@@ -212,7 +213,7 @@ pytest
 
 ## Roadmap
 
-- **Agent-to-agent communication** — agents collaborate via DM topics
+- **Agent-to-agent communication** — agents collaborate via private topics
 - **zenohd + storage backend** — persistent message history across sessions
 - **Feishu bridge** — Feishu as another Zenoh node
 - **Ed25519 signing** — message authenticity verification

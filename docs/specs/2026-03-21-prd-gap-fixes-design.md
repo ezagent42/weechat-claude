@@ -2,7 +2,11 @@
 
 **Date**: 2026-03-21
 **Status**: Approved
-**Scope**: Fix all identified gaps between PRD v3.0.0 and current codebase
+**Scope**: Fix all identified gaps between PRD v3.1.0 and current codebase
+
+> **Terminology**: This document follows WeeChat naming conventions:
+> channel (not "room"), private (not "DM"), buffer (generic container).
+> Signal payload field: `"buffer"` with values like `"channel:#general"` or `"private:@alice"`.
 
 ---
 
@@ -77,45 +81,46 @@ test -d weechat-channel-server/skills && test -f weechat-channel-server/README.m
 
 ### Fix 10: Signal field alignment
 
-**Problem**: `zenoh_message_received` signal sends `{"target": ...}` but PRD §3.5 specifies `{"room": ...}`.
+**Problem**: `zenoh_message_received` signal sends `{"target": ...}` but PRD §3.5 specifies a `"buffer"` field using WeeChat buffer type conventions.
 
 **Fix**: Extract a helper function and use it in `poll_queues_cb`:
 ```python
-def _target_to_room_label(target: str) -> str:
-    """Convert internal target key to PRD-format room label.
+def _target_to_buffer_label(target: str) -> str:
+    """Convert internal target key to WeeChat-style buffer label.
 
-    'room:general' → '#general', 'dm:alice_bob' → '@alice' (other nick)
+    'channel:general' → 'channel:#general'
+    'private:alice_bob' → 'private:@alice' (the other nick)
     """
-    if target.startswith("room:"):
-        return f"#{target[5:]}"
-    # DM: extract the other nick from the pair
+    if target.startswith("channel:"):
+        return f"channel:#{target[8:]}"
+    # Private: extract the other nick from the pair
     pair = target.split(":", 1)[1]
     nicks = pair.split("_")
     other = [n for n in nicks if n != my_nick]
-    return f"@{other[0]}" if other else f"@{pair}"
+    return f"private:@{other[0]}" if other else f"private:@{pair}"
 
 # In poll_queues_cb:
-room_label = _target_to_room_label(target)
-json.dumps({"room": room_label, "nick": nick, "body": body, "type": msg_type})
+buffer_label = _target_to_buffer_label(target)
+json.dumps({"buffer": buffer_label, "nick": nick, "body": body, "type": msg_type})
 ```
 
-**Downstream impact**: Update `weechat-agent.py:on_message_signal_cb` to read `room` instead of `target`.
+**Downstream impact**: Update `weechat-agent.py:on_message_signal_cb` to read `msg.get("buffer")` instead of `msg.get("target")`.
 
-### Fix 11: DM `zenoh_message_sent` signal
+### Fix 11: Private `zenoh_message_sent` signal
 
-**Problem**: `buffer_input_cb` sends `zenoh_message_sent` signal for rooms but not DMs.
+**Problem**: `buffer_input_cb` sends `zenoh_message_sent` signal for channels but not privates.
 
-**Fix**: Add signal send in the DM branch:
+**Fix**: Add signal send in the private branch:
 ```python
-elif buf_type == "dm":
-    pair = weechat.buffer_get_string(buffer, "localvar_dm_pair")
-    _publish_event(f"dm:{pair}", "msg", input_data)
+elif buf_type == "private":
+    pair = weechat.buffer_get_string(buffer, "localvar_private_pair")
+    _publish_event(f"private:{pair}", "msg", input_data)
     weechat.prnt(buffer, f"{my_nick}\t{input_data}")
     # Add this:
     target_nick = weechat.buffer_get_string(buffer, "localvar_target")
     weechat.hook_signal_send("zenoh_message_sent",
         weechat.WEECHAT_HOOK_SIGNAL_STRING,
-        json.dumps({"room": f"@{target_nick}", "nick": my_nick, "body": input_data}))
+        json.dumps({"buffer": f"private:@{target_nick}", "nick": my_nick, "body": input_data}))
 ```
 
 ### Fix 9: `/me` action support
@@ -138,31 +143,31 @@ else:
 **Problem**: Nick change only updates local config. PRD requires broadcasting and updating liveliness tokens.
 
 **Fix** in `zenoh_cmd_cb` nick handler:
-1. Broadcast `type: "nick"` to all joined rooms:
+1. Broadcast `type: "nick"` to all joined channels:
    ```python
-   for room_id in rooms:
-       _publish_event(f"room:{room_id}", "nick", json.dumps({"old": old, "new": new_nick}))
+   for channel_id in channels:
+       _publish_event(f"channel:{channel_id}", "nick", json.dumps({"old": old, "new": new_nick}))
    ```
 2. Update global liveliness token:
    ```python
    liveliness_tokens["_global"].undeclare()
    liveliness_tokens["_global"] = zenoh_session.liveliness().declare_token(f"wc/presence/{new_nick}")
    ```
-3. Update room liveliness tokens:
+3. Update channel liveliness tokens:
    ```python
-   for room_id in rooms:
-       key = f"room:{room_id}"
+   for channel_id in channels:
+       key = f"channel:{channel_id}"
        if key in liveliness_tokens:
            liveliness_tokens[key].undeclare()
        liveliness_tokens[key] = zenoh_session.liveliness().declare_token(
-           f"wc/rooms/{room_id}/presence/{new_nick}")
+           f"wc/channels/{channel_id}/presence/{new_nick}")
    ```
 4. Handle `type: "nick"` in `poll_queues_cb` — update nicklist display.
 
-**Known limitation — DM pair staleness on nick change**: DM pairs are based on nicks (e.g., `alice_bob`). After renaming `alice` → `alice2`, the existing DM buffer still subscribes to `wc/dm/alice_bob/messages` but new messages would use `wc/dm/alice2_bob/messages`. **Existing open DM conversations will silently break.** For v0.1.0, this is documented as a known limitation:
-- Warn the user when changing nick if DMs are open
-- Print a notice: `[zenoh] Warning: open DMs may stop working after nick change. Re-open with /zenoh leave @target && /zenoh join @target`
-- Future: auto-resubscribe DM channels (close old pair, open new one, update buffer localvars)
+**Known limitation — private pair staleness on nick change**: Private pairs are based on nicks (e.g., `alice_bob`). After renaming `alice` → `alice2`, the existing private buffer still subscribes to `wc/private/alice_bob/messages` but new messages would use `wc/private/alice2_bob/messages`. **Existing open private conversations will silently break.** For v0.1.0, this is documented as a known limitation:
+- Warn the user when changing nick if privates are open
+- Print a notice: `[zenoh] Warning: open private buffers may stop working after nick change. Re-open with /zenoh leave @target && /zenoh join @target`
+- Future: auto-resubscribe private buffers (close old pair, open new one, update buffer localvars)
 
 ### Fix 6: `/zenoh status` enhancement
 
@@ -177,7 +182,7 @@ elif cmd == "status":
     peers = [str(p.zid) for p in info.peers_zid()]
     weechat.prnt(buffer,
         f"[zenoh] zid={zid[:8]}... nick={my_nick}\n"
-        f"  mode=peer  rooms={len(rooms)} dms={len(dms)}\n"
+        f"  mode=peer  channels={len(channels)} privates={len(privates)}\n"
         f"  routers={len(routers)} peers={len(peers)}\n"
         f"  session={'open' if zenoh_session else 'closed'}")
 ```
@@ -188,11 +193,11 @@ elif cmd == "status":
 
 | Test | What it verifies |
 |------|-----------------|
-| `test_signal_room_format` | Signal payload uses `{"room": "#general", ...}` format |
-| `test_signal_dm_format` | Signal payload uses `{"room": "@alice", ...}` format |
-| `test_dm_message_sent_signal` | DM input triggers `zenoh_message_sent` signal |
+| `test_signal_channel_format` | Signal payload uses `{"buffer": "channel:#general", ...}` format |
+| `test_signal_private_format` | Signal payload uses `{"buffer": "private:@alice", ...}` format |
+| `test_private_message_sent_signal` | Private input triggers `zenoh_message_sent` signal |
 | `test_me_action_type` | `/me waves` sends `type: "action"` |
-| `test_nick_broadcast_rooms` | Nick change publishes `type: "nick"` to all rooms |
+| `test_nick_broadcast_channels` | Nick change publishes `type: "nick"` to all channels |
 | `test_nick_message_body` | Nick message body contains `{"old": "x", "new": "y"}` |
 | `test_status_includes_zid` | `/zenoh status` output includes zid, peers, mode (mock `zenoh_session.info()`) |
 
@@ -205,7 +210,7 @@ These tests mock WeeChat API. Extract pure logic functions from weechat-zenoh.py
 | Test | What it verifies |
 |------|-----------------|
 | `test_nick_change_liveliness` | Old presence disappears, new one appears |
-| `test_nick_message_received` | Room subscriber gets `type: "nick"` message |
+| `test_nick_message_received` | Channel subscriber gets `type: "nick"` message |
 
 **Cannot automate** (requires WeeChat runtime):
 - `/me` rendering in buffer
@@ -266,8 +271,8 @@ Zenoh subscriber (background thread)
            # ... @mention filter, parse ...
            loop.call_soon_threadsafe(queue.put_nowait, (msg, context))
 
-       zenoh_session.declare_subscriber("wc/dm/*/messages", on_dm, background=True)
-       zenoh_session.declare_subscriber("wc/rooms/*/messages", on_room, background=True)
+       zenoh_session.declare_subscriber("wc/private/*/messages", on_dm, background=True)
+       zenoh_session.declare_subscriber("wc/channels/*/messages", on_room, background=True)
        return zenoh_session
    ```
 5. Inject messages by writing directly to the MCP stdio write stream:
@@ -324,7 +329,7 @@ Zenoh subscriber (background thread)
        f'You are "{AGENT_NAME}", a coding assistant connected to '
        f"WeeChat chat via Zenoh P2P messaging.\n"
        f"Messages arrive as <channel> events with sender and context "
-       f"(DM or #room).\n"
+       f"(private or #channel).\n"
        f"The sender reads WeeChat, not this terminal. Use the reply "
        f"tool to respond.\n"
        f"Always reply via the reply tool. Never print responses to stdout."
@@ -339,20 +344,20 @@ Zenoh subscriber (background thread)
 
 **Startup delay** (from feishu pattern): 2-second delay before connecting Zenoh subscribers to let Claude Code initialize. This is a pragmatic choice matching the reference implementation.
 
-### Fix 4: Channel-server room presence
+### Fix 4: Channel-server channel presence
 
-**Problem**: Agent doesn't declare room-level liveliness tokens.
+**Problem**: Agent doesn't declare channel-level liveliness tokens.
 
 **Fix**:
-- Maintain `joined_rooms: dict[str, LivelinessToken]` in lifespan context
-- When agent first receives an @mention from a room, auto-join:
+- Maintain `joined_channels: dict[str, LivelinessToken]` in lifespan context
+- When agent first receives an @mention from a channel, auto-join:
   ```python
-  if room not in joined_rooms:
+  if channel not in joined_channels:
       token = zenoh_session.liveliness().declare_token(
-          f"wc/rooms/{room}/presence/{AGENT_NAME}")
-      joined_rooms[room] = token
+          f"wc/channels/{channel}/presence/{AGENT_NAME}")
+      joined_channels[channel] = token
   ```
-- Add optional `join_room(room_name: str)` MCP tool for Claude to join proactively
+- Add optional `join_channel(channel_name: str)` MCP tool for Claude to join proactively
 - Clean up tokens in lifespan teardown
 
 ### Phase 3 Testing
@@ -361,8 +366,8 @@ Zenoh subscriber (background thread)
 
 | Test | What it verifies |
 |------|-----------------|
-| `test_reply_dm_topic` | reply("alice", ...) publishes to `wc/dm/{pair}/messages` |
-| `test_reply_room_topic` | reply("#general", ...) publishes to `wc/rooms/general/messages` |
+| `test_reply_private_topic` | reply("alice", ...) publishes to `wc/private/{pair}/messages` |
+| `test_reply_channel_topic` | reply("#general", ...) publishes to `wc/channels/general/messages` |
 | `test_reply_message_fields` | Published JSON has id, nick, type, body, ts |
 | `test_reply_chunking` | Long text is split into multiple publishes |
 
@@ -371,13 +376,13 @@ Zenoh subscriber (background thread)
 | Test | What it verifies |
 |------|-----------------|
 | `test_notification_format` | `inject_message()` produces correct JSONRPCNotification |
-| `test_notification_dm_chat_id` | DM context sets `meta.chat_id` = sender nick |
-| `test_notification_room_chat_id` | Room context sets `meta.chat_id` = `#room` |
+| `test_notification_private_chat_id` | Private context sets `meta.chat_id` = sender nick |
+| `test_notification_channel_chat_id` | Channel context sets `meta.chat_id` = `#channel` |
 | `test_notification_meta_fields` | All meta fields present: chat_id, message_id, user, ts |
 | `test_dedup_prevents_double_inject` | Same message_id not injected twice |
 | `test_own_message_ignored` | Messages from AGENT_NAME are dropped |
-| `test_room_mention_filter` | Only @mentioned messages forwarded from rooms |
-| `test_dm_pair_filter` | Only DMs involving AGENT_NAME processed |
+| `test_channel_mention_filter` | Only @mentioned messages forwarded from channels |
+| `test_private_pair_filter` | Only privates involving AGENT_NAME processed |
 
 For `inject_message()` unit tests: mock `write_stream.send()` and assert the notification payload structure.
 
@@ -393,10 +398,10 @@ For `inject_message()` unit tests: mock `write_stream.send()` and assert the not
 
 | Test | What it verifies |
 |------|-----------------|
-| `test_dm_roundtrip_real_zenoh` | Publish DM → agent filter accepts → can reply |
-| `test_room_mention_roundtrip` | Publish @mention → agent filter accepts → can reply |
-| `test_room_no_mention_ignored` | Publish without @mention → not forwarded |
-| `test_room_auto_join_presence` | First @mention triggers liveliness token declaration |
+| `test_private_roundtrip_real_zenoh` | Publish private → agent filter accepts → can reply |
+| `test_channel_mention_roundtrip` | Publish @mention → agent filter accepts → can reply |
+| `test_channel_no_mention_ignored` | Publish without @mention → not forwarded |
+| `test_channel_auto_join_presence` | First @mention triggers liveliness token declaration |
 
 **Cannot automate** (requires Claude Code runtime):
 - Full e2e: user sends WeeChat message → agent receives → Claude replies → WeeChat shows reply
@@ -433,7 +438,7 @@ For `inject_message()` unit tests: mock `write_stream.send()` and assert the not
    ```
 3. Update restart logic to use stored pane_id.
 
-**Downstream**: Update `on_message_signal_cb` to use `msg.get("room")` instead of `msg.get("target")` (from Fix 10).
+**Downstream**: Update `on_message_signal_cb` to use `msg.get("buffer")` instead of `msg.get("target")` (from Fix 10).
 
 ### Phase 4 Testing
 
@@ -445,7 +450,7 @@ For `inject_message()` unit tests: mock `write_stream.send()` and assert the not
 | `test_stop_agent_uses_pane_id` | tmux command includes `-t {pane_id}` |
 | `test_agent0_cannot_stop` | `stop_agent("agent0")` is no-op |
 | `test_restart_preserves_workspace` | After restart, workspace is same as before |
-| `test_signal_uses_room_field` | `on_message_signal_cb` reads `room` not `target` |
+| `test_signal_uses_buffer_field` | `on_message_signal_cb` reads `buffer` not `target` |
 
 These tests mock `subprocess.run` and `weechat` module. Extract testable logic:
 - `build_tmux_create_cmd(name, workspace, session, plugin_dir) -> list[str]`
@@ -493,7 +498,7 @@ Create `docs/manual-testing.md` covering all scenarios that cannot be automated.
 3. Verify: Bob sees nick change message, nicklist updates
 
 ### Test: /zenoh status
-1. Join a room, verify status shows zid, peer count, mode
+1. Join a channel, verify status shows zid, peer count, mode
 
 ## Phase 3: Channel Server
 ### Test: Full message bridge
@@ -503,7 +508,7 @@ Create `docs/manual-testing.md` covering all scenarios that cannot be automated.
 4. Verify: Claude Code session shows <channel> event
 5. Verify: Claude uses reply tool → message appears in WeeChat
 
-### Test: Room @mention
+### Test: Channel @mention
 1. In WeeChat: `/zenoh join #dev`
 2. Send: `@agent0 list files in src/`
 3. Verify: agent receives, replies to #dev
