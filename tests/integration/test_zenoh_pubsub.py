@@ -31,10 +31,10 @@ def zenoh_sessions():
 
 
 class TestZenohPubSub:
-    def test_room_message_roundtrip(self, zenoh_sessions):
+    def test_channel_message_roundtrip(self, zenoh_sessions):
         session_a, session_b = zenoh_sessions
         received = []
-        topic = "wc/rooms/test/messages"
+        topic = "wc/channels/test/messages"
 
         session_b.declare_subscriber(
             topic,
@@ -65,10 +65,10 @@ class TestZenohPubSub:
         assert received[0]["nick"] == "alice"
         assert received[0]["body"] == "hello from integration test"
 
-    def test_dm_message_roundtrip(self, zenoh_sessions):
+    def test_private_message_roundtrip(self, zenoh_sessions):
         session_a, session_b = zenoh_sessions
         received = []
-        topic = "wc/dm/alice_bob/messages"
+        topic = "wc/private/alice_bob/messages"
 
         session_b.declare_subscriber(
             topic,
@@ -81,7 +81,7 @@ class TestZenohPubSub:
         time.sleep(0.5)
 
         msg = {
-            "id": "dm-001",
+            "id": "private-001",
             "nick": "alice",
             "type": "msg",
             "body": "private message",

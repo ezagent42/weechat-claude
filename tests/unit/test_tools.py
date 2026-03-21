@@ -27,27 +27,27 @@ class TestReplyTool:
         return registered, mock_zenoh_session
 
     @pytest.mark.asyncio
-    async def test_reply_to_dm(self, mcp_and_session):
+    async def test_reply_to_private(self, mcp_and_session):
         tools, session = mcp_and_session
         result = await tools["reply"]("alice", "hello")
         assert "Sent" in result
         assert len(session.published) == 1
         key, payload = session.published[0]
-        assert key == "wc/dm/agent0_alice/messages"
+        assert key == "wc/private/agent0_alice/messages"
         msg = json.loads(payload)
         assert msg["nick"] == "agent0"
         assert msg["body"] == "hello"
         assert msg["type"] == "msg"
 
     @pytest.mark.asyncio
-    async def test_reply_to_room(self, mcp_and_session):
+    async def test_reply_to_channel(self, mcp_and_session):
         tools, session = mcp_and_session
-        result = await tools["reply"]("#general", "hi room")
+        result = await tools["reply"]("#general", "hi channel")
         assert "Sent" in result
         key, payload = session.published[0]
-        assert key == "wc/rooms/general/messages"
+        assert key == "wc/channels/general/messages"
         msg = json.loads(payload)
-        assert msg["body"] == "hi room"
+        assert msg["body"] == "hi channel"
 
     @pytest.mark.asyncio
     async def test_reply_message_format(self, mcp_and_session):

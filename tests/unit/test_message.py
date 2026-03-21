@@ -4,9 +4,9 @@ from message import (
     MessageDedup,
     detect_mention,
     clean_mention,
-    make_dm_pair,
-    dm_topic,
-    room_topic,
+    make_private_pair,
+    private_topic,
+    channel_topic,
     presence_topic,
     chunk_message,
 )
@@ -75,26 +75,26 @@ class TestCleanMention:
         assert clean_mention("hello world", "agent0") == "hello world"
 
 
-class TestMakeDmPair:
+class TestMakePrivatePair:
     def test_alphabetical_order(self):
-        assert make_dm_pair("bob", "alice") == "alice_bob"
+        assert make_private_pair("bob", "alice") == "alice_bob"
 
     def test_same_order(self):
-        assert make_dm_pair("alice", "bob") == "alice_bob"
+        assert make_private_pair("alice", "bob") == "alice_bob"
 
     def test_same_nick(self):
-        assert make_dm_pair("alice", "alice") == "alice_alice"
+        assert make_private_pair("alice", "alice") == "alice_alice"
 
     def test_agent_pair(self):
-        assert make_dm_pair("agent0", "alice") == "agent0_alice"
+        assert make_private_pair("agent0", "alice") == "agent0_alice"
 
 
 class TestTopicHelpers:
-    def test_dm_topic(self):
-        assert dm_topic("alice_bob") == "wc/dm/alice_bob/messages"
+    def test_private_topic(self):
+        assert private_topic("alice_bob") == "wc/private/alice_bob/messages"
 
-    def test_room_topic(self):
-        assert room_topic("general") == "wc/rooms/general/messages"
+    def test_channel_topic(self):
+        assert channel_topic("general") == "wc/channels/general/messages"
 
     def test_presence_topic(self):
         assert presence_topic("agent0") == "wc/presence/agent0"

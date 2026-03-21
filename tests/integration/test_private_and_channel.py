@@ -1,10 +1,10 @@
-"""Integration test: DM routing and room @mention filtering."""
+"""Integration test: Private routing and channel @mention filtering."""
 
 import json
 import time
 import pytest
 
-from message import detect_mention, clean_mention, make_dm_pair
+from message import detect_mention, clean_mention, make_private_pair
 
 pytestmark = pytest.mark.integration
 
@@ -20,11 +20,11 @@ def zenoh_session():
     session.close()
 
 
-class TestDmRouting:
-    def test_agent0_receives_own_dm(self, zenoh_session):
-        """Messages to agent0's DM pair are received."""
-        pair = make_dm_pair("agent0", "alice")
-        topic = f"wc/dm/{pair}/messages"
+class TestPrivateRouting:
+    def test_agent0_receives_own_private(self, zenoh_session):
+        """Messages to agent0's private pair are received."""
+        pair = make_private_pair("agent0", "alice")
+        topic = f"wc/private/{pair}/messages"
         received = []
 
         zenoh_session.declare_subscriber(
@@ -45,10 +45,10 @@ class TestDmRouting:
 
         assert len(received) == 1
 
-    def test_agent1_does_not_receive_agent0_dm(self, zenoh_session):
-        """agent1 should not receive DMs addressed to agent0."""
-        agent0_pair = make_dm_pair("agent0", "alice")
-        agent0_topic = f"wc/dm/{agent0_pair}/messages"
+    def test_agent1_does_not_receive_agent0_private(self, zenoh_session):
+        """agent1 should not receive privates addressed to agent0."""
+        agent0_pair = make_private_pair("agent0", "alice")
+        agent0_topic = f"wc/private/{agent0_pair}/messages"
 
         agent1_received = []
 
@@ -59,7 +59,7 @@ class TestDmRouting:
                 agent1_received.append(True)
 
         zenoh_session.declare_subscriber(
-            "wc/dm/*/messages", agent1_filter, background=True
+            "wc/private/*/messages", agent1_filter, background=True
         )
         time.sleep(0.5)
 
@@ -72,16 +72,16 @@ class TestDmRouting:
         assert len(agent1_received) == 0
 
 
-class TestRoomMentionFiltering:
+class TestChannelMentionFiltering:
     def test_mention_triggers_forwarding(self):
-        """Room message with @agent0 should be forwarded."""
+        """Channel message with @agent0 should be forwarded."""
         body = "@agent0 list files"
         assert detect_mention(body, "agent0") is True
         cleaned = clean_mention(body, "agent0")
         assert cleaned == "list files"
 
     def test_no_mention_not_forwarded(self):
-        """Room message without @mention should not be forwarded."""
+        """Channel message without @mention should not be forwarded."""
         body = "hello everyone, nice day"
         assert detect_mention(body, "agent0") is False
 
@@ -90,13 +90,13 @@ class TestRoomMentionFiltering:
         body = "@agent1 do something"
         assert detect_mention(body, "agent0") is False
 
-    def test_mention_in_room_roundtrip(self, zenoh_session):
-        """End-to-end: room message with @mention is received and cleaned."""
-        topic = "wc/rooms/general/messages"
+    def test_mention_in_channel_roundtrip(self, zenoh_session):
+        """End-to-end: channel message with @mention is received and cleaned."""
+        topic = "wc/channels/general/messages"
         agent_name = "agent0"
         forwarded = []
 
-        def room_handler(sample):
+        def channel_handler(sample):
             msg = json.loads(sample.payload.to_string())
             if msg.get("nick") == agent_name:
                 return
@@ -106,7 +106,7 @@ class TestRoomMentionFiltering:
                 forwarded.append(msg)
 
         zenoh_session.declare_subscriber(
-            topic, room_handler, background=True
+            topic, channel_handler, background=True
         )
         time.sleep(0.5)
 

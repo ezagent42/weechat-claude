@@ -17,11 +17,11 @@ def register_tools(mcp, zenoh_session):
 
     @mcp.tool()
     async def reply(chat_id: str, text: str) -> str:
-        """Reply to a WeeChat user or room.
+        """Reply to a WeeChat user or channel.
 
         Args:
-            chat_id: Target — a username for DM (e.g. "alice")
-                     or a #room name (e.g. "#general")
+            chat_id: Target — a username for private (e.g. "alice")
+                     or a #channel name (e.g. "#general")
             text: Message content
         """
         chunks = chunk_message(text)
@@ -36,10 +36,10 @@ def register_tools(mcp, zenoh_session):
             })
 
             if chat_id.startswith("#"):
-                room = chat_id.lstrip("#")
-                zenoh_session.put(f"wc/rooms/{room}/messages", msg)
+                channel = chat_id.lstrip("#")
+                zenoh_session.put(f"wc/channels/{channel}/messages", msg)
             else:
                 pair = "_".join(sorted([AGENT_NAME, chat_id]))
-                zenoh_session.put(f"wc/dm/{pair}/messages", msg)
+                zenoh_session.put(f"wc/private/{pair}/messages", msg)
 
         return f"Sent to {chat_id}"
