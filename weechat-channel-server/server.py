@@ -1,110 +1,102 @@
 #!/usr/bin/env python3
 """
 weechat-channel-server: Claude Code Channel MCP Server
-桥接 Zenoh 消息总线 ↔ Claude Code MCP stdio 协议
-
-This is a Claude Code plugin that runs as an MCP server (stdio transport).
-It receives messages from Zenoh and injects them into Claude Code as
-channel notifications, and provides a reply tool for Claude to respond.
+Bridges Zenoh P2P messaging <-> Claude Code via MCP stdio protocol.
 """
-
+import asyncio
 import json
-import sys
 import os
+import sys
+import time
+from datetime import datetime, timezone
+
+import anyio
+import zenoh
+import mcp.server.stdio
+from mcp.server.lowlevel import Server, NotificationOptions
+from mcp.server.models import InitializationOptions
+from mcp.shared.message import SessionMessage
+from mcp.types import JSONRPCMessage, JSONRPCNotification, Tool, TextContent
+from mcp import types
+
+from message import (
+    MessageDedup, detect_mention, clean_mention,
+    make_private_pair, chunk_message,
+)
 
 AGENT_NAME = os.environ.get("AGENT_NAME", "agent0")
 
+# ============================================================
+# MCP Notification Injection
+# ============================================================
 
-def main():
-    import zenoh
-    from mcp.server.fastmcp import FastMCP
+async def inject_message(write_stream, msg: dict, context: str):
+    """Send a channel notification to Claude Code via the MCP write stream."""
+    ts = msg.get("ts", 0)
+    iso_ts = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else datetime.now(tz=timezone.utc).isoformat()
+    notification = JSONRPCNotification(
+        jsonrpc="2.0",
+        method="notifications/claude/channel",
+        params={
+            "content": msg.get("body", ""),
+            "meta": {
+                "chat_id": context,
+                "message_id": msg.get("id", ""),
+                "user": msg.get("nick", "unknown"),
+                "ts": iso_ts,
+            },
+        },
+    )
+    await write_stream.send(SessionMessage(message=JSONRPCMessage(notification)))
 
-    from message import MessageDedup, detect_mention, clean_mention, make_dm_pair
-    from tools import register_tools
 
-    # ============================================================
-    # Zenoh 初始化
-    # ============================================================
+async def poll_zenoh_queue(queue: asyncio.Queue, write_stream):
+    """Consume Zenoh messages from the queue and inject into Claude Code."""
+    while True:
+        msg, context = await queue.get()
+        try:
+            await inject_message(write_stream, msg, context)
+        except Exception as e:
+            print(f"[channel-server] inject error: {e}", file=sys.stderr)
 
+# ============================================================
+# Zenoh Setup
+# ============================================================
+
+def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
+    """Initialize Zenoh session and subscribe to messages."""
     zenoh_config = zenoh.Config()
     zenoh_config.insert_json5("mode", '"peer"')
-
     connect = os.environ.get("ZENOH_CONNECT")
     if connect:
-        zenoh_config.insert_json5("connect/endpoints",
-                                  json.dumps(connect.split(",")))
-
+        zenoh_config.insert_json5("connect/endpoints", json.dumps(connect.split(",")))
     zenoh_session = zenoh.open(zenoh_config)
-
-    # 在线状态
     zenoh_session.liveliness().declare_token(f"wc/presence/{AGENT_NAME}")
-
-    # Message deduplication
     dedup = MessageDedup()
+    joined_channels: dict[str, object] = {}
 
-    # ============================================================
-    # MCP Server
-    # ============================================================
-
-    mcp = FastMCP(
-        name=f"weechat-channel-{AGENT_NAME}",
-        instructions=(
-            f'You are "{AGENT_NAME}", a coding assistant connected to a '
-            f"WeeChat chat system via Zenoh P2P messaging.\n"
-            f"Messages arrive as <channel> events. Each event has a sender "
-            f"and a context (DM or #room).\n"
-            f"The sender reads WeeChat, not this session. Anything you want "
-            f"them to see must go through the reply tool.\n"
-            f"Always use the reply tool to respond."
-        ),
-    )
-
-    # Register tools
-    register_tools(mcp, zenoh_session)
-
-    # ============================================================
-    # Zenoh → Claude Code 桥接
-    # ============================================================
-
-    def _inject_to_claude(msg: dict, context: str):
-        """Inject a message as a channel notification into Claude Code.
-
-        Uses MCP server notification mechanism to deliver messages
-        as <channel> events that Claude Code processes.
-        """
-        sender = msg.get("nick", "unknown")
-        body = msg.get("body", "")
-        msg_id = msg.get("id", "")
-
-        # Deduplication
-        if msg_id and dedup.is_duplicate(msg_id):
-            return
-
-        print(
-            f"[channel-server] [{context}] {sender}: {body}",
-            file=sys.stderr,
-        )
-
-        # Send as MCP notification
-        # The FastMCP server's internal session handles this
-        # TODO: Validate the exact notification method once
-        # Claude Code's channel API is finalized.
-        # For now, we use the pattern from feishu-claude-code-channel:
-        # server.send_notification() with channel event payload
-
-    def on_dm_message(sample):
-        """DM 消息到达 → 注入 Claude Code session"""
+    def on_private(sample):
         try:
+            key = str(sample.key_expr)
+            parts = key.split("/")
+            if len(parts) < 3:
+                return
+            pair = parts[2]
+            if AGENT_NAME not in pair.split("_"):
+                return
             msg = json.loads(sample.payload.to_string())
             if msg.get("nick") == AGENT_NAME:
                 return
+            msg_id = msg.get("id", "")
+            if msg_id and dedup.is_duplicate(msg_id):
+                return
             sender = msg.get("nick", "unknown")
-            _inject_to_claude(msg, f"DM from {sender}")
+            print(f"[channel-server] [private:{sender}] {sender}: {msg.get('body', '')}", file=sys.stderr)
+            loop.call_soon_threadsafe(queue.put_nowait, (msg, sender))
         except Exception as e:
-            print(f"[channel-server] DM error: {e}", file=sys.stderr)
+            print(f"[channel-server] private error: {e}", file=sys.stderr)
 
-    def on_room_message(sample):
-        """Room 消息到达 → 检查 @mention → 注入 Claude Code"""
+    def on_channel(sample):
         try:
             msg = json.loads(sample.payload.to_string())
             if msg.get("nick") == AGENT_NAME:
@@ -112,51 +104,120 @@ def main():
             body = msg.get("body", "")
             if not detect_mention(body, AGENT_NAME):
                 return
-            # Clean the @mention from body
+            msg_id = msg.get("id", "")
+            if msg_id and dedup.is_duplicate(msg_id):
+                return
             msg["body"] = clean_mention(body, AGENT_NAME)
-            room = str(sample.key_expr).split("/")[2]
-            _inject_to_claude(msg, f"#{room}")
+            channel = str(sample.key_expr).split("/")[2]
+            print(f"[channel-server] [#{channel}] {msg.get('nick', '?')}: {body}", file=sys.stderr)
+            if channel not in joined_channels:
+                token = zenoh_session.liveliness().declare_token(f"wc/channels/{channel}/presence/{AGENT_NAME}")
+                joined_channels[channel] = token
+            loop.call_soon_threadsafe(queue.put_nowait, (msg, f"#{channel}"))
         except Exception as e:
-            print(f"[channel-server] Room error: {e}", file=sys.stderr)
+            print(f"[channel-server] channel error: {e}", file=sys.stderr)
 
-    # Subscribe to DMs containing this agent's name
-    def _filter_dm(sample):
-        """Only process DM pairs that include this agent."""
-        key = str(sample.key_expr)
-        # key format: wc/dm/{pair}/messages
-        parts = key.split("/")
-        if len(parts) >= 3:
-            pair = parts[2]
-            if AGENT_NAME in pair.split("_"):
-                on_dm_message(sample)
+    zenoh_session.declare_subscriber("wc/private/*/messages", on_private, background=True)
+    zenoh_session.declare_subscriber("wc/channels/*/messages", on_channel, background=True)
+    return zenoh_session, joined_channels
 
-    zenoh_session.declare_subscriber(
-        "wc/dm/*/messages",
-        _filter_dm,
-        background=True,
+# ============================================================
+# MCP Server + Tools
+# ============================================================
+
+def create_server():
+    server = Server("weechat-channel")
+    return server
+
+def register_tools(server: Server, zenoh_session):
+    @server.list_tools()
+    async def handle_list_tools() -> list[Tool]:
+        return [
+            Tool(
+                name="reply",
+                description="Reply to a WeeChat user or channel. chat_id is a username for private (e.g. 'alice') or #channel name (e.g. '#general').",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "chat_id": {"type": "string", "description": "Target: username for private or #channel"},
+                        "text": {"type": "string", "description": "Message content"},
+                    },
+                    "required": ["chat_id", "text"],
+                },
+            ),
+            Tool(
+                name="join_channel",
+                description="Join a WeeChat channel to receive @mentions.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "channel_name": {"type": "string", "description": "Channel name without # prefix"},
+                    },
+                    "required": ["channel_name"],
+                },
+            ),
+        ]
+
+    @server.call_tool()
+    async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
+        if name == "reply":
+            return await _handle_reply(zenoh_session, arguments)
+        elif name == "join_channel":
+            return await _handle_join_channel(zenoh_session, arguments)
+        raise ValueError(f"Unknown tool: {name}")
+
+async def _handle_reply(zenoh_session, arguments: dict) -> list[TextContent]:
+    chat_id = arguments["chat_id"]
+    text = arguments["text"]
+    chunks = chunk_message(text)
+    for chunk in chunks:
+        msg = json.dumps({
+            "id": os.urandom(8).hex(),
+            "nick": AGENT_NAME,
+            "type": "msg",
+            "body": chunk,
+            "ts": time.time(),
+        })
+        if chat_id.startswith("#"):
+            channel = chat_id.lstrip("#")
+            zenoh_session.put(f"wc/channels/{channel}/messages", msg)
+        else:
+            pair = make_private_pair(AGENT_NAME, chat_id)
+            zenoh_session.put(f"wc/private/{pair}/messages", msg)
+    return [TextContent(type="text", text=f"Sent to {chat_id}")]
+
+async def _handle_join_channel(zenoh_session, arguments: dict) -> list[TextContent]:
+    channel = arguments["channel_name"]
+    zenoh_session.liveliness().declare_token(f"wc/channels/{channel}/presence/{AGENT_NAME}")
+    return [TextContent(type="text", text=f"Joined #{channel}")]
+
+# ============================================================
+# Main
+# ============================================================
+
+async def main():
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+    server = create_server()
+    init_opts = InitializationOptions(
+        server_name=f"weechat-channel-{AGENT_NAME}",
+        server_version="0.1.0",
+        capabilities=server.get_capabilities(
+            notification_options=NotificationOptions(),
+            experimental_capabilities={"claude/channel": {}},
+        ),
     )
-
-    # Subscribe to all rooms (filter by @mention in handler)
-    zenoh_session.declare_subscriber(
-        "wc/rooms/*/messages",
-        on_room_message,
-        background=True,
-    )
-
-    # Publish ready status
-    zenoh_session.put(
-        f"wc/presence/{AGENT_NAME}",
-        json.dumps({"status": "ready"}),
-    )
-
-    print(f"[channel-server] {AGENT_NAME} ready on Zenoh", file=sys.stderr)
-
-    # ============================================================
-    # 启动 MCP server (stdio)
-    # ============================================================
-
-    mcp.run(transport="stdio")
-
+    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        await anyio.sleep(2)
+        zenoh_session, joined_channels = setup_zenoh(queue, loop)
+        register_tools(server, zenoh_session)
+        print(f"[channel-server] {AGENT_NAME} ready on Zenoh", file=sys.stderr)
+        try:
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(server.run, read_stream, write_stream, init_opts)
+                tg.start_soon(poll_zenoh_queue, queue, write_stream)
+        finally:
+            zenoh_session.close()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
