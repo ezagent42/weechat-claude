@@ -1,0 +1,119 @@
+"""Integration test: Zenoh pub/sub round-trip.
+
+Requires a real Zenoh session (peer mode, localhost).
+"""
+
+import json
+import time
+import threading
+import pytest
+
+pytestmark = pytest.mark.integration
+
+
+@pytest.fixture
+def zenoh_sessions():
+    """Create two Zenoh peer sessions for testing."""
+    import zenoh
+
+    config_a = zenoh.Config()
+    config_a.insert_json5("mode", '"peer"')
+    session_a = zenoh.open(config_a)
+
+    config_b = zenoh.Config()
+    config_b.insert_json5("mode", '"peer"')
+    session_b = zenoh.open(config_b)
+
+    yield session_a, session_b
+
+    session_a.close()
+    session_b.close()
+
+
+class TestZenohPubSub:
+    def test_room_message_roundtrip(self, zenoh_sessions):
+        session_a, session_b = zenoh_sessions
+        received = []
+        topic = "wc/rooms/test/messages"
+
+        session_b.declare_subscriber(
+            topic,
+            lambda sample: received.append(
+                json.loads(sample.payload.to_string())
+            ),
+            background=True,
+        )
+
+        # Allow subscriber to settle
+        time.sleep(0.5)
+
+        msg = {
+            "id": "test-001",
+            "nick": "alice",
+            "type": "msg",
+            "body": "hello from integration test",
+            "ts": time.time(),
+        }
+        session_a.put(topic, json.dumps(msg))
+
+        # Wait for message delivery
+        deadline = time.time() + 2.0
+        while not received and time.time() < deadline:
+            time.sleep(0.1)
+
+        assert len(received) == 1
+        assert received[0]["nick"] == "alice"
+        assert received[0]["body"] == "hello from integration test"
+
+    def test_dm_message_roundtrip(self, zenoh_sessions):
+        session_a, session_b = zenoh_sessions
+        received = []
+        topic = "wc/dm/alice_bob/messages"
+
+        session_b.declare_subscriber(
+            topic,
+            lambda sample: received.append(
+                json.loads(sample.payload.to_string())
+            ),
+            background=True,
+        )
+
+        time.sleep(0.5)
+
+        msg = {
+            "id": "dm-001",
+            "nick": "alice",
+            "type": "msg",
+            "body": "private message",
+            "ts": time.time(),
+        }
+        session_a.put(topic, json.dumps(msg))
+
+        deadline = time.time() + 2.0
+        while not received and time.time() < deadline:
+            time.sleep(0.1)
+
+        assert len(received) == 1
+        assert received[0]["body"] == "private message"
+
+    def test_liveliness_token(self, zenoh_sessions):
+        session_a, session_b = zenoh_sessions
+        events = []
+
+        session_b.liveliness().declare_subscriber(
+            "wc/presence/*",
+            lambda sample: events.append(str(sample.key_expr)),
+            background=True,
+        )
+
+        time.sleep(0.5)
+
+        token = session_a.liveliness().declare_token("wc/presence/test-user")
+        time.sleep(0.5)
+
+        # Query liveliness
+        replies = list(session_b.liveliness().get("wc/presence/*"))
+        nicks = [str(r.ok.key_expr).rsplit("/", 1)[-1] for r in replies]
+        assert "test-user" in nicks
+
+        token.undeclare()
