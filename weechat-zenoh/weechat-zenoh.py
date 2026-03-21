@@ -494,9 +494,21 @@ def zenoh_cmd_cb(data, buffer, args):
         send_message(target, body)
 
     elif cmd == "status":
-        weechat.prnt(buffer,
-            f"[zenoh] nick={my_nick} channels={len(channels)} "
-            f"privates={len(privates)} session={'open' if zenoh_session else 'closed'}")
+        try:
+            info = zenoh_session.info()
+            zid = str(info.zid())
+            routers = list(info.routers_zid())
+            peers = list(info.peers_zid())
+            weechat.prnt(buffer,
+                f"[zenoh] zid={zid[:8]}... nick={my_nick}\n"
+                f"  mode=peer  channels={len(channels)} privates={len(privates)}\n"
+                f"  routers={len(routers)} peers={len(peers)}\n"
+                f"  session={'open' if zenoh_session else 'closed'}")
+        except Exception as e:
+            weechat.prnt(buffer,
+                f"[zenoh] nick={my_nick} channels={len(channels)} "
+                f"privates={len(privates)} session={'open' if zenoh_session else 'closed'}\n"
+                f"  (info unavailable: {e})")
 
     else:
         weechat.prnt(buffer,
