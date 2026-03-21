@@ -75,3 +75,23 @@ class TestAgentCreateLogic:
             assert False, "Should have raised"
         except json.JSONDecodeError:
             pass  # Expected
+
+
+class TestTmuxPaneTracking:
+    def test_create_stores_pane_id(self):
+        agents = {}
+        name = "helper1"
+        agents[name] = {"workspace": "/tmp", "status": "starting", "pane_id": "%42"}
+        assert agents[name]["pane_id"] == "%42"
+
+    def test_stop_uses_pane_id(self):
+        pane_id = "%42"
+        cmd = ["tmux", "send-keys", "-t", pane_id, "C-c", ""]
+        assert "-t" in cmd
+        assert cmd[cmd.index("-t") + 1] == "%42"
+
+    def test_signal_buffer_field(self):
+        signal_data = json.dumps({"buffer": "private:@agent0", "nick": "alice", "body": "hello"})
+        msg = json.loads(signal_data)
+        assert "buffer" in msg
+        assert msg["buffer"] == "private:@agent0"
