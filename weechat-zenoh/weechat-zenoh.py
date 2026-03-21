@@ -12,6 +12,7 @@ import time
 import uuid
 import os
 from collections import deque
+from helpers import target_to_buffer_label, parse_input
 
 SCRIPT_NAME = "weechat-zenoh"
 SCRIPT_AUTHOR = "Allen <ezagent42>"
@@ -270,19 +271,27 @@ def send_message(target, body):
 def buffer_input_cb(data, buffer, input_data):
     buf_type = weechat.buffer_get_string(buffer, "localvar_type")
     target = weechat.buffer_get_string(buffer, "localvar_target")
+    msg_type, body = parse_input(input_data)
 
     if buf_type == "channel":
-        _publish_event(f"channel:{target}", "msg", input_data)
-        weechat.prnt(buffer, f"{my_nick}\t{input_data}")
-        weechat.hook_signal_send("zenoh_message_sent",
-            weechat.WEECHAT_HOOK_SIGNAL_STRING,
-            json.dumps({"channel": f"#{target}", "nick": my_nick,
-                        "body": input_data}))
+        pub_key = f"channel:{target}"
+        buffer_label = f"channel:#{target}"
     elif buf_type == "private":
         pair = weechat.buffer_get_string(buffer, "localvar_private_pair")
-        _publish_event(f"private:{pair}", "msg", input_data)
-        weechat.prnt(buffer, f"{my_nick}\t{input_data}")
+        pub_key = f"private:{pair}"
+        buffer_label = f"private:@{target}"
+    else:
+        return weechat.WEECHAT_RC_OK
 
+    _publish_event(pub_key, msg_type, body)
+    if msg_type == "action":
+        weechat.prnt(buffer, f" *\t{my_nick} {body}")
+    else:
+        weechat.prnt(buffer, f"{my_nick}\t{body}")
+    weechat.hook_signal_send("zenoh_message_sent",
+        weechat.WEECHAT_HOOK_SIGNAL_STRING,
+        json.dumps({"buffer": buffer_label, "nick": my_nick,
+                    "body": body, "type": msg_type}))
     return weechat.WEECHAT_RC_OK
 
 
@@ -359,9 +368,10 @@ def poll_queues_cb(data, remaining_calls):
             _remove_nick(channel_id, nick)
 
         # Signal 供其他脚本消费
+        buffer_label = target_to_buffer_label(target, my_nick)
         weechat.hook_signal_send("zenoh_message_received",
             weechat.WEECHAT_HOOK_SIGNAL_STRING,
-            json.dumps({"target": target, "nick": nick,
+            json.dumps({"buffer": buffer_label, "nick": nick,
                         "body": body, "type": msg_type}))
 
     # Presence
