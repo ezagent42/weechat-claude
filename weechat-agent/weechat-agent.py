@@ -206,35 +206,51 @@ def stop_agent(name):
 
     pane_id = agents[name].get("pane_id")
     if pane_id:
-        # Send /exit directly to claude's tmux pane.
-        # Zenoh messaging is unreliable for shutdown (agent may not be
-        # online, may not have joined any channel, or claude won't
-        # auto-execute /exit from a chat message).
+        # Send /exit to claude's tmux pane (non-blocking)
         subprocess.run(
             ["tmux", "send-keys", "-t", pane_id, "/exit", "Enter"],
             capture_output=True
         )
-        # Wait for claude to exit (pane returns to shell or closes)
-        for _ in range(15):
-            time.sleep(1)
-            result = subprocess.run(
-                ["tmux", "display-message", "-t", pane_id,
-                 "-p", "#{pane_current_command}"],
-                capture_output=True, text=True
-            )
-            if result.returncode != 0:
-                break  # pane already gone
-            cmd = result.stdout.strip()
-            if cmd in ("zsh", "bash", "sh"):
-                break  # claude exited, shell returned
-        # Kill the pane
+        # Poll for exit asynchronously via hook_timer (don't block WeeChat)
+        weechat.hook_timer(1000, 0, 15, "_stop_poll_cb",
+                          json.dumps({"name": name, "pane_id": pane_id}))
+        weechat.prnt("", f"[agent] Stopping {name}...")
+    else:
+        _finalize_stop(name, "")
+
+
+def _stop_poll_cb(data, remaining_calls):
+    """Non-blocking timer callback to poll agent pane exit."""
+    info = json.loads(data)
+    name = info["name"]
+    pane_id = info["pane_id"]
+
+    result = subprocess.run(
+        ["tmux", "display-message", "-t", pane_id,
+         "-p", "#{pane_current_command}"],
+        capture_output=True, text=True
+    )
+    pane_gone = result.returncode != 0
+    cmd = result.stdout.strip()
+    shell_returned = cmd in ("zsh", "bash", "sh")
+
+    if pane_gone or shell_returned or int(remaining_calls) == 0:
+        _finalize_stop(name, pane_id)
+        return weechat.WEECHAT_RC_OK
+
+    return weechat.WEECHAT_RC_OK
+
+
+def _finalize_stop(name, pane_id):
+    """Clean up after agent stop."""
+    if pane_id:
         subprocess.run(
             ["tmux", "kill-pane", "-t", pane_id],
             capture_output=True
         )
-
     _cleanup_mcp_config(name)
-    agents[name]["status"] = "stopped"
+    if name in agents:
+        agents[name]["status"] = "stopped"
     weechat.prnt("", f"[agent] Stopped {name}")
 
 
