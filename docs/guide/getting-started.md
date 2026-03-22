@@ -6,7 +6,7 @@
 
 在 Discord 或微信中，你的消息经过一台中央服务器：消息从你的设备发到云端，再分发给其他人。服务器负责存储历史、管理在线状态、推送通知。
 
-WeeChat-Claude 不一样——它没有中央服务器。消息通过 Zenoh P2P 协议在你的本机或局域网内直接传输。这意味着：
+WeeChat-Claude 不一样——它使用本地的 zenohd 路由来转发消息。同一台机器上的所有 Zenoh 客户端通过 zenohd 通信，不经过任何外部服务器。这意味着：
 
 - **数据不出本机/内网** — 所有消息都在你控制的范围内
 - **不依赖外部平台** — 不需要注册 Discord 或 Telegram 账号
@@ -16,7 +16,7 @@ WeeChat-Claude 不一样——它没有中央服务器。消息通过 Zenoh P2P 
 
 | 概念 | Discord / 微信 | WeeChat-Claude |
 |------|---------------|----------------|
-| 消息传输 | 云端服务器中转 | Zenoh P2P（本地/局域网直连） |
+| 消息传输 | 云端服务器中转 | 本地 zenohd 路由转发（不经过外部服务器） |
 | 群聊 | #频道 / 群 | channel（`/zenoh join #channel`） |
 | 私聊 | DM / 私信 | private buffer（`/zenoh join @nick`） |
 | 在线状态 | 绿点 / 灰点 | Zenoh liveliness（自动广播，掉线即消失） |

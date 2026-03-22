@@ -22,11 +22,11 @@ cd weechat-claude
 `start.sh` 会自动完成以下步骤：
 
 1. **检查依赖** — 确认 claude、uv、weechat、tmux、zenohd 都已安装
-2. **确保 zenohd 运行** — 在 `localhost:7447` 启动 Zenoh router（如果尚未运行）
+2. **确保 zenohd 运行** — 在 `tcp/127.0.0.1:7447` 启动 Zenoh router（如果尚未运行）
 3. **安装依赖** — `uv sync` 安装 channel-server 依赖，`uv pip install --system eclipse-zenoh` 让 WeeChat 的系统 Python 能 import zenoh
 4. **复制插件** — 将 weechat-zenoh.py 和 weechat-agent.py 复制到 WeeChat 插件目录
 5. **创建 tmux session** — 分为两个 pane：
-   - **Pane 0**：Claude Code (agent0) + channel plugin
+   - **Pane 0**：Claude Code (`alice:agent0`) + channel plugin
    - **Pane 1**：WeeChat + zenoh/agent 插件已加载
 
 ## 第一次对话

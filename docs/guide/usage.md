@@ -18,8 +18,8 @@
 
 | 命令 | 说明 |
 |------|------|
-| `/agent create <name> [--workspace <path>]` | 启动新的 Claude Code 实例 |
-| `/agent stop <name>` | 停止一个 Agent（不能停 agent0） |
+| `/agent create <name> [--workspace <path>]` | 启动新的 Claude Code 实例（名称自动加 `{username}:` 前缀） |
+| `/agent stop <name>` | 停止一个 Agent（不能停 primary agent `{username}:agent0`） |
 | `/agent restart <name>` | 重启一个 Agent |
 | `/agent list` | 列出所有 Agent 及状态 |
 | `/agent join <agent> #channel` | 让 Agent 加入一个 channel |
