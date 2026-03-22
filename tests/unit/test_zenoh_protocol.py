@@ -48,7 +48,7 @@ class TestDmPairSorting:
         assert make_dm_pair("bob", "alice") == "alice_bob"
 
     def test_pair_with_agent(self):
-        assert make_dm_pair("agent0", "zara") == "agent0_zara"
+        assert make_dm_pair("alice:agent0", "zara") == "alice:agent0_zara"
 
     def test_pair_symmetric(self):
         assert make_dm_pair("x", "y") == make_dm_pair("y", "x")
@@ -62,7 +62,7 @@ class TestTopicFormats:
         assert dm_topic("alice_bob") == "wc/dm/alice_bob/messages"
 
     def test_presence_topic(self):
-        assert presence_topic("agent0") == "wc/presence/agent0"
+        assert presence_topic("alice:agent0") == "wc/presence/alice:agent0"
 
     def test_room_presence_format(self):
         # Room presence follows: wc/rooms/{room}/presence/{nick}

@@ -23,7 +23,7 @@ Messages are JSON: `{id, nick, type, body, ts}`
 ### Commands
 
 ```bash
-./start.sh ~/workspace username    # Full system startup (tmux + agent0 + weechat)
+./start.sh ~/workspace username    # Full system startup (tmux + username:agent0 + weechat)
 ./stop.sh                          # Kill tmux session
 pytest tests/unit/                 # Unit tests (mocked Zenoh, fast)
 pytest -m integration tests/       # Integration tests (real Zenoh peers)
@@ -51,6 +51,7 @@ pytest -m integration tests/       # Integration tests (real Zenoh peers)
 ### Key Constraints
 
 - Channel MCP requires `--dangerously-load-development-channels` flag
-- `agent0` is special — created by start.sh, cannot be stopped via `/agent stop`
+- `{username}:agent0` is the primary agent — created by start.sh, cannot be stopped via `/agent stop`
+- Agent names are scoped to creator: `alice:agent0`, `alice:helper` (separator: `:`)
 - WeeChat callbacks must not block — use deques + timers for async work
 - Zenoh Python + WeeChat .so may conflict — sidecar process is planned

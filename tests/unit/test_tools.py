@@ -5,8 +5,8 @@ import os
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
-# Patch AGENT_NAME before importing tools
-os.environ["AGENT_NAME"] = "agent0"
+# Patch AGENT_NAME before importing tools (scoped to creator per issue #2)
+os.environ["AGENT_NAME"] = "alice:agent0"
 
 from tools import register_tools
 
@@ -33,9 +33,9 @@ class TestReplyTool:
         assert "Sent" in result
         assert len(session.published) == 1
         key, payload = session.published[0]
-        assert key == "wc/dm/agent0_alice/messages"
+        assert key == "wc/dm/alice_alice:agent0/messages"
         msg = json.loads(payload)
-        assert msg["nick"] == "agent0"
+        assert msg["nick"] == "alice:agent0"
         assert msg["body"] == "hello"
         assert msg["type"] == "msg"
 
