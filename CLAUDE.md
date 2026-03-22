@@ -1,65 +1,65 @@
 # WeeChat-Claude
 
-Multi-agent collaboration system: WeeChat ↔ Zenoh P2P ↔ Claude Code (MCP).
+多 Agent 协作系统：WeeChat ↔ Zenoh P2P ↔ Claude Code (MCP)。
 
-## Terminology
+## 术语
 
-Follow WeeChat naming conventions:
-- **channel** (not "room") — group chat buffer (`localvar_type = "channel"`)
-- **private** (not "DM") — 1-on-1 buffer (`localvar_type = "private"`)
-- **buffer** — generic WeeChat message container
+遵循 WeeChat 命名惯例：
+- **channel**（不是 "room"）— 群聊 buffer（`localvar_type = "channel"`）
+- **private**（不是 "DM"）— 一对一 buffer（`localvar_type = "private"`）
+- **buffer** — WeeChat 通用消息容器
 
-## Architecture
+## 架构
 
-Three composable components connected via Zenoh topic contracts:
-- `weechat-zenoh/weechat-zenoh.py` — WeeChat plugin for P2P channels & privates over Zenoh
-- `weechat-channel-server/` — MCP server bridging Claude Code ↔ Zenoh (server.py, tools.py, message.py)
-- `weechat-agent/weechat-agent.py` — Agent lifecycle manager (spawn/stop Claude in tmux panes)
-- `zenohd` — local Zenoh router (auto-started by start.sh, persists across sessions)
+四个可组合组件，通过 Zenoh topic 约定连接：
+- `weechat-zenoh/weechat-zenoh.py` — WeeChat P2P 聊天插件（详见 [docs/dev/weechat-zenoh.md](docs/dev/weechat-zenoh.md)）
+- `weechat-channel-server/` — MCP server 桥接 Claude Code ↔ Zenoh（详见 [docs/dev/channel-server.md](docs/dev/channel-server.md)）
+- `weechat-agent/weechat-agent.py` — Agent 生命周期管理（详见 [docs/dev/agent.md](docs/dev/agent.md)）
+- `zenohd` — 本地 Zenoh 路由（start.sh 自动启动，跨 session 持续运行）
 
 ## Zenoh Topics
 
 - `wc/channels/{channel_id}/messages` — channel pub/sub
 - `wc/channels/{channel_id}/presence/{nick}` — channel presence (liveliness)
-- `wc/private/{sorted_pair}/messages` — private pub/sub (alphabetically sorted pair, e.g. `alice_bob`)
-- `wc/presence/{nick}` — global online status
+- `wc/private/{sorted_pair}/messages` — private pub/sub（按字母序排列，如 `alice_bob`）
+- `wc/presence/{nick}` — 全局在线状态
 
-Messages are JSON: `{id, nick, type, body, ts}`
+消息格式：JSON `{id, nick, type, body, ts}`
 
-## Development
+## 开发
 
-### Commands
+### 常用命令
 
 ```bash
-./start.sh ~/workspace username    # Full system startup (tmux + username:agent0 + weechat)
-./stop.sh                          # Stop tmux session (zenohd keeps running)
-./stop.sh --all                    # Stop tmux session + zenohd
-pytest tests/unit/                 # Unit tests (mocked Zenoh, fast)
-pytest -m integration tests/       # Integration tests (real Zenoh peers)
+./start.sh ~/workspace username    # 完整系统启动（tmux + username:agent0 + weechat）
+./stop.sh                          # 停止 tmux session（zenohd 保持运行）
+./stop.sh --all                    # 停止 tmux session + zenohd
+pytest tests/unit/                 # Unit 测试（mock Zenoh，快）
+pytest -m integration tests/       # Integration 测试（真实 Zenoh peer）
 ```
 
-### Dependencies
+### 依赖
 
-- `eclipse-zenoh` ≥1.0.0 — P2P messaging
-- `mcp[cli]` ≥1.2.0 — MCP server framework
-- `uv` — Python dependency management (used by MCP runner)
-- `tmux` — Session/pane management for agents
+- `eclipse-zenoh` ≥1.0.0 — P2P 消息
+- `mcp[cli]` ≥1.2.0 — MCP server 框架
+- `uv` — Python 依赖管理
+- `tmux` — Session/pane 管理
 
-### Testing
+### 测试
 
-- `tests/conftest.py` — MockZenohSession fixtures for unit tests
-- Unit tests: mock Zenoh, test message utilities, tools, protocol
-- Integration tests: real Zenoh peer sessions, marked with `@pytest.mark.integration`
+详见 [docs/dev/testing.md](docs/dev/testing.md)
 
-### Adding MCP Tools
+### 添加 MCP Tool
 
-1. Add async function in `weechat-channel-server/tools.py`
-2. Register via `@server.list_tools()` / `@server.call_tool()` in `server.py`
-3. Add tests in `tests/unit/test_tools.py`
+1. 在 `weechat-channel-server/tools.py` 添加 async 函数
+2. 在 `server.py` 中通过 `@server.list_tools()` / `@server.call_tool()` 注册
+3. 在 `tests/unit/test_tools.py` 添加测试
 
-### Key Constraints
+详见 [docs/dev/channel-server.md](docs/dev/channel-server.md#添加-mcp-tool)
 
-- Channel MCP requires `--dangerously-load-development-channels` flag
-- `{username}:agent0` is the primary agent — created by start.sh, cannot be stopped via `/agent stop`
-- Agent names are scoped to creator: `alice:agent0`, `alice:helper` (separator: `:`)
-- WeeChat callbacks must not block — use deques + timers for async work
+### 关键约束
+
+- Channel MCP 需要 `--dangerously-load-development-channels` flag
+- `{username}:agent0` 是 primary agent — 由 start.sh 创建，不能通过 `/agent stop` 停止
+- Agent 名称带用户前缀：`alice:agent0`、`alice:helper`（分隔符：`:`）
+- WeeChat callback 不能阻塞 — 使用 deque + timer 实现异步
