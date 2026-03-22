@@ -9,15 +9,8 @@ from message import detect_mention, clean_mention, make_private_pair
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def zenoh_session():
-    import zenoh
 
-    config = zenoh.Config()
-    config.insert_json5("mode", '"peer"')
-    session = zenoh.open(config)
-    yield session
-    session.close()
+# zenoh_session fixture provided by tests/integration/conftest.py
 
 
 class TestPrivateRouting:
@@ -30,7 +23,6 @@ class TestPrivateRouting:
         zenoh_session.declare_subscriber(
             topic,
             lambda s: received.append(json.loads(s.payload.to_string())),
-            background=True,
         )
         time.sleep(0.5)
 
@@ -59,8 +51,7 @@ class TestPrivateRouting:
                 agent1_received.append(True)
 
         zenoh_session.declare_subscriber(
-            "wc/private/*/messages", agent1_filter, background=True
-        )
+            "wc/private/*/messages", agent1_filter        )
         time.sleep(0.5)
 
         zenoh_session.put(agent0_topic, json.dumps({
@@ -106,8 +97,7 @@ class TestChannelMentionFiltering:
                 forwarded.append(msg)
 
         zenoh_session.declare_subscriber(
-            topic, channel_handler, background=True
-        )
+            topic, channel_handler        )
         time.sleep(0.5)
 
         zenoh_session.put(topic, json.dumps({

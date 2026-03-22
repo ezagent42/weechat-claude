@@ -116,8 +116,8 @@ def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
         except Exception as e:
             print(f"[channel-server] channel error: {e}", file=sys.stderr)
 
-    zenoh_session.declare_subscriber("wc/private/*/messages", on_private, background=True)
-    zenoh_session.declare_subscriber("wc/channels/*/messages", on_channel, background=True)
+    zenoh_session.declare_subscriber("wc/private/*/messages", on_private)
+    zenoh_session.declare_subscriber("wc/channels/*/messages", on_channel)
     return zenoh_session, joined_channels
 
 # ============================================================

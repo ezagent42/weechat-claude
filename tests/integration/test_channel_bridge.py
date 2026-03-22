@@ -12,16 +12,8 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def zenoh_session():
-    """Create a single Zenoh peer session."""
-    import zenoh
 
-    config = zenoh.Config()
-    config.insert_json5("mode", '"peer"')
-    session = zenoh.open(config)
-    yield session
-    session.close()
+# zenoh_session fixture provided by tests/integration/conftest.py
 
 
 class TestChannelBridge:
@@ -47,7 +39,7 @@ class TestChannelBridge:
                         received.append(msg)
 
         zenoh_session.declare_subscriber(
-            "wc/private/*/messages", filter_private, background=True
+            "wc/private/*/messages", filter_private
         )
         time.sleep(0.5)
 
@@ -81,7 +73,7 @@ class TestChannelBridge:
                     received.append(True)
 
         zenoh_session.declare_subscriber(
-            "wc/private/*/messages", filter_private, background=True
+            "wc/private/*/messages", filter_private
         )
         time.sleep(0.5)
 
@@ -104,7 +96,6 @@ class TestChannelBridge:
         zenoh_session.declare_subscriber(
             "wc/channels/general/messages",
             lambda s: received.append(json.loads(s.payload.to_string())),
-            background=True,
         )
         time.sleep(0.5)
 

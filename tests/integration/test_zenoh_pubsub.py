@@ -11,23 +11,8 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def zenoh_sessions():
-    """Create two Zenoh peer sessions for testing."""
-    import zenoh
 
-    config_a = zenoh.Config()
-    config_a.insert_json5("mode", '"peer"')
-    session_a = zenoh.open(config_a)
-
-    config_b = zenoh.Config()
-    config_b.insert_json5("mode", '"peer"')
-    session_b = zenoh.open(config_b)
-
-    yield session_a, session_b
-
-    session_a.close()
-    session_b.close()
+# zenoh_sessions fixture provided by tests/integration/conftest.py
 
 
 class TestZenohPubSub:
@@ -41,7 +26,6 @@ class TestZenohPubSub:
             lambda sample: received.append(
                 json.loads(sample.payload.to_string())
             ),
-            background=True,
         )
 
         # Allow subscriber to settle
@@ -75,7 +59,6 @@ class TestZenohPubSub:
             lambda sample: received.append(
                 json.loads(sample.payload.to_string())
             ),
-            background=True,
         )
 
         time.sleep(0.5)
@@ -103,7 +86,6 @@ class TestZenohPubSub:
         session_b.liveliness().declare_subscriber(
             "wc/presence/*",
             lambda sample: events.append(str(sample.key_expr)),
-            background=True,
         )
 
         time.sleep(0.5)

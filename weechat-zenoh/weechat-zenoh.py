@@ -130,7 +130,7 @@ def join_channel(channel_id):
     subscribers[f"channel:{channel_id}"] = zenoh_session.declare_subscriber(
         msg_key,
         lambda sample, _cid=channel_id: _on_channel_msg(sample, _cid),
-        background=True
+
     )
 
     # Liveliness
@@ -142,7 +142,7 @@ def join_channel(channel_id):
     zenoh_session.liveliness().declare_subscriber(
         f"wc/channels/{channel_id}/presence/*",
         lambda sample, _cid=channel_id: _on_channel_presence(sample, _cid),
-        background=True
+
     )
 
     # 查询当前在线的成员
@@ -188,7 +188,7 @@ def join_private(target_nick):
     subscribers[private_key] = zenoh_session.declare_subscriber(
         msg_key,
         lambda sample, _pk=private_key: _on_private_msg(sample, _pk),
-        background=True
+
     )
 
     privates.add(pair)
@@ -495,7 +495,7 @@ def zenoh_cmd_cb(data, buffer, args):
 
     elif cmd == "status":
         try:
-            info = zenoh_session.info()
+            info = zenoh_session.info
             zid = str(info.zid())
             routers = list(info.routers_zid())
             peers = list(info.peers_zid())
