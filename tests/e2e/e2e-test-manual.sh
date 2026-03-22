@@ -190,15 +190,30 @@ else
     info "agent1: tmux pane may have exited (total=$TOTAL_PANES, expected ≥4)"
 fi
 
-tmux send-keys -t "$PANE_ALICE" "/agent stop agent1" Enter
-sleep 2
+pause
 
-if wait_for_pane "$PANE_ALICE" "Stopped" 5; then
+# ============================================================
+# Phase 6: stop agent1
+# ============================================================
+step "Phase 6: /agent stop agent1"
+
+tmux send-keys -t "$PANE_ALICE" "/agent stop agent1" Enter
+
+# stop_agent sends /exit to agent1's pane, waits up to 15s, then kill-pane
+if wait_for_pane "$PANE_ALICE" "Stopped" 20; then
     pass "alice: agent1 stopped"
 elif grep -q "Stopped" "$ALICE_WC_DIR/logs/"*.weechatlog 2>/dev/null; then
     pass "alice: agent1 stopped (verified via log)"
 else
     fail "alice: agent1 stop not confirmed"
+fi
+
+# Verify pane was cleaned up
+PANES_AFTER=$(tmux list-panes -t "$TMUX_SESSION" | wc -l | tr -d ' ')
+if [ "$PANES_AFTER" -lt "$TOTAL_PANES" ]; then
+    pass "agent1: tmux pane closed (count=$PANES_AFTER)"
+else
+    info "agent1: tmux pane may still exist (count=$PANES_AFTER)"
 fi
 
 # ============================================================
