@@ -15,11 +15,21 @@ echo "  Username:  $USERNAME"
 
 # --- 依赖检查 ---
 MISSING=""
-for cmd in claude uv weechat tmux; do
+for cmd in claude uv weechat tmux zenohd; do
   command -v "$cmd" &>/dev/null || MISSING="$MISSING $cmd"
 done
 if [ -n "$MISSING" ]; then
   echo "Missing:$MISSING"; exit 1
+fi
+
+# --- 确保 zenohd 运行 (localhost only) ---
+if ! pgrep -x zenohd &>/dev/null; then
+  echo "  Starting zenohd..."
+  zenohd -l tcp/127.0.0.1:7447 &>/dev/null &
+  sleep 1
+  if ! pgrep -x zenohd &>/dev/null; then
+    echo "Error: zenohd failed to start"; exit 1
+  fi
 fi
 
 # --- 确保 channel-server 依赖 ---
