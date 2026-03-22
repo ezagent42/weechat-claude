@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 
 SCRIPT_NAME = "weechat-agent"
 SCRIPT_AUTHOR = "Allen <ezagent42>"
@@ -51,9 +52,12 @@ def agent_init():
 
     # 注册 agent0（由 start.sh 预启动）
     if weechat.config_get_plugin("agent0_workspace"):
+        # 找到 agent0 的 tmux pane（运行 claude 的 pane）
+        agent0_pane = _find_claude_pane()
         agents[PRIMARY_AGENT] = {
             "workspace": weechat.config_get_plugin("agent0_workspace"),
             "status": "running",
+            "pane_id": agent0_pane,
         }
         # 为 agent0 创建 private buffer
         weechat.command("", f"/zenoh join @{PRIMARY_AGENT}")
@@ -107,6 +111,33 @@ def _cleanup_mcp_config(name):
         pass
 
 
+def _find_claude_pane():
+    """Find the tmux pane running claude in the current session."""
+    try:
+        result = subprocess.run(
+            ["tmux", "list-panes", "-t", TMUX_SESSION,
+             "-F", "#{pane_id}:#{pane_current_command}"],
+            capture_output=True, text=True)
+        for line in result.stdout.strip().split("\n"):
+            if ":" in line:
+                pane_id, cmd = line.split(":", 1)
+                # claude shows as its version number (e.g. 2.1.81) in pane_current_command
+                if cmd and cmd not in ("weechat", "zsh", "bash"):
+                    return pane_id
+    except Exception:
+        pass
+    return ""
+
+
+def _last_agent_pane():
+    """Return the pane_id of the last registered agent (for split targeting)."""
+    for name in reversed(list(agents.keys())):
+        pane = agents[name].get("pane_id")
+        if pane:
+            return pane
+    return ""
+
+
 # ============================================================
 # Agent 创建
 # ============================================================
@@ -133,9 +164,12 @@ def create_agent(name, workspace):
         f"--permission-mode bypassPermissions "
         f"--mcp-config '{mcp_config}'"
     )
+    # Split vertically from the last agent pane (right column),
+    # so agents stack below agent0.
+    target = _last_agent_pane() or TMUX_SESSION
     result = subprocess.run(
-        ["tmux", "split-window", "-h", "-P", "-F", "#{pane_id}",
-         "-t", TMUX_SESSION, cmd],
+        ["tmux", "split-window", "-v", "-P", "-F", "#{pane_id}",
+         "-t", target, cmd],
         capture_output=True, text=True
     )
     pane_id = result.stdout.strip()
@@ -167,11 +201,17 @@ def stop_agent(name):
         weechat.prnt("", f"[agent] Unknown agent: {name}")
         return
 
-    # 向 Claude Code 发送退出命令（target specific pane）
     pane_id = agents[name].get("pane_id")
     if pane_id:
+        # Send /exit to claude (graceful shutdown)
         subprocess.run(
-            ["tmux", "send-keys", "-t", pane_id, "C-c", ""],
+            ["tmux", "send-keys", "-t", pane_id, "/exit", "Enter"],
+            capture_output=True
+        )
+        # Wait briefly for claude to exit, then kill the pane
+        time.sleep(3)
+        subprocess.run(
+            ["tmux", "kill-pane", "-t", pane_id],
             capture_output=True
         )
 
