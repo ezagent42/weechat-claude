@@ -5,7 +5,7 @@
 | 类型 | 目录 | 特点 |
 |------|------|------|
 | Unit | `tests/unit/` | Mock Zenoh session，快速，无外部依赖 |
-| Integration | `tests/integration/` | 真实 Zenoh peer session，需要 zenohd 运行 |
+| Integration | `tests/integration/` | 真实 Zenoh client session，需要 zenohd 在 localhost:7447 运行 |
 
 ## 运行测试
 
@@ -56,6 +56,16 @@ def test_something(mock_zenoh_session):
 - 文件命名：`test_<模块名>.py`
 - 使用 `mock_zenoh_session` fixture
 - 异步测试自动支持（`asyncio_mode = auto`）
+
+现有 unit test 文件：
+- `test_message.py` — 消息工具（dedup、mention、chunking、topic）
+- `test_tools.py` — MCP tool handler
+- `test_zenoh_protocol.py` — Zenoh 消息协议
+- `test_zenoh_signals.py` — WeeChat signal 格式
+- `test_zenoh_config.py` — Zenoh client config 构造
+- `test_zenoh_asyncio_bridge.py` — Zenoh 线程到 async 桥接
+- `test_server.py` — server.py notification injection
+- `test_agent_lifecycle.py` — Agent 生命周期和 pane 管理
 
 ### Integration Test
 
