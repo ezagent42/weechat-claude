@@ -21,7 +21,16 @@ SCRIPT_DESC = "Claude Code agent lifecycle management for WeeChat"
 agents = {}                # name → { workspace, tmux_pane, status }
 CHANNEL_PLUGIN_DIR = ""    # weechat-channel-server plugin 路径
 TMUX_SESSION = ""          # tmux session 名称
+USERNAME = ""              # 当前用户名（用于 agent 名称作用域）
+PRIMARY_AGENT = ""         # 主 agent 全名（如 alice:agent0）
 next_pane_id = 1
+
+
+def scoped_name(name):
+    """给 agent 名称加上用户名前缀（如已有前缀则不重复添加）。"""
+    if ":" in name:
+        return name
+    return f"{USERNAME}:{name}"
 
 
 # ============================================================
@@ -29,19 +38,24 @@ next_pane_id = 1
 # ============================================================
 
 def agent_init():
-    global CHANNEL_PLUGIN_DIR, TMUX_SESSION
+    global CHANNEL_PLUGIN_DIR, TMUX_SESSION, USERNAME, PRIMARY_AGENT
 
     CHANNEL_PLUGIN_DIR = weechat.config_get_plugin("channel_plugin_dir")
     TMUX_SESSION = weechat.config_get_plugin("tmux_session") or "weechat-claude"
+    USERNAME = weechat.config_string(
+        weechat.config_get("plugins.var.python.weechat-zenoh.nick")
+    ) or os.environ.get("USER", "user")
+
+    PRIMARY_AGENT = scoped_name("agent0")
 
     # 注册 agent0（由 start.sh 预启动）
     if weechat.config_get_plugin("agent0_workspace"):
-        agents["agent0"] = {
+        agents[PRIMARY_AGENT] = {
             "workspace": weechat.config_get_plugin("agent0_workspace"),
             "status": "running",
         }
-        # 为 agent0 创建 DM buffer
-        weechat.command("", "/zenoh join @agent0")
+        # 为 agent0 创建 private buffer
+        weechat.command("", f"/zenoh join @{PRIMARY_AGENT}")
 
     # 监听消息 signal，检测 Agent 的结构化命令输出
     weechat.hook_signal("zenoh_message_received",
@@ -57,6 +71,7 @@ def agent_init():
 # ============================================================
 
 def create_agent(name, workspace):
+    name = scoped_name(name)
     if name in agents:
         weechat.prnt("", f"[agent] {name} already exists")
         return
@@ -78,18 +93,21 @@ def create_agent(name, workspace):
         f"--dangerously-load-development-channels "
         f"plugin:weechat-channel"
     )
-    subprocess.Popen([
-        "tmux", "split-window", "-h",
-        "-t", TMUX_SESSION, cmd
-    ])
+    result = subprocess.run(
+        ["tmux", "split-window", "-h", "-P", "-F", "#{pane_id}",
+         "-t", TMUX_SESSION, cmd],
+        capture_output=True, text=True
+    )
+    pane_id = result.stdout.strip()
 
     # 2. 注册
     agents[name] = {
         "workspace": workspace,
         "status": "starting",
+        "pane_id": pane_id,
     }
 
-    # 3. 通知 weechat-zenoh 创建 DM buffer
+    # 3. 通知 weechat-zenoh 创建 private buffer
     weechat.command("", f"/zenoh join @{name}")
 
     weechat.prnt("", f"[agent] Created {name} in {workspace}")
@@ -100,17 +118,21 @@ def create_agent(name, workspace):
 # ============================================================
 
 def stop_agent(name):
-    if name == "agent0":
-        weechat.prnt("", "[agent] Cannot stop agent0")
+    name = scoped_name(name)
+    if name == PRIMARY_AGENT:
+        weechat.prnt("", f"[agent] Cannot stop {PRIMARY_AGENT}")
         return
     if name not in agents:
         weechat.prnt("", f"[agent] Unknown agent: {name}")
         return
 
-    # 向 Claude Code 发送退出命令
-    subprocess.run([
-        "tmux", "send-keys", "-t", TMUX_SESSION, "C-c", ""
-    ], capture_output=True)
+    # 向 Claude Code 发送退出命令（target specific pane）
+    pane_id = agents[name].get("pane_id")
+    if pane_id:
+        subprocess.run(
+            ["tmux", "send-keys", "-t", pane_id, "C-c", ""],
+            capture_output=True
+        )
 
     agents[name]["status"] = "stopped"
     weechat.prnt("", f"[agent] Stopped {name}")
@@ -177,7 +199,7 @@ def agent_cmd_cb(data, buffer, args):
         stop_agent(argv[1])
 
     elif cmd == "restart" and len(argv) >= 2:
-        name = argv[1]
+        name = scoped_name(argv[1])
         if name in agents:
             ws = agents[name]["workspace"]
             stop_agent(name)
@@ -194,16 +216,16 @@ def agent_cmd_cb(data, buffer, args):
                     f"  {name}\t{info['status']}\t{info['workspace']}")
 
     elif cmd == "join" and len(argv) >= 3:
-        agent_name = argv[1]
-        room = argv[2]
+        agent_name = scoped_name(argv[1])
+        channel = argv[2]
         if agent_name not in agents:
             weechat.prnt(buffer, f"[agent] Unknown agent: {agent_name}")
         else:
             weechat.command("",
                 f"/zenoh send @{agent_name} "
-                f"Please join room {room} and monitor it for messages mentioning you.")
+                f"Please join channel {channel} and monitor it for messages mentioning you.")
             weechat.prnt(buffer,
-                f"[agent] Asked {agent_name} to join {room}")
+                f"[agent] Asked {agent_name} to join {channel}")
 
     else:
         weechat.prnt(buffer,
@@ -212,7 +234,7 @@ def agent_cmd_cb(data, buffer, args):
             "  /agent stop <n>\n"
             "  /agent restart <n>\n"
             "  /agent list\n"
-            "  /agent join <agent> <#room>")
+            "  /agent join <agent> <#channel>")
 
     return weechat.WEECHAT_RC_OK
 
@@ -225,7 +247,7 @@ def restart_timer_cb(data, remaining_calls):
 
 def agent_deinit():
     for name in list(agents.keys()):
-        if name != "agent0":
+        if name != PRIMARY_AGENT:
             stop_agent(name)
     return weechat.WEECHAT_RC_OK
 
@@ -247,12 +269,12 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
     weechat.hook_command("agent",
         "Manage Claude Code agents",
         "create <n> [--workspace <path>] || stop <n> || "
-        "restart <n> || list || join <agent> <#room>",
-        "  create: Launch new Claude Code instance\n"
-        "    stop: Stop an agent (cannot stop agent0)\n"
+        "restart <n> || list || join <agent> <#channel>",
+        "  create: Launch new Claude Code instance (name auto-scoped to user)\n"
+        "    stop: Stop an agent (cannot stop primary agent)\n"
         " restart: Restart an agent\n"
         "    list: List all agents and status\n"
-        "    join: Ask agent to join a room",
+        "    join: Ask agent to join a channel",
         "create || stop || restart || list || join",
         "agent_cmd_cb", "")
 

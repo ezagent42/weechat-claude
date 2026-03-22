@@ -15,11 +15,21 @@ echo "  Username:  $USERNAME"
 
 # --- 依赖检查 ---
 MISSING=""
-for cmd in claude uv weechat tmux; do
+for cmd in claude uv weechat tmux zenohd; do
   command -v "$cmd" &>/dev/null || MISSING="$MISSING $cmd"
 done
 if [ -n "$MISSING" ]; then
   echo "Missing:$MISSING"; exit 1
+fi
+
+# --- 确保 zenohd 运行 (localhost only) ---
+if ! pgrep -x zenohd &>/dev/null; then
+  echo "  Starting zenohd..."
+  zenohd -l tcp/127.0.0.1:7447 &>/dev/null &
+  sleep 1
+  if ! pgrep -x zenohd &>/dev/null; then
+    echo "Error: zenohd failed to start"; exit 1
+  fi
 fi
 
 # --- 确保 channel-server 依赖 ---
@@ -29,7 +39,7 @@ echo "  Syncing channel-server deps..."
 # --- 确保 WeeChat Python 能 import zenoh ---
 python3 -c "import zenoh" 2>/dev/null || {
   echo "  Installing eclipse-zenoh for system Python..."
-  pip install eclipse-zenoh --quiet
+  uv pip install --system eclipse-zenoh --quiet
 }
 
 # --- 安装 WeeChat 脚本 ---
@@ -46,12 +56,12 @@ tmux new-session -d -s "$SESSION" -x 220 -y 50
 
 # --- Pane 0: Claude Code (agent0) with channel plugin ---
 tmux send-keys -t "$SESSION" \
-  "cd '$WORKSPACE' && AGENT_NAME=agent0 claude \
+  "cd '$WORKSPACE' && AGENT_NAME='$USERNAME:agent0' claude \
     --dangerously-skip-permissions \
     --dangerously-load-development-channels \
     plugin:weechat-channel" Enter
 
-echo -n "  Waiting for agent0..."
+echo -n "  Waiting for $USERNAME:agent0..."
 sleep 5
 echo " done"
 

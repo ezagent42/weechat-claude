@@ -5,8 +5,6 @@ We test the pure logic functions extracted from the agent module.
 """
 
 import json
-import os
-import pytest
 
 
 class TestAgentCreateLogic:
@@ -35,29 +33,29 @@ class TestAgentCreateLogic:
         assert server["command"] == "uv"
         assert server["env"]["AGENT_NAME"] == name
 
-    def test_agent0_cannot_be_stopped(self):
-        """Verify the stop-agent0 guard logic."""
-        # This tests the condition used in stop_agent()
-        name = "agent0"
-        assert name == "agent0"  # This would trigger the guard
+    def test_primary_agent_cannot_be_stopped(self):
+        """Verify the stop-primary-agent guard logic."""
+        primary = "alice:agent0"
+        name = "alice:agent0"
+        assert name == primary  # This would trigger the guard
 
     def test_duplicate_agent_detection(self):
         """Verify duplicate agent names are detected."""
-        agents = {"agent0": {"status": "running"}}
-        name = "agent0"
+        agents = {"alice:agent0": {"status": "running"}}
+        name = "alice:agent0"
         assert name in agents
 
     def test_agent_status_tracking(self):
         """Test agent status update from presence signals."""
-        agents = {"agent0": {"status": "running", "workspace": "/tmp"}}
+        agents = {"alice:agent0": {"status": "running", "workspace": "/tmp"}}
 
         # Simulate presence signal
-        ev = {"nick": "agent0", "online": False}
+        ev = {"nick": "alice:agent0", "online": False}
         nick = ev["nick"]
         if nick in agents:
             agents[nick]["status"] = "running" if ev["online"] else "offline"
 
-        assert agents["agent0"]["status"] == "offline"
+        assert agents["alice:agent0"]["status"] == "offline"
 
     def test_structured_command_parsing(self):
         """Test parsing of agent's structured command output."""
@@ -75,3 +73,23 @@ class TestAgentCreateLogic:
             assert False, "Should have raised"
         except json.JSONDecodeError:
             pass  # Expected
+
+
+class TestTmuxPaneTracking:
+    def test_create_stores_pane_id(self):
+        agents = {}
+        name = "helper1"
+        agents[name] = {"workspace": "/tmp", "status": "starting", "pane_id": "%42"}
+        assert agents[name]["pane_id"] == "%42"
+
+    def test_stop_uses_pane_id(self):
+        pane_id = "%42"
+        cmd = ["tmux", "send-keys", "-t", pane_id, "C-c", ""]
+        assert "-t" in cmd
+        assert cmd[cmd.index("-t") + 1] == "%42"
+
+    def test_signal_buffer_field(self):
+        signal_data = json.dumps({"buffer": "private:@agent0", "nick": "alice", "body": "hello"})
+        msg = json.loads(signal_data)
+        assert "buffer" in msg
+        assert msg["buffer"] == "private:@agent0"

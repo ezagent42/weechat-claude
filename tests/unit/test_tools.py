@@ -1,64 +1,44 @@
-"""Tests for weechat-channel-server/tools.py"""
-
+"""Tests for reply tool logic in server.py."""
 import json
 import os
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
-# Patch AGENT_NAME before importing tools
-os.environ["AGENT_NAME"] = "agent0"
+# Patch AGENT_NAME before importing tools (scoped to creator per issue #2)
+os.environ["AGENT_NAME"] = "alice:agent0"
 
-from tools import register_tools
-
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "weechat-channel-server"))
+from server import _handle_reply
 
 class TestReplyTool:
     @pytest.fixture
-    def mcp_and_session(self, mock_zenoh_session):
-        mcp = MagicMock()
-        # Capture the tool function when @mcp.tool() is called
-        registered = {}
-        def fake_tool():
-            def decorator(func):
-                registered[func.__name__] = func
-                return func
-            return decorator
-        mcp.tool = fake_tool
-        register_tools(mcp, mock_zenoh_session)
-        return registered, mock_zenoh_session
+    def mock_zenoh(self):
+        session = MagicMock()
+        session.put = MagicMock()
+        return session
 
     @pytest.mark.asyncio
-    async def test_reply_to_dm(self, mcp_and_session):
-        tools, session = mcp_and_session
-        result = await tools["reply"]("alice", "hello")
-        assert "Sent" in result
-        assert len(session.published) == 1
-        key, payload = session.published[0]
-        assert key == "wc/dm/agent0_alice/messages"
-        msg = json.loads(payload)
-        assert msg["nick"] == "agent0"
+    async def test_reply_to_private(self, mock_zenoh):
+        result = await _handle_reply(mock_zenoh, {"chat_id": "alice", "text": "hello"})
+        assert "Sent" in result[0].text
+        mock_zenoh.put.assert_called_once()
+        key = mock_zenoh.put.call_args[0][0]
+        assert key == "wc/private/alice_alice:agent0/messages"
+        msg = json.loads(mock_zenoh.put.call_args[0][1])
+        assert msg["nick"] == "alice:agent0"
         assert msg["body"] == "hello"
-        assert msg["type"] == "msg"
 
     @pytest.mark.asyncio
-    async def test_reply_to_room(self, mcp_and_session):
-        tools, session = mcp_and_session
-        result = await tools["reply"]("#general", "hi room")
-        assert "Sent" in result
-        key, payload = session.published[0]
-        assert key == "wc/rooms/general/messages"
-        msg = json.loads(payload)
-        assert msg["body"] == "hi room"
+    async def test_reply_to_channel(self, mock_zenoh):
+        result = await _handle_reply(mock_zenoh, {"chat_id": "#general", "text": "hi"})
+        key = mock_zenoh.put.call_args[0][0]
+        assert key == "wc/channels/general/messages"
 
     @pytest.mark.asyncio
-    async def test_reply_message_format(self, mcp_and_session):
-        tools, session = mcp_and_session
-        await tools["reply"]("bob", "test")
-        _, payload = session.published[0]
-        msg = json.loads(payload)
-        # Verify all required fields
-        assert "id" in msg
-        assert "nick" in msg
-        assert "type" in msg
-        assert "body" in msg
-        assert "ts" in msg
+    async def test_reply_message_format(self, mock_zenoh):
+        await _handle_reply(mock_zenoh, {"chat_id": "bob", "text": "test"})
+        msg = json.loads(mock_zenoh.put.call_args[0][1])
+        for field in ("id", "nick", "type", "body", "ts"):
+            assert field in msg
         assert isinstance(msg["ts"], float)

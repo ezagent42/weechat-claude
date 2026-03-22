@@ -4,11 +4,11 @@ import json
 import uuid
 import time
 
-from message import make_dm_pair, dm_topic, room_topic, presence_topic
+from message import make_private_pair, private_topic, channel_topic, presence_topic
 
 
 class TestMessageJsonSchema:
-    """Verify message JSON structure matches PRD §3.3."""
+    """Verify message JSON structure matches PRD S3.3."""
 
     def _make_msg(self, **overrides):
         msg = {
@@ -43,30 +43,30 @@ class TestMessageJsonSchema:
         assert isinstance(msg["ts"], (int, float))
 
 
-class TestDmPairSorting:
+class TestPrivatePairSorting:
     def test_pair_alphabetical(self):
-        assert make_dm_pair("bob", "alice") == "alice_bob"
+        assert make_private_pair("bob", "alice") == "alice_bob"
 
     def test_pair_with_agent(self):
-        assert make_dm_pair("agent0", "zara") == "agent0_zara"
+        assert make_private_pair("alice:agent0", "zara") == "alice:agent0_zara"
 
     def test_pair_symmetric(self):
-        assert make_dm_pair("x", "y") == make_dm_pair("y", "x")
+        assert make_private_pair("x", "y") == make_private_pair("y", "x")
 
 
 class TestTopicFormats:
-    def test_room_topic(self):
-        assert room_topic("general") == "wc/rooms/general/messages"
+    def test_channel_topic(self):
+        assert channel_topic("general") == "wc/channels/general/messages"
 
-    def test_dm_topic(self):
-        assert dm_topic("alice_bob") == "wc/dm/alice_bob/messages"
+    def test_private_topic(self):
+        assert private_topic("alice_bob") == "wc/private/alice_bob/messages"
 
     def test_presence_topic(self):
-        assert presence_topic("agent0") == "wc/presence/agent0"
+        assert presence_topic("alice:agent0") == "wc/presence/alice:agent0"
 
-    def test_room_presence_format(self):
-        # Room presence follows: wc/rooms/{room}/presence/{nick}
-        room = "general"
+    def test_channel_presence_format(self):
+        # Channel presence follows: wc/channels/{channel}/presence/{nick}
+        channel = "general"
         nick = "alice"
-        expected = f"wc/rooms/{room}/presence/{nick}"
-        assert expected == "wc/rooms/general/presence/alice"
+        expected = f"wc/channels/{channel}/presence/{nick}"
+        assert expected == "wc/channels/general/presence/alice"

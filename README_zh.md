@@ -42,7 +42,7 @@
 
 | 组件 | 类型 | 用途 |
 |------|------|------|
-| **weechat-zenoh** | WeeChat Python 插件 | 基于 Zenoh 的 P2P 聊天室和私信。平等对待所有参与者，不感知 Claude 的存在。 |
+| **weechat-zenoh** | WeeChat Python 插件 | 基于 Zenoh 的 P2P channel 和 private buffer。平等对待所有参与者，不感知 Claude 的存在。 |
 | **weechat-channel-server** | Claude Code 插件 (MCP server) | 连接 Claude Code 与 Zenoh。不感知 WeeChat 的存在，只知道 Zenoh topic 和 MCP 协议。 |
 | **weechat-agent** | WeeChat Python 插件 | Agent 生命周期管理器。在 tmux pane 中启动/停止 Claude Code 实例。 |
 
@@ -52,6 +52,7 @@
 - [uv](https://docs.astral.sh/uv/) ≥ 0.4
 - [WeeChat](https://weechat.org/) ≥ 4.0
 - [tmux](https://github.com/tmux/tmux)
+- [zenohd](https://github.com/eclipse-zenoh/zenoh) — 本地 Zenoh 路由（start.sh 自动启动）
 - Python ≥ 3.10
 
 ## 快速开始
@@ -61,6 +62,7 @@ git clone https://github.com/ezagent42/weechat-claude.git
 cd weechat-claude
 
 # 启动完整系统（agent0 + WeeChat，运行在 tmux 中）
+# zenohd 未运行时会自动启动
 ./start.sh ~/my-project alice
 ```
 
@@ -86,11 +88,11 @@ cd weechat-claude
 
 | 命令 | 说明 |
 |------|------|
-| `/zenoh join #room` | 加入聊天室 |
-| `/zenoh join @nick` | 开启私信 |
-| `/zenoh leave [target]` | 离开当前或指定的聊天室/私信 |
+| `/zenoh join #channel` | 加入 channel |
+| `/zenoh join @nick` | 开启 private buffer |
+| `/zenoh leave [target]` | 离开当前或指定的 channel/private |
 | `/zenoh nick <name>` | 修改昵称 |
-| `/zenoh list` | 列出已加入的聊天室和私信 |
+| `/zenoh list` | 列出已加入的 channel 和 private |
 | `/zenoh status` | 显示 Zenoh session 状态 |
 
 **Agent 管理命令 (weechat-agent)**
@@ -101,7 +103,7 @@ cd weechat-claude
 | `/agent stop <name>` | 停止 agent（不能停止 agent0） |
 | `/agent restart <name>` | 重启 agent |
 | `/agent list` | 列出所有 agent 及其状态 |
-| `/agent join <agent> #room` | 让 agent 加入聊天室 |
+| `/agent join <agent> #channel` | 让 agent 加入 channel |
 
 ### 独立使用各组件
 
@@ -155,11 +157,11 @@ weechat
 
 ```
 wc/
-├── rooms/{room_id}/
-│   ├── messages                # 聊天室消息 (pub/sub)
+├── channels/{channel_id}/
+│   ├── messages                # Channel 消息 (pub/sub)
 │   └── presence/{nick}         # 成员在线状态 (liveliness)
-├── dm/{sorted_pair}/
-│   └── messages                # 私信消息（按字母序排列，如 alice_bob）
+├── private/{sorted_pair}/
+│   └── messages                # Private 消息（按字母序排列，如 alice_bob）
 └── presence/{nick}             # 全局在线状态 (liveliness)
 ```
 
@@ -182,7 +184,7 @@ weechat-claude/
 ├── tests/
 │   ├── conftest.py                 # Mock Zenoh fixtures
 │   ├── unit/                       # 单元测试（Mock，快速）
-│   └── integration/                # 集成测试（真实 Zenoh peer）
+│   └── integration/                # 集成测试（需要 zenohd 运行）
 └── docs/
     └── PRD.md                      # 完整设计文档
 ```
@@ -193,7 +195,7 @@ weechat-claude/
 # 单元测试（Mock Zenoh，快速）
 pytest tests/unit/
 
-# 集成测试（需要 Zenoh peer，较慢）
+# 集成测试（需要 zenohd 运行）
 pytest -m integration tests/integration/
 
 # 全部测试
@@ -207,12 +209,12 @@ pytest
 | Channel MCP 处于 research preview | 需要 `--dangerously-load-development-channels` 标志 | 等待正式发布 |
 | Claude Code 需要登录 | 不支持 API key 认证 | 使用 claude.ai 账号 |
 | `--dangerously-skip-permissions` | Claude 无需确认即可执行文件操作 | 仅在受信任环境中使用 |
-| Zenoh Python + WeeChat .so | 部分系统上可能存在动态库冲突 | 计划中：Zenoh sidecar 进程 |
+| zenohd 必须运行 | 所有 Zenoh 通信经由本地 zenohd 路由 | start.sh 自动启动 |
 | 无跨 session 历史记录 | 重启后消息丢失 | WeeChat logger 自动保存本地；未来接入 zenohd storage |
 
 ## 路线图
 
-- **Agent 间通信** — agent 之间通过 DM topic 直接协作
+- **Agent 间通信** — agent 之间通过 private topic 直接协作
 - **zenohd + 存储后端** — 跨 session 的持久化消息历史
 - **飞书桥接** — 飞书作为 Zenoh 网络中的另一个节点
 - **Ed25519 签名** — 消息真实性验证，防止冒充

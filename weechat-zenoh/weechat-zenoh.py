@@ -3,7 +3,7 @@
 
 """
 WeeChat Zenoh P2P 聊天插件
-提供 Zenoh 消息总线上的 room/DM 基础设施
+提供 Zenoh 消息总线上的 channel/private 基础设施
 """
 
 import weechat
@@ -12,6 +12,7 @@ import time
 import uuid
 import os
 from collections import deque
+from helpers import target_to_buffer_label, parse_input
 
 SCRIPT_NAME = "weechat-zenoh"
 SCRIPT_AUTHOR = "Allen <ezagent42>"
@@ -28,8 +29,8 @@ publishers = {}           # key → zenoh.Publisher
 liveliness_tokens = {}    # key → zenoh.LivelinessToken
 buffers = {}              # buffer_key → weechat buffer ptr
 my_nick = ""
-rooms = set()             # 已加入的 room
-dms = set()               # 已开启的 DM
+channels = set()          # 已加入的 channel
+privates = set()          # 已开启的 private
 
 
 # ============================================================
@@ -45,14 +46,10 @@ def zc_init():
         my_nick = os.environ.get("USER", "user_%s" % uuid.uuid4().hex[:6])
         weechat.config_set_plugin("nick", my_nick)
 
-    # Zenoh peer mode, multicast scouting
-    config = zenoh.Config()
-    config.insert_json5("mode", '"peer"')
-
+    # Zenoh client mode, connect to local zenohd
+    from helpers import build_zenoh_config
     connect = weechat.config_get_plugin("connect")
-    if connect:
-        config.insert_json5("connect/endpoints",
-                            json.dumps(connect.split(",")))
+    config = build_zenoh_config(connect if connect else None)
 
     try:
         zenoh_session = zenoh.open(config)
@@ -91,130 +88,130 @@ def zc_deinit():
 
 
 # ============================================================
-# Room / DM 管理
+# Channel / Private 管理
 # ============================================================
 
 def join(target):
-    """加入 #room 或开启 @nick DM"""
+    """加入 #channel 或开启 @nick private"""
     if target.startswith("#"):
-        join_room(target.lstrip("#"))
+        join_channel(target.lstrip("#"))
     elif target.startswith("@"):
-        join_dm(target.lstrip("@"))
+        join_private(target.lstrip("@"))
     else:
-        join_room(target)
+        join_channel(target)
 
 
-def join_room(room_id):
+def join_channel(channel_id):
     import zenoh
 
-    if room_id in rooms:
-        weechat.prnt("", f"[zenoh] Already in #{room_id}")
+    if channel_id in channels:
+        weechat.prnt("", f"[zenoh] Already in #{channel_id}")
         return
 
     # Buffer
     buf = weechat.buffer_new(
-        f"zenoh.#{room_id}", "buffer_input_cb", "",
+        f"zenoh.#{channel_id}", "buffer_input_cb", "",
         "buffer_close_cb", "")
-    weechat.buffer_set(buf, "title", f"Zenoh: #{room_id}")
-    weechat.buffer_set(buf, "short_name", f"#{room_id}")
+    weechat.buffer_set(buf, "title", f"Zenoh: #{channel_id}")
+    weechat.buffer_set(buf, "short_name", f"#{channel_id}")
     weechat.buffer_set(buf, "nicklist", "1")
-    weechat.buffer_set(buf, "localvar_set_type", "room")
-    weechat.buffer_set(buf, "localvar_set_target", room_id)
+    weechat.buffer_set(buf, "localvar_set_type", "channel")
+    weechat.buffer_set(buf, "localvar_set_target", channel_id)
     weechat.nicklist_add_nick(buf, "", my_nick, "default", "", "", 1)
-    buffers[f"room:{room_id}"] = buf
+    buffers[f"channel:{channel_id}"] = buf
 
     # Zenoh pub/sub
-    msg_key = f"wc/rooms/{room_id}/messages"
-    publishers[f"room:{room_id}"] = zenoh_session.declare_publisher(msg_key)
-    subscribers[f"room:{room_id}"] = zenoh_session.declare_subscriber(
+    msg_key = f"wc/channels/{channel_id}/messages"
+    publishers[f"channel:{channel_id}"] = zenoh_session.declare_publisher(msg_key)
+    subscribers[f"channel:{channel_id}"] = zenoh_session.declare_subscriber(
         msg_key,
-        lambda sample, _rid=room_id: _on_room_msg(sample, _rid),
-        background=True
+        lambda sample, _cid=channel_id: _on_channel_msg(sample, _cid),
+
     )
 
     # Liveliness
-    token_key = f"wc/rooms/{room_id}/presence/{my_nick}"
-    liveliness_tokens[f"room:{room_id}"] = \
+    token_key = f"wc/channels/{channel_id}/presence/{my_nick}"
+    liveliness_tokens[f"channel:{channel_id}"] = \
         zenoh_session.liveliness().declare_token(token_key)
 
-    # 监听该 room 的 presence 变化
+    # 监听该 channel 的 presence 变化
     zenoh_session.liveliness().declare_subscriber(
-        f"wc/rooms/{room_id}/presence/*",
-        lambda sample, _rid=room_id: _on_room_presence(sample, _rid),
-        background=True
+        f"wc/channels/{channel_id}/presence/*",
+        lambda sample, _cid=channel_id: _on_channel_presence(sample, _cid),
+
     )
 
     # 查询当前在线的成员
     try:
         replies = zenoh_session.liveliness().get(
-            f"wc/rooms/{room_id}/presence/*")
+            f"wc/channels/{channel_id}/presence/*")
         for reply in replies:
             nick = str(reply.ok.key_expr).rsplit("/", 1)[-1]
-            _add_nick(room_id, nick)
+            _add_nick(channel_id, nick)
     except Exception:
         pass
 
-    rooms.add(room_id)
+    channels.add(channel_id)
 
     # 广播 join
-    _publish_event(f"room:{room_id}", "join", "")
-    weechat.prnt(buf, f"-->\t{my_nick} joined #{room_id}")
+    _publish_event(f"channel:{channel_id}", "join", "")
+    weechat.prnt(buf, f"-->\t{my_nick} joined #{channel_id}")
 
 
-def join_dm(target_nick):
-    # DM key: 两个 nick 字母序排列
+def join_private(target_nick):
+    # Private key: 两个 nick 字母序排列
     pair = "_".join(sorted([my_nick, target_nick]))
-    dm_key = f"dm:{pair}"
+    private_key = f"private:{pair}"
 
-    if pair in dms:
+    if pair in privates:
         return
 
     buf = weechat.buffer_new(
         f"zenoh.@{target_nick}", "buffer_input_cb", "",
         "buffer_close_cb", "")
-    weechat.buffer_set(buf, "title", f"DM with {target_nick}")
+    weechat.buffer_set(buf, "title", f"Private with {target_nick}")
     weechat.buffer_set(buf, "short_name", f"@{target_nick}")
     weechat.buffer_set(buf, "nicklist", "1")
-    weechat.buffer_set(buf, "localvar_set_type", "dm")
+    weechat.buffer_set(buf, "localvar_set_type", "private")
     weechat.buffer_set(buf, "localvar_set_target", target_nick)
-    weechat.buffer_set(buf, "localvar_set_dm_pair", pair)
+    weechat.buffer_set(buf, "localvar_set_private_pair", pair)
     weechat.nicklist_add_nick(buf, "", target_nick, "cyan", "", "", 1)
     weechat.nicklist_add_nick(buf, "", my_nick, "default", "", "", 1)
-    buffers[dm_key] = buf
+    buffers[private_key] = buf
 
-    msg_key = f"wc/dm/{pair}/messages"
-    publishers[dm_key] = zenoh_session.declare_publisher(msg_key)
-    subscribers[dm_key] = zenoh_session.declare_subscriber(
+    msg_key = f"wc/private/{pair}/messages"
+    publishers[private_key] = zenoh_session.declare_publisher(msg_key)
+    subscribers[private_key] = zenoh_session.declare_subscriber(
         msg_key,
-        lambda sample, _dk=dm_key: _on_dm_msg(sample, _dk),
-        background=True
+        lambda sample, _pk=private_key: _on_private_msg(sample, _pk),
+
     )
 
-    dms.add(pair)
+    privates.add(pair)
 
 
 def leave(target):
-    """离开 room 或关闭 DM"""
+    """离开 channel 或关闭 private"""
     if target.startswith("#"):
-        leave_room(target.lstrip("#"))
+        leave_channel(target.lstrip("#"))
     elif target.startswith("@"):
-        leave_dm(target.lstrip("@"))
+        leave_private(target.lstrip("@"))
 
 
-def leave_room(room_id):
-    key = f"room:{room_id}"
-    if room_id not in rooms:
+def leave_channel(channel_id):
+    key = f"channel:{channel_id}"
+    if channel_id not in channels:
         return
     _publish_event(key, "leave", "")
     _cleanup_key(key)
-    rooms.discard(room_id)
+    channels.discard(channel_id)
 
 
-def leave_dm(target_nick):
+def leave_private(target_nick):
     pair = "_".join(sorted([my_nick, target_nick]))
-    key = f"dm:{pair}"
+    key = f"private:{pair}"
     _cleanup_key(key)
-    dms.discard(pair)
+    privates.discard(pair)
 
 
 def _cleanup_key(key):
@@ -249,8 +246,8 @@ def _publish_event(pub_key, msg_type, body):
 def send_message(target, body):
     """公共 API: 发送消息到指定 target"""
     if target.startswith("#"):
-        room_id = target.lstrip("#")
-        key = f"room:{room_id}"
+        channel_id = target.lstrip("#")
+        key = f"channel:{channel_id}"
         _publish_event(key, "msg", body)
         buf = buffers.get(key)
         if buf:
@@ -258,9 +255,9 @@ def send_message(target, body):
     elif target.startswith("@"):
         nick = target.lstrip("@")
         pair = "_".join(sorted([my_nick, nick]))
-        key = f"dm:{pair}"
-        if pair not in dms:
-            join_dm(nick)
+        key = f"private:{pair}"
+        if pair not in privates:
+            join_private(nick)
         _publish_event(key, "msg", body)
         buf = buffers.get(key)
         if buf:
@@ -270,29 +267,37 @@ def send_message(target, body):
 def buffer_input_cb(data, buffer, input_data):
     buf_type = weechat.buffer_get_string(buffer, "localvar_type")
     target = weechat.buffer_get_string(buffer, "localvar_target")
+    msg_type, body = parse_input(input_data)
 
-    if buf_type == "room":
-        _publish_event(f"room:{target}", "msg", input_data)
-        weechat.prnt(buffer, f"{my_nick}\t{input_data}")
-        weechat.hook_signal_send("zenoh_message_sent",
-            weechat.WEECHAT_HOOK_SIGNAL_STRING,
-            json.dumps({"room": f"#{target}", "nick": my_nick,
-                        "body": input_data}))
-    elif buf_type == "dm":
-        pair = weechat.buffer_get_string(buffer, "localvar_dm_pair")
-        _publish_event(f"dm:{pair}", "msg", input_data)
-        weechat.prnt(buffer, f"{my_nick}\t{input_data}")
+    if buf_type == "channel":
+        pub_key = f"channel:{target}"
+        buffer_label = f"channel:#{target}"
+    elif buf_type == "private":
+        pair = weechat.buffer_get_string(buffer, "localvar_private_pair")
+        pub_key = f"private:{pair}"
+        buffer_label = f"private:@{target}"
+    else:
+        return weechat.WEECHAT_RC_OK
 
+    _publish_event(pub_key, msg_type, body)
+    if msg_type == "action":
+        weechat.prnt(buffer, f" *\t{my_nick} {body}")
+    else:
+        weechat.prnt(buffer, f"{my_nick}\t{body}")
+    weechat.hook_signal_send("zenoh_message_sent",
+        weechat.WEECHAT_HOOK_SIGNAL_STRING,
+        json.dumps({"buffer": buffer_label, "nick": my_nick,
+                    "body": body, "type": msg_type}))
     return weechat.WEECHAT_RC_OK
 
 
 def buffer_close_cb(data, buffer):
     buf_type = weechat.buffer_get_string(buffer, "localvar_type")
     target = weechat.buffer_get_string(buffer, "localvar_target")
-    if buf_type == "room":
-        leave_room(target)
-    elif buf_type == "dm":
-        leave_dm(target)
+    if buf_type == "channel":
+        leave_channel(target)
+    elif buf_type == "private":
+        leave_private(target)
     return weechat.WEECHAT_RC_OK
 
 
@@ -300,31 +305,31 @@ def buffer_close_cb(data, buffer):
 # 消息接收 (Zenoh callback → deque → hook_timer)
 # ============================================================
 
-def _on_room_msg(sample, room_id):
+def _on_channel_msg(sample, channel_id):
     try:
         msg = json.loads(sample.payload.to_string())
         if msg.get("nick") != my_nick:
-            msg["_target"] = f"room:{room_id}"
+            msg["_target"] = f"channel:{channel_id}"
             msg_queue.append(msg)
     except Exception:
         pass
 
 
-def _on_dm_msg(sample, dm_key):
+def _on_private_msg(sample, private_key):
     try:
         msg = json.loads(sample.payload.to_string())
         if msg.get("nick") != my_nick:
-            msg["_target"] = dm_key
+            msg["_target"] = private_key
             msg_queue.append(msg)
     except Exception:
         pass
 
 
-def _on_room_presence(sample, room_id):
+def _on_channel_presence(sample, channel_id):
     nick = str(sample.key_expr).rsplit("/", 1)[-1]
     kind = str(sample.kind)
     presence_queue.append({
-        "room_id": room_id,
+        "channel_id": channel_id,
         "nick": nick,
         "online": "PUT" in kind
     })
@@ -351,17 +356,31 @@ def poll_queues_cb(data, remaining_calls):
             weechat.prnt(buf, f" *\t{nick} {body}")
         elif msg_type == "join":
             weechat.prnt(buf, f"-->\t{nick} joined")
-            room_id = target.replace("room:", "")
-            _add_nick(room_id, nick)
+            channel_id = target.replace("channel:", "")
+            _add_nick(channel_id, nick)
         elif msg_type == "leave":
             weechat.prnt(buf, f"<--\t{nick} left")
-            room_id = target.replace("room:", "")
-            _remove_nick(room_id, nick)
+            channel_id = target.replace("channel:", "")
+            _remove_nick(channel_id, nick)
+        elif msg_type == "nick":
+            try:
+                nick_info = json.loads(body)
+                old_nick = nick_info.get("old", "")
+                new_nick = nick_info.get("new", "")
+                if old_nick and new_nick and target.startswith("channel:"):
+                    channel_id = target.replace("channel:", "")
+                    _remove_nick(channel_id, old_nick)
+                    _add_nick(channel_id, new_nick)
+                    weechat.prnt(buf,
+                        f"--\t{old_nick} is now known as {new_nick}")
+            except (json.JSONDecodeError, KeyError):
+                pass
 
         # Signal 供其他脚本消费
+        buffer_label = target_to_buffer_label(target, my_nick)
         weechat.hook_signal_send("zenoh_message_received",
             weechat.WEECHAT_HOOK_SIGNAL_STRING,
-            json.dumps({"target": target, "nick": nick,
+            json.dumps({"buffer": buffer_label, "nick": nick,
                         "body": body, "type": msg_type}))
 
     # Presence
@@ -370,13 +389,13 @@ def poll_queues_cb(data, remaining_calls):
             ev = presence_queue.popleft()
         except IndexError:
             break
-        room_id = ev["room_id"]
+        channel_id = ev["channel_id"]
         nick = ev["nick"]
         if ev["online"]:
-            _add_nick(room_id, nick)
+            _add_nick(channel_id, nick)
         else:
-            _remove_nick(room_id, nick)
-            buf = buffers.get(f"room:{room_id}")
+            _remove_nick(channel_id, nick)
+            buf = buffers.get(f"channel:{channel_id}")
             if buf:
                 weechat.prnt(buf, f"<--\t{nick} went offline")
         weechat.hook_signal_send("zenoh_presence_changed",
@@ -390,13 +409,13 @@ def poll_queues_cb(data, remaining_calls):
 # Nicklist helpers
 # ============================================================
 
-def _add_nick(room_id, nick):
-    buf = buffers.get(f"room:{room_id}")
+def _add_nick(channel_id, nick):
+    buf = buffers.get(f"channel:{channel_id}")
     if buf and not weechat.nicklist_search_nick(buf, "", nick):
         weechat.nicklist_add_nick(buf, "", nick, "cyan", "", "", 1)
 
-def _remove_nick(room_id, nick):
-    buf = buffers.get(f"room:{room_id}")
+def _remove_nick(channel_id, nick):
+    buf = buffers.get(f"channel:{channel_id}")
     if buf:
         ptr = weechat.nicklist_search_nick(buf, "", nick)
         if ptr:
@@ -421,7 +440,7 @@ def zenoh_cmd_cb(data, buffer, args):
             target = weechat.buffer_get_string(buffer, "localvar_target")
             buf_type = weechat.buffer_get_string(buffer, "localvar_type")
             if target:
-                leave(f"{'#' if buf_type == 'room' else '@'}{target}")
+                leave(f"{'#' if buf_type == 'channel' else '@'}{target}")
 
     elif cmd == "nick" and len(argv) >= 2:
         global my_nick
@@ -430,12 +449,39 @@ def zenoh_cmd_cb(data, buffer, args):
         weechat.config_set_plugin("nick", my_nick)
         weechat.prnt("", f"[zenoh] Nick changed: {old} → {my_nick}")
 
+        # Broadcast nick change to all joined channels
+        nick_body = json.dumps({"old": old, "new": my_nick})
+        for cid in channels:
+            _publish_event(f"channel:{cid}", "nick", nick_body)
+
+        # Update global liveliness token
+        if "_global" in liveliness_tokens:
+            liveliness_tokens["_global"].undeclare()
+        liveliness_tokens["_global"] = \
+            zenoh_session.liveliness().declare_token(f"wc/presence/{my_nick}")
+
+        # Update per-channel liveliness tokens
+        for cid in channels:
+            tok_key = f"channel:{cid}"
+            if tok_key in liveliness_tokens:
+                liveliness_tokens[tok_key].undeclare()
+            liveliness_tokens[tok_key] = \
+                zenoh_session.liveliness().declare_token(
+                    f"wc/channels/{cid}/presence/{my_nick}")
+
+        # Warn about open privates (pair keys contain old nick)
+        if privates:
+            weechat.prnt("",
+                f"[zenoh] Warning: {len(privates)} open private(s) still "
+                f"use pair keys with old nick '{old}'. "
+                f"Close and re-open them to update.")
+
     elif cmd == "list":
-        weechat.prnt(buffer, "[zenoh] Rooms:")
-        for r in sorted(rooms):
+        weechat.prnt(buffer, "[zenoh] Channels:")
+        for r in sorted(channels):
             weechat.prnt(buffer, f"  #{r}")
-        weechat.prnt(buffer, "[zenoh] DMs:")
-        for d in sorted(dms):
+        weechat.prnt(buffer, "[zenoh] Privates:")
+        for d in sorted(privates):
             weechat.prnt(buffer, f"  {d}")
 
     elif cmd == "send" and len(argv) >= 3:
@@ -444,9 +490,21 @@ def zenoh_cmd_cb(data, buffer, args):
         send_message(target, body)
 
     elif cmd == "status":
-        weechat.prnt(buffer,
-            f"[zenoh] nick={my_nick} rooms={len(rooms)} "
-            f"dms={len(dms)} session={'open' if zenoh_session else 'closed'}")
+        try:
+            info = zenoh_session.info
+            zid = str(info.zid())
+            routers = list(info.routers_zid())
+            peers = list(info.peers_zid())
+            weechat.prnt(buffer,
+                f"[zenoh] zid={zid[:8]}... nick={my_nick}\n"
+                f"  mode=client  channels={len(channels)} privates={len(privates)}\n"
+                f"  routers={len(routers)} peers={len(peers)}\n"
+                f"  session={'open' if zenoh_session else 'closed'}")
+        except Exception as e:
+            weechat.prnt(buffer,
+                f"[zenoh] nick={my_nick} channels={len(channels)} "
+                f"privates={len(privates)} session={'open' if zenoh_session else 'closed'}\n"
+                f"  (info unavailable: {e})")
 
     else:
         weechat.prnt(buffer,
@@ -471,12 +529,12 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
 
     weechat.hook_command("zenoh",
         "Zenoh P2P chat",
-        "join <#room|@nick> || leave [target] || nick <n> || "
+        "join <#channel|@nick> || leave [target] || nick <n> || "
         "list || send <target> <msg> || status",
-        "  join: Join room or open DM\n"
-        " leave: Leave room or close DM\n"
+        "  join: Join channel or open private\n"
+        " leave: Leave channel or close private\n"
         "  nick: Change nickname\n"
-        "  list: List joined rooms and DMs\n"
+        "  list: List joined channels and privates\n"
         "  send: Send message programmatically\n"
         "status: Show connection status",
         "join || leave || nick || list || send || status",

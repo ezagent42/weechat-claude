@@ -4,9 +4,9 @@ from message import (
     MessageDedup,
     detect_mention,
     clean_mention,
-    make_dm_pair,
-    dm_topic,
-    room_topic,
+    make_private_pair,
+    private_topic,
+    channel_topic,
     presence_topic,
     chunk_message,
 )
@@ -49,55 +49,59 @@ class TestMessageDedup:
 
 class TestMentionDetection:
     def test_mention_present(self):
-        assert detect_mention("hey @agent0 do stuff", "agent0") is True
+        assert detect_mention("hey @alice:agent0 do stuff", "alice:agent0") is True
 
     def test_mention_absent(self):
-        assert detect_mention("hello everyone", "agent0") is False
+        assert detect_mention("hello everyone", "alice:agent0") is False
 
     def test_mention_different_agent(self):
-        assert detect_mention("@agent1 help", "agent0") is False
+        assert detect_mention("@bob:agent1 help", "alice:agent0") is False
 
     def test_mention_at_start(self):
-        assert detect_mention("@agent0 list files", "agent0") is True
+        assert detect_mention("@alice:agent0 list files", "alice:agent0") is True
 
     def test_mention_at_end(self):
-        assert detect_mention("help me @agent0", "agent0") is True
+        assert detect_mention("help me @alice:agent0", "alice:agent0") is True
+
+    def test_mention_no_collision_across_users(self):
+        """alice:agent0 and bob:agent0 should not collide."""
+        assert detect_mention("@bob:agent0 help", "alice:agent0") is False
 
 
 class TestCleanMention:
     def test_removes_mention(self):
-        assert clean_mention("@agent0 list files", "agent0") == "list files"
+        assert clean_mention("@alice:agent0 list files", "alice:agent0") == "list files"
 
     def test_removes_mention_middle(self):
-        assert clean_mention("hey @agent0 do stuff", "agent0") == "hey  do stuff"
+        assert clean_mention("hey @alice:agent0 do stuff", "alice:agent0") == "hey  do stuff"
 
     def test_no_mention_unchanged(self):
-        assert clean_mention("hello world", "agent0") == "hello world"
+        assert clean_mention("hello world", "alice:agent0") == "hello world"
 
 
-class TestMakeDmPair:
+class TestMakePrivatePair:
     def test_alphabetical_order(self):
-        assert make_dm_pair("bob", "alice") == "alice_bob"
+        assert make_private_pair("bob", "alice") == "alice_bob"
 
     def test_same_order(self):
-        assert make_dm_pair("alice", "bob") == "alice_bob"
+        assert make_private_pair("alice", "bob") == "alice_bob"
 
     def test_same_nick(self):
-        assert make_dm_pair("alice", "alice") == "alice_alice"
+        assert make_private_pair("alice", "alice") == "alice_alice"
 
     def test_agent_pair(self):
-        assert make_dm_pair("agent0", "alice") == "agent0_alice"
+        assert make_private_pair("alice:agent0", "bob") == "alice:agent0_bob"
 
 
 class TestTopicHelpers:
-    def test_dm_topic(self):
-        assert dm_topic("alice_bob") == "wc/dm/alice_bob/messages"
+    def test_private_topic(self):
+        assert private_topic("alice_bob") == "wc/private/alice_bob/messages"
 
-    def test_room_topic(self):
-        assert room_topic("general") == "wc/rooms/general/messages"
+    def test_channel_topic(self):
+        assert channel_topic("general") == "wc/channels/general/messages"
 
     def test_presence_topic(self):
-        assert presence_topic("agent0") == "wc/presence/agent0"
+        assert presence_topic("alice:agent0") == "wc/presence/alice:agent0"
 
 
 class TestChunkMessage:

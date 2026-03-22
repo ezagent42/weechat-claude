@@ -23,7 +23,7 @@ class MockZenohSession:
     def declare_publisher(self, key: str):
         return MockPublisher(key, self)
 
-    def declare_subscriber(self, key, handler, background=False):
+    def declare_subscriber(self, key, handler):
         return MockSubscriber(key, handler)
 
     def liveliness(self):
@@ -58,7 +58,7 @@ class MockLiveliness:
     def declare_token(self, key):
         return MockToken()
 
-    def declare_subscriber(self, key, handler, background=False):
+    def declare_subscriber(self, key, handler):
         return MockSubscriber(key, handler)
 
     def get(self, key):
@@ -78,5 +78,5 @@ def mock_zenoh_session():
 
 @pytest.fixture
 def agent_name():
-    """Default agent name for tests."""
-    return "agent0"
+    """Default agent name for tests (scoped to creator per issue #2)."""
+    return "alice:agent0"

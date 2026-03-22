@@ -8,5 +8,8 @@ dependencies = [
     "eclipse-zenoh>=1.0.0",
 ]
 
+[project.optional-dependencies]
+test = ["pytest", "pytest-asyncio"]
+
 [project.scripts]
 weechat-channel = "server:main"

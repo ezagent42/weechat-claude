@@ -43,19 +43,19 @@ def clean_mention(body: str, agent_name: str) -> str:
     return body.replace(f"@{agent_name}", "").strip()
 
 
-def make_dm_pair(nick_a: str, nick_b: str) -> str:
-    """Create a sorted DM pair key from two nicknames."""
+def make_private_pair(nick_a: str, nick_b: str) -> str:
+    """Create a sorted private pair key from two nicknames."""
     return "_".join(sorted([nick_a, nick_b]))
 
 
-def dm_topic(pair: str) -> str:
-    """Return the Zenoh topic for a DM pair."""
-    return f"wc/dm/{pair}/messages"
+def private_topic(pair: str) -> str:
+    """Return the Zenoh topic for a private pair."""
+    return f"wc/private/{pair}/messages"
 
 
-def room_topic(room_id: str) -> str:
-    """Return the Zenoh topic for a room."""
-    return f"wc/rooms/{room_id}/messages"
+def channel_topic(channel_id: str) -> str:
+    """Return the Zenoh topic for a channel."""
+    return f"wc/channels/{channel_id}/messages"
 
 
 def presence_topic(nick: str) -> str:

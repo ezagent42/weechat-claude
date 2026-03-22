@@ -1,6 +1,6 @@
 """Integration test: Zenoh pub/sub round-trip.
 
-Requires a real Zenoh session (peer mode, localhost).
+Requires a real Zenoh session (client mode, connects to local zenohd).
 """
 
 import json
@@ -11,37 +11,21 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def zenoh_sessions():
-    """Create two Zenoh peer sessions for testing."""
-    import zenoh
 
-    config_a = zenoh.Config()
-    config_a.insert_json5("mode", '"peer"')
-    session_a = zenoh.open(config_a)
-
-    config_b = zenoh.Config()
-    config_b.insert_json5("mode", '"peer"')
-    session_b = zenoh.open(config_b)
-
-    yield session_a, session_b
-
-    session_a.close()
-    session_b.close()
+# zenoh_sessions fixture provided by tests/integration/conftest.py
 
 
 class TestZenohPubSub:
-    def test_room_message_roundtrip(self, zenoh_sessions):
+    def test_channel_message_roundtrip(self, zenoh_sessions):
         session_a, session_b = zenoh_sessions
         received = []
-        topic = "wc/rooms/test/messages"
+        topic = "wc/channels/test/messages"
 
         session_b.declare_subscriber(
             topic,
             lambda sample: received.append(
                 json.loads(sample.payload.to_string())
             ),
-            background=True,
         )
 
         # Allow subscriber to settle
@@ -65,23 +49,22 @@ class TestZenohPubSub:
         assert received[0]["nick"] == "alice"
         assert received[0]["body"] == "hello from integration test"
 
-    def test_dm_message_roundtrip(self, zenoh_sessions):
+    def test_private_message_roundtrip(self, zenoh_sessions):
         session_a, session_b = zenoh_sessions
         received = []
-        topic = "wc/dm/alice_bob/messages"
+        topic = "wc/private/alice_bob/messages"
 
         session_b.declare_subscriber(
             topic,
             lambda sample: received.append(
                 json.loads(sample.payload.to_string())
             ),
-            background=True,
         )
 
         time.sleep(0.5)
 
         msg = {
-            "id": "dm-001",
+            "id": "private-001",
             "nick": "alice",
             "type": "msg",
             "body": "private message",
@@ -96,6 +79,14 @@ class TestZenohPubSub:
         assert len(received) == 1
         assert received[0]["body"] == "private message"
 
+    def test_client_sees_router(self, zenoh_sessions):
+        """Verify client session can see the zenohd router."""
+        session_a, session_b = zenoh_sessions
+        routers_a = list(session_a.info.routers_zid())
+        routers_b = list(session_b.info.routers_zid())
+        assert len(routers_a) >= 1, "Client A should see at least one router"
+        assert len(routers_b) >= 1, "Client B should see at least one router"
+
     def test_liveliness_token(self, zenoh_sessions):
         session_a, session_b = zenoh_sessions
         events = []
@@ -103,7 +94,6 @@ class TestZenohPubSub:
         session_b.liveliness().declare_subscriber(
             "wc/presence/*",
             lambda sample: events.append(str(sample.key_expr)),
-            background=True,
         )
 
         time.sleep(0.5)
