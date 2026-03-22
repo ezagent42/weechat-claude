@@ -158,3 +158,29 @@ class TestSidecarNick:
         finally:
             proc.terminate()
             proc.wait()
+
+
+class TestSidecarBuildConfig:
+    def test_init_with_custom_connect(self):
+        """Sidecar accepts custom connect endpoint."""
+        proc = start_sidecar(mock=True)
+        try:
+            send_cmd(proc, {"cmd": "init", "nick": "alice",
+                            "connect": "tcp/10.0.0.1:7447"})
+            event = read_event(proc)
+            assert event["event"] == "ready"
+        finally:
+            proc.terminate()
+            proc.wait()
+
+    def test_init_with_multiple_endpoints(self):
+        """Sidecar accepts comma-separated endpoints."""
+        proc = start_sidecar(mock=True)
+        try:
+            send_cmd(proc, {"cmd": "init", "nick": "alice",
+                            "connect": "tcp/10.0.0.1:7447,tcp/10.0.0.2:7447"})
+            event = read_event(proc)
+            assert event["event"] == "ready"
+        finally:
+            proc.terminate()
+            proc.wait()
