@@ -73,7 +73,8 @@ MCPEOF
 tmux send-keys -t "$SESSION" \
   "cd '$WORKSPACE' && claude \
     --permission-mode bypassPermissions \
-    --mcp-config '$MCP_CONFIG'" Enter
+    --mcp-config '$MCP_CONFIG' \
+    --dangerously-load-development-channels server:weechat-channel" Enter
 
 echo -n "  Waiting for $USERNAME:agent0..."
 sleep 5

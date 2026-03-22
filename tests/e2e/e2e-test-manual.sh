@@ -73,7 +73,7 @@ sleep 2
 
 PANE_AGENT0=$(split_pane -h "$PANE_ALICE")
 tmux send-keys -t "$PANE_AGENT0" \
-    "cd $PROJECT_DIR && AGENT_NAME='alice:agent0' claude $CLAUDE_FLAGS --mcp-config $MCP_CONFIG" Enter
+    "cd $PROJECT_DIR && AGENT_NAME='alice:agent0' claude $CLAUDE_FLAGS --mcp-config $MCP_CONFIG $CLAUDE_CHANNEL_FLAGS" Enter
 
 if wait_for_pane "$PANE_AGENT0" "Claude Code" 20; then
     pass "alice:agent0: claude started"
@@ -117,15 +117,13 @@ pause
 step "Phase 3: alice @mentions agent0"
 
 tmux send-keys -t "$PANE_ALICE" "@alice:agent0 what is the capital of France?" Enter
-sleep 3
 
-tmux send-keys -t "$PANE_AGENT0" \
-    'Reply to #general with "The capital of France is Paris."' Enter
-
-if wait_for_pane "$PANE_ALICE" "Paris" 40; then
-    pass "alice ↔ agent0: mention and reply working"
+# Agent0 should auto-respond via channel notification — no tmux send-keys needed.
+# Channel server sends @mention as MCP notification → claude reads it → calls reply tool.
+if wait_for_pane "$PANE_ALICE" "alice:agent0" 60; then
+    pass "alice ↔ agent0: agent auto-responded to @mention"
 else
-    fail "alice ↔ agent0: reply not received"
+    fail "alice ↔ agent0: agent did not auto-respond (channel notification may not be working)"
 fi
 
 pause

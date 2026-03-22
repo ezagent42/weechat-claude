@@ -165,7 +165,8 @@ def create_agent(name, workspace):
         f"cd '{workspace}' && "
         f"claude "
         f"--permission-mode bypassPermissions "
-        f"--mcp-config '{mcp_config}'"
+        f"--mcp-config '{mcp_config}' "
+        f"--dangerously-load-development-channels server:weechat-channel"
     )
     # Split vertically from the last agent pane (right column),
     # so agents stack below agent0.

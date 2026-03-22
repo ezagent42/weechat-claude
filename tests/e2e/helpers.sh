@@ -16,6 +16,8 @@ CLAUDE_FLAGS="--permission-mode bypassPermissions"
 if [ -f "$PROJECT_DIR/.claude/mcp.json" ]; then
     CLAUDE_FLAGS="$CLAUDE_FLAGS --mcp-config $PROJECT_DIR/.claude/mcp.json"
 fi
+# Enable channel notifications from weechat-channel MCP server
+CLAUDE_CHANNEL_FLAGS="--dangerously-load-development-channels server:weechat-channel"
 
 # User directories
 ALICE_WC_DIR="/tmp/e2e-alice-$$"
