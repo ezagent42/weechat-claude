@@ -172,6 +172,72 @@ def _cleanup_key(key):
         liveliness_tokens.pop(key).undeclare()
 
 
+def _on_private_msg(sample, private_key):
+    """Zenoh callback — runs in Zenoh thread."""
+    try:
+        msg = json.loads(sample.payload.to_string())
+        if msg.get("nick") != my_nick:
+            msg["_target"] = private_key
+            emit({"event": "message", "target": private_key, "msg": msg})
+    except Exception:
+        pass
+
+
+def handle_join_private(params: dict):
+    target_nick = params["target_nick"]
+    pair = "_".join(sorted([my_nick, target_nick]))
+    key = f"private:{pair}"
+
+    if pair in privates:
+        return
+
+    msg_key = f"wc/private/{pair}/messages"
+    publishers[key] = session.declare_publisher(msg_key)
+    subscribers[key] = session.declare_subscriber(
+        msg_key,
+        lambda sample, _pk=key: _on_private_msg(sample, _pk))
+
+    privates.add(pair)
+
+
+def handle_leave_private(params: dict):
+    target_nick = params["target_nick"]
+    pair = "_".join(sorted([my_nick, target_nick]))
+    key = f"private:{pair}"
+    _cleanup_key(key)
+    privates.discard(pair)
+
+
+def handle_send(params: dict):
+    _publish_event(params["pub_key"], params["type"], params["body"])
+
+
+def handle_set_nick(params: dict):
+    global my_nick
+    old = my_nick
+    my_nick = params["nick"]
+
+    # Broadcast nick change to all channels
+    nick_body = json.dumps({"old": old, "new": my_nick})
+    for cid in channels:
+        _publish_event(f"channel:{cid}", "nick", nick_body)
+
+    # Update global liveliness
+    if "_global" in liveliness_tokens:
+        liveliness_tokens["_global"].undeclare()
+    liveliness_tokens["_global"] = \
+        session.liveliness().declare_token(f"wc/presence/{my_nick}")
+
+    # Update per-channel liveliness
+    for cid in channels:
+        tok_key = f"channel:{cid}"
+        if tok_key in liveliness_tokens:
+            liveliness_tokens[tok_key].undeclare()
+        liveliness_tokens[tok_key] = \
+            session.liveliness().declare_token(
+                f"wc/channels/{cid}/presence/{my_nick}")
+
+
 def handle_status(params: dict):
     if _use_mock:
         zid = "mock-zid"
@@ -199,6 +265,14 @@ def handle_command(cmd: dict):
         handle_leave_channel(cmd)
     elif name == "status":
         handle_status(cmd)
+    elif name == "join_private":
+        handle_join_private(cmd)
+    elif name == "leave_private":
+        handle_leave_private(cmd)
+    elif name == "send":
+        handle_send(cmd)
+    elif name == "set_nick":
+        handle_set_nick(cmd)
     else:
         emit({"event": "error", "detail": f"Unknown command: {name}"})
 

@@ -93,3 +93,68 @@ class TestSidecarJoinChannel:
         finally:
             proc.terminate()
             proc.wait()
+
+
+class TestSidecarPrivate:
+    def test_join_private(self):
+        proc = start_sidecar(mock=True)
+        try:
+            send_cmd(proc, {"cmd": "init", "nick": "alice",
+                            "connect": "tcp/127.0.0.1:7447"})
+            read_event(proc)  # ready
+            send_cmd(proc, {"cmd": "join_private", "target_nick": "bob"})
+            send_cmd(proc, {"cmd": "status"})
+            event = read_event(proc)
+            assert event["privates"] == 1
+        finally:
+            proc.terminate()
+            proc.wait()
+
+    def test_leave_private(self):
+        proc = start_sidecar(mock=True)
+        try:
+            send_cmd(proc, {"cmd": "init", "nick": "alice",
+                            "connect": "tcp/127.0.0.1:7447"})
+            read_event(proc)
+            send_cmd(proc, {"cmd": "join_private", "target_nick": "bob"})
+            send_cmd(proc, {"cmd": "leave_private", "target_nick": "bob"})
+            send_cmd(proc, {"cmd": "status"})
+            event = read_event(proc)
+            assert event["privates"] == 0
+        finally:
+            proc.terminate()
+            proc.wait()
+
+
+class TestSidecarSend:
+    def test_send_does_not_error(self):
+        proc = start_sidecar(mock=True)
+        try:
+            send_cmd(proc, {"cmd": "init", "nick": "alice",
+                            "connect": "tcp/127.0.0.1:7447"})
+            read_event(proc)
+            send_cmd(proc, {"cmd": "join_channel", "channel_id": "general"})
+            send_cmd(proc, {"cmd": "send", "pub_key": "channel:general",
+                            "type": "msg", "body": "hello"})
+            send_cmd(proc, {"cmd": "status"})
+            event = read_event(proc)
+            assert event["event"] == "status_response"
+        finally:
+            proc.terminate()
+            proc.wait()
+
+
+class TestSidecarNick:
+    def test_set_nick(self):
+        proc = start_sidecar(mock=True)
+        try:
+            send_cmd(proc, {"cmd": "init", "nick": "alice",
+                            "connect": "tcp/127.0.0.1:7447"})
+            read_event(proc)
+            send_cmd(proc, {"cmd": "set_nick", "nick": "alice2"})
+            send_cmd(proc, {"cmd": "status"})
+            event = read_event(proc)
+            assert event["nick"] == "alice2"
+        finally:
+            proc.terminate()
+            proc.wait()
