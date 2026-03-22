@@ -11,7 +11,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 from collections import deque
 from helpers import target_to_buffer_label, parse_input
 
@@ -27,6 +26,7 @@ sidecar_fd_hook = None
 read_buffer = ""
 sidecar_connected = False
 pending_autojoin = ""     # targets to join on ready event
+pending_status_buffer = "" # buffer ptr to print status response to
 msg_queue = deque()
 presence_queue = deque()
 buffers = {}              # buffer_key → weechat buffer ptr
@@ -61,8 +61,7 @@ def _start_sidecar():
         [sys.executable, "-u", _sidecar_path()],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=log_file)
-    # Note: binary mode (no text=True) — os.read returns bytes,
-    # consistent with hook_fd usage. -u flag disables Python buffering.
+    log_file.close()  # Popen dupes the fd; close parent's copy
 
     # Monitor stdout with hook_fd
     fd = sidecar_proc.stdout.fileno()
@@ -100,41 +99,6 @@ def _sidecar_send(cmd: dict):
     except (BrokenPipeError, OSError) as e:
         weechat.prnt("", f"[zenoh] Sidecar write error: {e}")
         _handle_sidecar_crash()
-
-
-def _sidecar_read_sync(timeout=2.0):
-    """Synchronous read until status_response arrives.
-    Non-status events encountered are dispatched to _handle_event."""
-    import select
-    global read_buffer
-    if not sidecar_proc:
-        return None
-    fd = sidecar_proc.stdout.fileno()
-    deadline = time.time() + timeout
-    while True:
-        remaining = deadline - time.time()
-        if remaining <= 0:
-            return None
-        ready, _, _ = select.select([fd], [], [], remaining)
-        if not ready:
-            return None
-        chunk = os.read(fd, 65536)
-        if not chunk:
-            return None
-        read_buffer += chunk.decode("utf-8", errors="replace")
-        while "\n" in read_buffer:
-            line, read_buffer = read_buffer.split("\n", 1)
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if event.get("event") == "status_response":
-                return event
-            # Non-status event — dispatch normally
-            _handle_event(event)
 
 
 def _on_sidecar_fd(data, fd):
@@ -192,6 +156,19 @@ def _handle_event(event: dict):
 
     elif etype == "presence":
         presence_queue.append(event)
+
+    elif etype == "status_response":
+        global pending_status_buffer
+        buf = pending_status_buffer
+        pending_status_buffer = ""
+        if buf:
+            weechat.prnt(buf,
+                f"[zenoh] zid={event['zid'][:8]}... nick={my_nick}\n"
+                f"  mode=client  channels={event.get('channels', 0)} "
+                f"privates={event.get('privates', 0)}\n"
+                f"  routers={len(event.get('routers', []))} "
+                f"peers={len(event.get('peers', []))}\n"
+                f"  sidecar=running")
 
     elif etype == "error":
         weechat.prnt("", f"[zenoh] Sidecar error: {event.get('detail')}")
@@ -526,21 +503,9 @@ def zenoh_cmd_cb(data, buffer, args):
         send_message(target, body)
 
     elif cmd == "status":
+        global pending_status_buffer
+        pending_status_buffer = buffer
         _sidecar_send({"cmd": "status"})
-        event = _sidecar_read_sync(timeout=2.0)
-        if event and event.get("event") == "status_response":
-            weechat.prnt(buffer,
-                f"[zenoh] zid={event['zid'][:8]}... nick={my_nick}\n"
-                f"  mode=client  channels={event.get('channels', 0)} "
-                f"privates={event.get('privates', 0)}\n"
-                f"  routers={len(event.get('routers', []))} "
-                f"peers={len(event.get('peers', []))}\n"
-                f"  sidecar=running")
-        else:
-            weechat.prnt(buffer,
-                f"[zenoh] nick={my_nick} channels={len(channels)} "
-                f"privates={len(privates)} sidecar="
-                f"{'running' if sidecar_proc and sidecar_proc.poll() is None else 'stopped'}")
 
     elif cmd == "reconnect":
         weechat.prnt("", "[zenoh] Reconnecting...")

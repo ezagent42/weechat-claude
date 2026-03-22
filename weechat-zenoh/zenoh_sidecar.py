@@ -9,7 +9,7 @@ import json
 import sys
 import uuid
 import time
-from collections import deque
+import threading
 
 # Support --mock flag for testing
 _use_mock = "--mock" in sys.argv
@@ -30,21 +30,13 @@ liveliness_subs = {}     # key → zenoh liveliness Subscriber
 liveliness_tokens = {}   # key → zenoh.LivelinessToken
 channels = set()
 privates = set()
-event_queue = deque()    # events to write to stdout
+_stdout_lock = threading.Lock()
 
 
 def emit(event: dict):
-    """Write JSON event to stdout (thread-safe via deque)."""
-    event_queue.append(event)
-
-
-def flush_events():
-    """Write all queued events to stdout. Call from main thread."""
-    while True:
-        try:
-            event = event_queue.popleft()
-        except IndexError:
-            break
+    """Write JSON event to stdout. Thread-safe via lock.
+    Called from both main thread and Zenoh callback threads."""
+    with _stdout_lock:
         sys.stdout.write(json.dumps(event) + "\n")
         sys.stdout.flush()
 
@@ -288,10 +280,8 @@ def main():
             cmd = json.loads(line)
         except json.JSONDecodeError as e:
             emit({"event": "error", "detail": f"Invalid JSON: {e}"})
-            flush_events()
             continue
         handle_command(cmd)
-        flush_events()
 
     # stdin EOF — clean up
     cleanup()
