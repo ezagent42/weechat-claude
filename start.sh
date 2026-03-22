@@ -54,12 +54,26 @@ ln -sf "../weechat-agent.py" "$WC_DIR/python/autoload/"
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 tmux new-session -d -s "$SESSION" -x 220 -y 50
 
-# --- Pane 0: Claude Code (agent0) with channel plugin ---
+# --- 生成 agent0 MCP config ---
+MCP_CONFIG="/tmp/wc-mcp-${USERNAME}-agent0.json"
+cat > "$MCP_CONFIG" << MCPEOF
+{
+  "mcpServers": {
+    "weechat-channel": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--project", "$SCRIPT_DIR/weechat-channel-server", "python3", "$SCRIPT_DIR/weechat-channel-server/server.py"],
+      "env": { "AGENT_NAME": "$USERNAME:agent0" }
+    }
+  }
+}
+MCPEOF
+
+# --- Pane 0: Claude Code (agent0) with MCP channel server ---
 tmux send-keys -t "$SESSION" \
-  "cd '$WORKSPACE' && AGENT_NAME='$USERNAME:agent0' claude \
-    --dangerously-skip-permissions \
-    --dangerously-load-development-channels \
-    plugin:weechat-channel" Enter
+  "cd '$WORKSPACE' && claude \
+    --permission-mode bypassPermissions \
+    --mcp-config '$MCP_CONFIG'" Enter
 
 echo -n "  Waiting for $USERNAME:agent0..."
 sleep 5

@@ -10,6 +10,7 @@ import weechat
 import json
 import os
 import subprocess
+import tempfile
 
 SCRIPT_NAME = "weechat-agent"
 SCRIPT_AUTHOR = "Allen <ezagent42>"
@@ -67,6 +68,46 @@ def agent_init():
 
 
 # ============================================================
+# MCP Config 生成
+# ============================================================
+
+def _mcp_config_path(name):
+    """返回 agent 对应的临时 MCP config 路径。"""
+    safe = name.replace(":", "-")
+    return os.path.join(tempfile.gettempdir(), f"wc-mcp-{safe}.json")
+
+
+def _generate_mcp_config(name):
+    """生成 MCP config JSON，返回文件路径。"""
+    config = {
+        "mcpServers": {
+            "weechat-channel": {
+                "type": "stdio",
+                "command": "uv",
+                "args": [
+                    "run", "--project", CHANNEL_PLUGIN_DIR,
+                    "python3", os.path.join(CHANNEL_PLUGIN_DIR, "server.py"),
+                ],
+                "env": {"AGENT_NAME": name},
+            }
+        }
+    }
+    path = _mcp_config_path(name)
+    with open(path, "w") as f:
+        json.dump(config, f)
+    return path
+
+
+def _cleanup_mcp_config(name):
+    """删除 agent 的临时 MCP config。"""
+    path = _mcp_config_path(name)
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
+# ============================================================
 # Agent 创建
 # ============================================================
 
@@ -84,14 +125,13 @@ def create_agent(name, workspace):
 
     workspace = os.path.abspath(workspace)
 
-    # 1. 在 tmux pane 中启动 Claude Code with channel plugin
+    # 1. 生成 MCP config 并在 tmux pane 中启动 Claude Code
+    mcp_config = _generate_mcp_config(name)
     cmd = (
         f"cd '{workspace}' && "
-        f"AGENT_NAME='{name}' "
         f"claude "
-        f"--dangerously-skip-permissions "
-        f"--dangerously-load-development-channels "
-        f"plugin:weechat-channel"
+        f"--permission-mode bypassPermissions "
+        f"--mcp-config '{mcp_config}'"
     )
     result = subprocess.run(
         ["tmux", "split-window", "-h", "-P", "-F", "#{pane_id}",
@@ -105,6 +145,7 @@ def create_agent(name, workspace):
         "workspace": workspace,
         "status": "starting",
         "pane_id": pane_id,
+        "mcp_config": mcp_config,
     }
 
     # 3. 通知 weechat-zenoh 创建 private buffer
@@ -134,6 +175,7 @@ def stop_agent(name):
             capture_output=True
         )
 
+    _cleanup_mcp_config(name)
     agents[name]["status"] = "stopped"
     weechat.prnt("", f"[agent] Stopped {name}")
 
@@ -249,6 +291,7 @@ def agent_deinit():
     for name in list(agents.keys()):
         if name != PRIMARY_AGENT:
             stop_agent(name)
+        _cleanup_mcp_config(name)
     return weechat.WEECHAT_RC_OK
 
 
