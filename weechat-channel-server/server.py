@@ -121,6 +121,18 @@ def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
 
     zenoh_session.declare_subscriber("wc/private/*/messages", on_private)
     zenoh_session.declare_subscriber("wc/channels/*/messages", on_channel)
+
+    # Auto-join channels from AUTOJOIN_CHANNELS env (comma-separated)
+    autojoin = os.environ.get("AUTOJOIN_CHANNELS", "")
+    if autojoin:
+        for channel in autojoin.split(","):
+            channel = channel.strip().lstrip("#")
+            if channel and channel not in joined_channels:
+                token = zenoh_session.liveliness().declare_token(
+                    f"wc/channels/{channel}/presence/{AGENT_NAME}")
+                joined_channels[channel] = token
+                print(f"[channel-server] Auto-joined #{channel}", file=sys.stderr)
+
     return zenoh_session, joined_channels
 
 # ============================================================

@@ -63,7 +63,7 @@ cat > "$MCP_CONFIG" << MCPEOF
       "type": "stdio",
       "command": "uv",
       "args": ["run", "--project", "$SCRIPT_DIR/weechat-channel-server", "python3", "$SCRIPT_DIR/weechat-channel-server/server.py"],
-      "env": { "AGENT_NAME": "$USERNAME:agent0" }
+      "env": { "AGENT_NAME": "$USERNAME:agent0", "AUTOJOIN_CHANNELS": "general" }
     }
   }
 }

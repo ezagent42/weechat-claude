@@ -92,7 +92,10 @@ def _generate_mcp_config(name):
                     "run", "--project", CHANNEL_PLUGIN_DIR,
                     "python3", os.path.join(CHANNEL_PLUGIN_DIR, "server.py"),
                 ],
-                "env": {"AGENT_NAME": name},
+                "env": {
+                    "AGENT_NAME": name,
+                    "AUTOJOIN_CHANNELS": "general",
+                },
             }
         }
     }
