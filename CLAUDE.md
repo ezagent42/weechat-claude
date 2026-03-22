@@ -15,6 +15,7 @@ Three composable components connected via Zenoh topic contracts:
 - `weechat-zenoh/weechat-zenoh.py` — WeeChat plugin for P2P channels & privates over Zenoh
 - `weechat-channel-server/` — MCP server bridging Claude Code ↔ Zenoh (server.py, tools.py, message.py)
 - `weechat-agent/weechat-agent.py` — Agent lifecycle manager (spawn/stop Claude in tmux panes)
+- `zenohd` — local Zenoh router (auto-started by start.sh, persists across sessions)
 
 ## Zenoh Topics
 
@@ -31,7 +32,8 @@ Messages are JSON: `{id, nick, type, body, ts}`
 
 ```bash
 ./start.sh ~/workspace username    # Full system startup (tmux + agent0 + weechat)
-./stop.sh                          # Kill tmux session
+./stop.sh                          # Stop tmux session (zenohd keeps running)
+./stop.sh --all                    # Stop tmux session + zenohd
 pytest tests/unit/                 # Unit tests (mocked Zenoh, fast)
 pytest -m integration tests/       # Integration tests (real Zenoh peers)
 ```
@@ -60,4 +62,3 @@ pytest -m integration tests/       # Integration tests (real Zenoh peers)
 - Channel MCP requires `--dangerously-load-development-channels` flag
 - `agent0` is special — created by start.sh, cannot be stopped via `/agent stop`
 - WeeChat callbacks must not block — use deques + timers for async work
-- Zenoh Python + WeeChat .so may conflict — sidecar process is planned

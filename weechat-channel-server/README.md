@@ -21,4 +21,4 @@ claude --dangerously-load-development-channels plugin:weechat-channel
 ## Environment Variables
 
 - `AGENT_NAME` — agent identifier (default: `agent0`)
-- `ZENOH_CONNECT` — Zenoh endpoints (optional, multicast by default)
+- `ZENOH_CONNECT` — Zenoh router endpoints (default: tcp/127.0.0.1:7447)

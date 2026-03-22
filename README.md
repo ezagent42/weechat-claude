@@ -52,6 +52,7 @@ Scenario 3: Full deployment (all three components)
 - [uv](https://docs.astral.sh/uv/) ≥ 0.4
 - [WeeChat](https://weechat.org/) ≥ 4.0
 - [tmux](https://github.com/tmux/tmux)
+- [zenohd](https://github.com/eclipse-zenoh/zenoh) — local Zenoh router (auto-started by start.sh)
 - Python ≥ 3.10
 
 ## Quick Start
@@ -61,6 +62,7 @@ git clone https://github.com/ezagent42/weechat-claude.git
 cd weechat-claude
 
 # Launch the full system (agent0 + WeeChat in tmux)
+# zenohd is automatically started if not already running
 ./start.sh ~/my-project alice
 ```
 
@@ -182,7 +184,7 @@ weechat-claude/
 ├── tests/
 │   ├── conftest.py                 # Mock Zenoh fixtures
 │   ├── unit/                       # Fast, mocked tests
-│   └── integration/                # Real Zenoh peer tests
+│   └── integration/                # Real Zenoh integration tests (requires zenohd)
 └── docs/
     ├── PRD.md                      # Full design document
     └── specs/                      # Implementation specs
@@ -194,7 +196,7 @@ weechat-claude/
 # Unit tests (mocked Zenoh — fast)
 pytest tests/unit/
 
-# Integration tests (requires Zenoh peer — slower)
+# Integration tests (requires zenohd running)
 pytest -m integration tests/integration/
 
 # All tests
@@ -208,7 +210,7 @@ pytest
 | Channel MCP is research preview | Requires `--dangerously-load-development-channels` | Wait for official release |
 | Claude Code requires login | No API key auth | Use claude.ai account |
 | `--dangerously-skip-permissions` | Claude executes file ops without confirmation | Use only in trusted environments |
-| Zenoh Python + WeeChat .so | May conflict on some systems | Planned: Zenoh sidecar process |
+| zenohd must be running | All Zenoh communication routes through local zenohd | Auto-started by start.sh |
 | No cross-session history | Messages lost on restart | WeeChat logger saves locally; future: zenohd storage |
 
 ## Roadmap

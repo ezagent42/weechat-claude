@@ -5,6 +5,8 @@ Tests that require a full WeeChat + Claude Code runtime and cannot be automated.
 ## Prerequisites
 
 - macOS/Linux with tmux, weechat, claude, uv installed
+- zenohd installed (`brew install eclipse-zenoh/zenoh/zenohd`)
+- zenohd will be auto-started by start.sh if not running
 - Two terminal windows minimum
 - Claude Code account logged in
 
@@ -34,7 +36,7 @@ Tests that require a full WeeChat + Claude Code runtime and cannot be automated.
 
 ### Test: /zenoh status output
 1. Join a channel, run `/zenoh status`
-2. **Expected**: Output shows zid, peer count, mode=peer, channel/private counts
+2. **Expected**: Output shows zid, peer count, mode=client, channel/private counts
 
 ## Phase 3: Channel Server
 
@@ -67,3 +69,13 @@ Tests that require a full WeeChat + Claude Code runtime and cannot be automated.
 ### Test: Agent restart
 1. `/agent restart helper1`
 2. **Expected**: helper1 stops, then restarts after 2s in same workspace
+
+## Phase 5: zenohd Lifecycle
+
+### Test: stop.sh does not affect other users' zenohd
+1. Start system A: `./start.sh /tmp/a alice`
+2. In another terminal, verify zenohd is running: `pgrep -x zenohd`
+3. Stop system A: `./stop.sh`
+4. Verify zenohd is still running: `pgrep -x zenohd` (should still show PID)
+5. Full stop: `./stop.sh --all`
+6. Verify zenohd stopped: `pgrep -x zenohd` (should be empty)

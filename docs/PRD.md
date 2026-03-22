@@ -23,7 +23,7 @@
 
 Claude Code Channels（research preview, 2026-03-20）支持 Telegram/Discord 作为消息桥接，但对以下场景不够理想：
 
-- **本地/LAN 优先**：不依赖外部平台，数据不出本机/内网
+- **本地路由**：zenohd 作为轻量本地路由，数据不出本机/内网
 - **多 Agent 管理**：同时运行和管理多个 Claude Code 实例
 - **终端原生**：在 tmux/terminal 中完成一切
 - **可组合**：各组件独立使用，不强制绑定
@@ -118,7 +118,7 @@ type 枚举：`msg`, `action` (/me), `join`, `leave`, `nick`
 |`/zenoh leave [target]`     |离开当前或指定的 channel/private                                   |
 |`/zenoh nick <n>`           |修改昵称，广播 nick 变更                                           |
 |`/zenoh list`               |列出已加入的 channel 和 private                                   |
-|`/zenoh status`             |显示 Zenoh session 状态（mode, peers, scouting）                |
+|`/zenoh status`             |显示 Zenoh session 状态（mode, routers, peers）                |
 |`/zenoh send <target> <msg>`|程序化发送消息（供其他脚本调用）                                          |
 
 ### 3.5 对外暴露的 Signal（供其他脚本 hook）
@@ -357,7 +357,7 @@ See original PRD for private, channel @mention, dynamic agent creation, agent li
 |Channel research preview        |自定义 channel 必须用 `--dangerously-load-development-channels`|等正式发布                                     |
 |claude.ai 登录必需                  |不支持 API key                                              |使用 claude.ai 账号                           |
 |`--dangerously-skip-permissions`|Claude 无需确认即可执行文件操作                                      |仅在信任环境使用                                  |
-|Zenoh Python in WeeChat         |`.so` 可能与 WeeChat 内嵌 Python 冲突                           |Plan B：Zenoh sidecar 进程                   |
+|zenohd 必须运行                    |所有 Zenoh 通信依赖本地 zenohd                                  |start.sh 自动启动                             |
 |无跨 session 历史                   |重启后消息丢失                                                  |WeeChat logger 自动保存本地；未来可接入 zenohd storage|
 
 -----
@@ -367,7 +367,7 @@ See original PRD for private, channel @mention, dynamic agent creation, agent li
 |方向                  |描述                                            |
 |--------------------|----------------------------------------------|
 |**Agent 间通信**       |Agent A publish 到 Agent B 的 private topic，直接协作 |
-|**zenohd + storage**|接入 filesystem backend，提供跨 session 消息历史        |
+|**zenohd + storage**|zenohd 已作为基础设施就绪，接入 filesystem/rocksdb storage backend 即可提供跨 session 消息历史|
 |**飞书桥接**            |复用 Zenoh 总线，飞书作为另一个 Zenoh 节点                  |
 |**Ed25519 身份**      |消息签名验证，防冒充                                    |
 |**Socialware**      |Channel → Slot，Agent role → Kit，Capability 权限 |

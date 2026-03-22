@@ -52,6 +52,7 @@
 - [uv](https://docs.astral.sh/uv/) ≥ 0.4
 - [WeeChat](https://weechat.org/) ≥ 4.0
 - [tmux](https://github.com/tmux/tmux)
+- [zenohd](https://github.com/eclipse-zenoh/zenoh) — 本地 Zenoh 路由（start.sh 自动启动）
 - Python ≥ 3.10
 
 ## 快速开始
@@ -61,6 +62,7 @@ git clone https://github.com/ezagent42/weechat-claude.git
 cd weechat-claude
 
 # 启动完整系统（agent0 + WeeChat，运行在 tmux 中）
+# zenohd 未运行时会自动启动
 ./start.sh ~/my-project alice
 ```
 
@@ -182,7 +184,7 @@ weechat-claude/
 ├── tests/
 │   ├── conftest.py                 # Mock Zenoh fixtures
 │   ├── unit/                       # 单元测试（Mock，快速）
-│   └── integration/                # 集成测试（真实 Zenoh peer）
+│   └── integration/                # 集成测试（需要 zenohd 运行）
 └── docs/
     └── PRD.md                      # 完整设计文档
 ```
@@ -193,7 +195,7 @@ weechat-claude/
 # 单元测试（Mock Zenoh，快速）
 pytest tests/unit/
 
-# 集成测试（需要 Zenoh peer，较慢）
+# 集成测试（需要 zenohd 运行）
 pytest -m integration tests/integration/
 
 # 全部测试
@@ -207,7 +209,7 @@ pytest
 | Channel MCP 处于 research preview | 需要 `--dangerously-load-development-channels` 标志 | 等待正式发布 |
 | Claude Code 需要登录 | 不支持 API key 认证 | 使用 claude.ai 账号 |
 | `--dangerously-skip-permissions` | Claude 无需确认即可执行文件操作 | 仅在受信任环境中使用 |
-| Zenoh Python + WeeChat .so | 部分系统上可能存在动态库冲突 | 计划中：Zenoh sidecar 进程 |
+| zenohd 必须运行 | 所有 Zenoh 通信经由本地 zenohd 路由 | start.sh 自动启动 |
 | 无跨 session 历史记录 | 重启后消息丢失 | WeeChat logger 自动保存本地；未来接入 zenohd storage |
 
 ## 路线图
