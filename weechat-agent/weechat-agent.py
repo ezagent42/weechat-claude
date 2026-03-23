@@ -209,24 +209,41 @@ def stop_agent(name):
         weechat.prnt("", f"[agent] Unknown agent: {name}")
         return
 
-    # Request shutdown via Zenoh private message.
-    # Don't use tmux send-keys — agent may be mid-task and send-keys
-    # would forcibly interrupt. Instead, send a message asking the agent
-    # to report status and exit when ready.
+    # Two-phase shutdown:
+    # 1. Send Zenoh message so agent can save work and report status
+    # 2. After delay, send /exit via tmux (claude can't execute /exit from chat)
     weechat.command("",
         f"/zenoh send @{name} "
         f"You have been requested to stop. "
-        f"Please report your current status, save any work, "
-        f"and then run /exit to shut down.")
+        f"Please report your current status and save any work.")
     agents[name]["status"] = "stopping"
-    weechat.prnt("", f"[agent] Stopping {name} (shutdown requested via message)...")
+    weechat.prnt("", f"[agent] Stopping {name} (saving work, will exit in 10s)...")
 
-    # When agent exits, its Zenoh session closes → liveliness token expires
-    # → on_presence_signal_cb detects offline → _finalize_stop kills pane.
-    # Timeout fallback if agent doesn't exit within 60s.
+    # After 10s, send /exit via tmux to actually quit claude
     pane_id = agents[name].get("pane_id", "")
-    weechat.hook_timer(60000, 0, 1, "_stop_timeout_cb",
+    weechat.hook_timer(10000, 0, 1, "_send_exit_cb",
                       json.dumps({"name": name, "pane_id": pane_id}))
+
+
+def _send_exit_cb(data, remaining_calls):
+    """Send /exit to agent's tmux pane after grace period."""
+    info = json.loads(data)
+    name = info["name"]
+    pane_id = info["pane_id"]
+
+    if name not in agents or agents[name].get("status") != "stopping":
+        return weechat.WEECHAT_RC_OK  # already stopped
+
+    if pane_id:
+        subprocess.run(
+            ["tmux", "send-keys", "-t", pane_id, "/exit", "Enter"],
+            capture_output=True
+        )
+    # Presence offline event will trigger _finalize_stop.
+    # Timeout fallback if agent doesn't exit within 30s after /exit.
+    weechat.hook_timer(30000, 0, 1, "_stop_timeout_cb",
+                      json.dumps({"name": name, "pane_id": pane_id}))
+    return weechat.WEECHAT_RC_OK
 
 
 def _stop_timeout_cb(data, remaining_calls):
