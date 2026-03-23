@@ -121,14 +121,40 @@ def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
 
     zenoh_session.declare_subscriber("wc/private/*/messages", on_private)
     zenoh_session.declare_subscriber("wc/channels/*/messages", on_channel)
+
+    # Auto-join channels from AUTOJOIN_CHANNELS env (comma-separated)
+    autojoin = os.environ.get("AUTOJOIN_CHANNELS", "")
+    if autojoin:
+        for channel in autojoin.split(","):
+            channel = channel.strip().lstrip("#")
+            if channel and channel not in joined_channels:
+                token = zenoh_session.liveliness().declare_token(
+                    f"wc/channels/{channel}/presence/{AGENT_NAME}")
+                joined_channels[channel] = token
+                print(f"[channel-server] Auto-joined #{channel}", file=sys.stderr)
+
     return zenoh_session, joined_channels
 
 # ============================================================
 # MCP Server + Tools
 # ============================================================
 
+CHANNEL_INSTRUCTIONS = f"""You are {AGENT_NAME}, a Claude Code agent connected to a WeeChat P2P chat system via Zenoh messaging.
+
+Messages arrive as <channel source="weechat-channel" chat_id="..." user="..." ts="...">content</channel>.
+- chat_id starting with "#" is a channel message (e.g. "#general")
+- chat_id without "#" is a private message from that user
+
+When you receive a channel notification:
+1. Read the message content and the user who sent it
+2. If addressed to you or relevant, respond using the "reply" tool with the same chat_id
+3. For private messages requesting you to stop/exit, save any work and run /exit
+
+Use the "reply" tool to send messages. Use "join_channel" to join new channels."""
+
+
 def create_server():
-    server = Server("weechat-channel")
+    server = Server("weechat-channel", instructions=CHANNEL_INSTRUCTIONS)
     return server
 
 def register_tools(server: Server, state: dict):

@@ -63,7 +63,7 @@ cat > "$MCP_CONFIG" << MCPEOF
       "type": "stdio",
       "command": "uv",
       "args": ["run", "--project", "$SCRIPT_DIR/weechat-channel-server", "python3", "$SCRIPT_DIR/weechat-channel-server/server.py"],
-      "env": { "AGENT_NAME": "$USERNAME:agent0" }
+      "env": { "AGENT_NAME": "$USERNAME:agent0", "AUTOJOIN_CHANNELS": "general" }
     }
   }
 }
@@ -73,7 +73,8 @@ MCPEOF
 tmux send-keys -t "$SESSION" \
   "cd '$WORKSPACE' && claude \
     --permission-mode bypassPermissions \
-    --mcp-config '$MCP_CONFIG'" Enter
+    --mcp-config '$MCP_CONFIG' \
+    --dangerously-load-development-channels server:weechat-channel" Enter
 
 echo -n "  Waiting for $USERNAME:agent0..."
 sleep 5
