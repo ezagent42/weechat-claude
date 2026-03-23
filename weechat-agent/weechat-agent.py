@@ -52,7 +52,6 @@ def agent_init():
 
     # 注册 agent0（由 start.sh 预启动）
     if weechat.config_get_plugin("agent0_workspace"):
-        # 找到 agent0 的 tmux pane（运行 claude 的 pane）
         agent0_pane = _find_claude_pane()
         agents[PRIMARY_AGENT] = {
             "workspace": weechat.config_get_plugin("agent0_workspace"),
@@ -72,17 +71,15 @@ def agent_init():
 
 
 # ============================================================
-# MCP Config 生成
+# Agent Workspace 管理
 # ============================================================
 
-def _mcp_config_path(name):
-    """返回 agent 对应的临时 MCP config 路径。"""
+def _create_agent_workspace(name):
+    """Create a temporary workspace with .mcp.json for the agent."""
     safe = name.replace(":", "-")
-    return os.path.join(tempfile.gettempdir(), f"wc-mcp-{safe}.json")
+    workspace = os.path.join(tempfile.gettempdir(), f"wc-agent-{safe}")
+    os.makedirs(workspace, exist_ok=True)
 
-
-def _generate_mcp_config(name):
-    """生成 MCP config JSON，返回文件路径。"""
     config = {
         "mcpServers": {
             "weechat-channel": {
@@ -99,19 +96,17 @@ def _generate_mcp_config(name):
             }
         }
     }
-    path = _mcp_config_path(name)
-    with open(path, "w") as f:
+    with open(os.path.join(workspace, ".mcp.json"), "w") as f:
         json.dump(config, f)
-    return path
+    return workspace
 
 
-def _cleanup_mcp_config(name):
-    """删除 agent 的临时 MCP config。"""
-    path = _mcp_config_path(name)
-    try:
-        os.unlink(path)
-    except FileNotFoundError:
-        pass
+def _cleanup_agent_workspace(name):
+    """Remove the agent's temporary workspace directory."""
+    import shutil
+    safe = name.replace(":", "-")
+    workspace = os.path.join(tempfile.gettempdir(), f"wc-agent-{safe}")
+    shutil.rmtree(workspace, ignore_errors=True)
 
 
 def _find_claude_pane():
@@ -124,7 +119,6 @@ def _find_claude_pane():
         for line in result.stdout.strip().split("\n"):
             if ":" in line:
                 pane_id, cmd = line.split(":", 1)
-                # claude shows as its version number (e.g. 2.1.81) in pane_current_command
                 if cmd and cmd not in ("weechat", "zsh", "bash"):
                     return pane_id
     except Exception:
@@ -157,15 +151,13 @@ def create_agent(name, workspace):
             "Use /set plugins.var.python.weechat-agent.channel_plugin_dir")
         return
 
-    workspace = os.path.abspath(workspace)
-
-    # 1. 生成 MCP config 并在 tmux pane 中启动 Claude Code
-    mcp_config = _generate_mcp_config(name)
+    # Create isolated workspace with .mcp.json for this agent
+    agent_workspace = _create_agent_workspace(name)
     cmd = (
-        f"cd '{workspace}' && "
+        f"cd '{agent_workspace}' && "
+        f"AGENT_NAME='{name}' "
         f"claude "
         f"--permission-mode bypassPermissions "
-        f"--mcp-config '{mcp_config}' "
         f"--dangerously-load-development-channels server:weechat-channel"
     )
     # Split vertically from the last agent pane (right column),
@@ -178,18 +170,17 @@ def create_agent(name, workspace):
     )
     pane_id = result.stdout.strip()
 
-    # 2. 注册
+    # 注册
     agents[name] = {
-        "workspace": workspace,
+        "workspace": agent_workspace,
         "status": "starting",
         "pane_id": pane_id,
-        "mcp_config": mcp_config,
     }
 
-    # 3. 通知 weechat-zenoh 创建 private buffer
+    # 通知 weechat-zenoh 创建 private buffer
     weechat.command("", f"/zenoh join @{name}")
 
-    weechat.prnt("", f"[agent] Created {name} in {workspace}")
+    weechat.prnt("", f"[agent] Created {name} in {agent_workspace}")
 
 
 # ============================================================
@@ -237,13 +228,13 @@ def _stop_timeout_cb(data, remaining_calls):
 
 
 def _finalize_stop(name, pane_id):
-    """Clean up after agent stop: kill pane, remove config, update status."""
+    """Clean up after agent stop: kill pane, remove workspace, update status."""
     if pane_id:
         subprocess.run(
             ["tmux", "kill-pane", "-t", pane_id],
             capture_output=True
         )
-    _cleanup_mcp_config(name)
+    _cleanup_agent_workspace(name)
     if name in agents:
         agents[name]["status"] = "stopped"
     weechat.prnt("", f"[agent] Stopped {name}")
@@ -377,7 +368,7 @@ def agent_deinit():
     for name in list(agents.keys()):
         if name != PRIMARY_AGENT:
             stop_agent(name)
-        _cleanup_mcp_config(name)
+        _cleanup_agent_workspace(name)
     return weechat.WEECHAT_RC_OK
 
 
