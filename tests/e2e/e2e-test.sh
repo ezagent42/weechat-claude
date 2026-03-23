@@ -181,6 +181,10 @@ else
     info "agent1: tmux pane may have exited (total=$TOTAL_PANES, expected ≥4)"
 fi
 
+# Wait for agent1 to fully start (confirm prompt + channel init)
+info "Waiting for agent1 to initialize..."
+sleep 15
+
 # ============================================================
 # Phase 6: graceful stop agent1 (/agent stop)
 # ============================================================

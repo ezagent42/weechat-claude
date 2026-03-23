@@ -177,10 +177,23 @@ def create_agent(name, workspace):
         "pane_id": pane_id,
     }
 
+    # Auto-confirm the --dangerously-load-development-channels prompt
+    weechat.hook_timer(3000, 0, 1, "_auto_confirm_cb", pane_id)
+
     # 通知 weechat-zenoh 创建 private buffer
     weechat.command("", f"/zenoh join @{name}")
 
     weechat.prnt("", f"[agent] Created {name} in {agent_workspace}")
+
+
+def _auto_confirm_cb(data, remaining_calls):
+    """Auto-confirm the development channels warning prompt."""
+    pane_id = data
+    subprocess.run(
+        ["tmux", "send-keys", "-t", pane_id, "Enter"],
+        capture_output=True
+    )
+    return weechat.WEECHAT_RC_OK
 
 
 # ============================================================
