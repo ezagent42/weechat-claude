@@ -9,7 +9,7 @@ os.environ["AGENT_NAME"] = "alice:agent0"
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "weechat-channel-server"))
-from server import _handle_reply
+from server import _handle_reply, _handle_create_agent
 
 class TestReplyTool:
     @pytest.fixture
@@ -42,3 +42,28 @@ class TestReplyTool:
         for field in ("id", "nick", "type", "body", "ts"):
             assert field in msg
         assert isinstance(msg["ts"], float)
+
+
+class TestCreateAgentTool:
+    @pytest.fixture
+    def mock_zenoh(self):
+        session = MagicMock()
+        session.put = MagicMock()
+        return session
+
+    @pytest.mark.asyncio
+    async def test_create_agent_sends_to_general(self, mock_zenoh):
+        result = await _handle_create_agent(mock_zenoh, {"name": "agent2"})
+        assert "agent2" in result[0].text
+        mock_zenoh.put.assert_called_once()
+        key = mock_zenoh.put.call_args[0][0]
+        assert key == "wc/channels/general/messages"
+
+    @pytest.mark.asyncio
+    async def test_create_agent_message_format(self, mock_zenoh):
+        await _handle_create_agent(mock_zenoh, {"name": "helper"})
+        outer = json.loads(mock_zenoh.put.call_args[0][1])
+        assert outer["nick"] == "alice:agent0"
+        inner = json.loads(outer["body"])
+        assert inner["action"] == "create_agent"
+        assert inner["name"] == "helper"

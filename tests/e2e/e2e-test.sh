@@ -1,5 +1,5 @@
 #!/bin/bash
-# e2e-test.sh — Full E2E test: alice + bob + alice:agent0 + alice:agent1
+# e2e-test.sh — Full E2E test: alice + bob + agent0 + agent1 + agent2
 #
 # Layout:
 #   ┌──────────────────┬──────────────────┐
@@ -8,6 +8,9 @@
 #   ├──────────────────┼──────────────────┤
 #   │ bob (WeeChat)    │ alice:agent1     │
 #   │                  │ (/agent create)  │
+#   │                  ├──────────────────┤
+#   │                  │ alice:agent2     │
+#   │                  │ (agent0 creates) │
 #   └──────────────────┴──────────────────┘
 set -euo pipefail
 
@@ -207,7 +210,105 @@ else
 fi
 
 # ============================================================
-# Phase 7: Summary
+# Phase 7: agent0 creates agent2 (agent-to-agent spawning)
+# ============================================================
+step "Phase 7: agent0 creates agent2 via create_agent tool"
+
+# Capture pane IDs before creation so we can find agent2's new pane
+PANES_BEFORE=$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id}' | sort)
+
+# agent0 uses the create_agent MCP tool to spawn agent2
+tmux send-keys -t "$PANE_AGENT0" \
+    'Use the create_agent MCP tool to create a new agent named "agent2"' Enter
+
+# Wait for agent0 to call the tool (needs time to process instruction)
+if wait_for_pane "$PANE_AGENT0" "agent2" 45; then
+    pass "agent0: create_agent tool called"
+else
+    fail "agent0: create_agent tool not called within timeout"
+fi
+
+# Wait for weechat-agent to detect and spawn agent2, then verify via /agent list
+sleep 10
+tmux send-keys -t "$PANE_ALICE" "/agent list" Enter
+sleep 2
+
+if pane_contains "$PANE_ALICE" "agent2"; then
+    pass "alice: agent2 created and listed in /agent list"
+else
+    # Retry — creation might still be in progress
+    sleep 10
+    tmux send-keys -t "$PANE_ALICE" "/agent list" Enter
+    sleep 2
+    if pane_contains "$PANE_ALICE" "agent2"; then
+        pass "alice: agent2 created and listed in /agent list (retry)"
+    else
+        fail "alice: agent2 not found in /agent list"
+    fi
+fi
+
+# Wait for agent2 to fully initialize (MCP server + Zenoh)
+info "Waiting for agent2 to initialize..."
+sleep 20
+
+# ============================================================
+# Phase 8: agent0 ↔ agent2 communication (agent-to-agent)
+# ============================================================
+step "Phase 8: agent0 ↔ agent2 private messaging"
+
+# agent0 sends a task to agent2 via private message
+tmux send-keys -t "$PANE_AGENT0" \
+    'Use the reply MCP tool to send a private message to "alice:agent2" with text: "Hello agent2, please reply with the word PONG to confirm you received this."' Enter
+
+# Wait for agent0 to confirm the message was sent
+if wait_for_pane "$PANE_AGENT0" "Sent to" 30; then
+    pass "agent0: sent private message to agent2"
+else
+    fail "agent0: failed to send private message to agent2"
+fi
+
+# Find agent2's pane by comparing with panes before creation
+PANES_AFTER=$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id}' | sort)
+AGENT2_PANE=$(comm -13 <(echo "$PANES_BEFORE") <(echo "$PANES_AFTER") | head -1)
+
+# Wait for agent2 to receive and process the message (it should auto-respond)
+if [ -n "$AGENT2_PANE" ]; then
+    if wait_for_pane "$AGENT2_PANE" "PONG" 60; then
+        pass "agent2: received message and replied with PONG"
+    elif wait_for_pane "$AGENT2_PANE" "Sent to" 30; then
+        pass "agent2: processed message and sent reply"
+    else
+        fail "agent2: did not respond to agent0's message"
+    fi
+else
+    fail "agent2: pane not found"
+fi
+
+# Verify agent0 received agent2's reply (via channel notification)
+if wait_for_pane "$PANE_AGENT0" "PONG" 30; then
+    pass "agent0: received agent2's PONG reply"
+else
+    info "agent0: PONG not visible in pane (may have scrolled)"
+fi
+
+# ============================================================
+# Phase 9: stop agent2
+# ============================================================
+step "Phase 9: stop agent2"
+
+if [ -n "$AGENT2_PANE" ]; then
+    tmux send-keys -t "$AGENT2_PANE" "/exit" Enter
+    if wait_for_pane "$PANE_ALICE" "agent2.*offline" 30; then
+        pass "agent2: exited and offline notification received"
+    else
+        info "agent2: /exit sent but offline notification not detected"
+    fi
+else
+    info "agent2: pane already gone"
+fi
+
+# ============================================================
+# Phase 10: Summary
 # ============================================================
 step "Summary"
 
