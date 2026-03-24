@@ -126,11 +126,12 @@ def _find_claude_pane():
 
 
 def _last_agent_pane():
-    """Return the pane_id of the last registered agent (for split targeting)."""
+    """Return the pane_id of the last running agent (for split targeting)."""
     for name in reversed(list(agents.keys())):
-        pane = agents[name].get("pane_id")
-        if pane:
-            return pane
+        if agents[name].get("status") not in ("offline", None):
+            pane = agents[name].get("pane_id")
+            if pane:
+                return pane
     return ""
 
 

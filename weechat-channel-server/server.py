@@ -189,6 +189,17 @@ def register_tools(server: Server, state: dict):
                     "required": ["channel_name"],
                 },
             ),
+            Tool(
+                name="create_agent",
+                description="Create a new Claude Code agent. Sends a structured command to the WeeChat agent manager which spawns a new agent in a tmux pane with its own MCP server.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Agent name (e.g. 'agent2'). Will be auto-prefixed with username."},
+                    },
+                    "required": ["name"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -198,6 +209,8 @@ def register_tools(server: Server, state: dict):
             return await _handle_reply(zenoh_session, arguments)
         elif name == "join_channel":
             return await _handle_join_channel(zenoh_session, arguments)
+        elif name == "create_agent":
+            return await _handle_create_agent(zenoh_session, arguments)
         raise ValueError(f"Unknown tool: {name}")
 
 async def _handle_reply(zenoh_session, arguments: dict) -> list[TextContent]:
@@ -224,6 +237,24 @@ async def _handle_join_channel(zenoh_session, arguments: dict) -> list[TextConte
     channel = arguments["channel_name"]
     zenoh_session.liveliness().declare_token(channel_presence_topic(channel, AGENT_NAME))
     return [TextContent(type="text", text=f"Joined #{channel}")]
+
+
+async def _handle_create_agent(zenoh_session, arguments: dict) -> list[TextContent]:
+    """Create a new agent by sending a structured command to #general.
+
+    The weechat-agent plugin monitors channel messages from registered agents
+    and detects JSON commands with action="create_agent".
+    """
+    name = arguments["name"]
+    cmd = json.dumps({
+        "id": os.urandom(8).hex(),
+        "nick": AGENT_NAME,
+        "type": "msg",
+        "body": json.dumps({"action": "create_agent", "name": name}),
+        "ts": time.time(),
+    })
+    zenoh_session.put(channel_topic("general"), cmd)
+    return [TextContent(type="text", text=f"Requested creation of agent '{name}' via #general")]
 
 # ============================================================
 # Main
