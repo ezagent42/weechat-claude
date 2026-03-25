@@ -12,6 +12,7 @@ import os
 import subprocess
 import tempfile
 import sys
+import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
 from wc_protocol.naming import scoped_name as protocol_scoped_name
 from wc_protocol.signals import SIGNAL_MESSAGE_RECEIVED, SIGNAL_PRESENCE_CHANGED
@@ -167,6 +168,7 @@ def create_agent(name, workspace):
         "workspace": agent_workspace,
         "status": "starting",
         "pane_id": pane_id,
+        "created_at": time.time(),
     }
 
     # Auto-confirm the --dangerously-load-development-channels prompt
@@ -224,6 +226,9 @@ def on_presence_signal_cb(data, signal, signal_data):
         online = ev.get("online", False)
         if nick in agents:
             if online:
+                if agents[nick]["status"] == "starting":
+                    elapsed = time.time() - agents[nick].get("created_at", time.time())
+                    weechat.prnt("", f"[agent] {nick} is now ready (took {elapsed:.1f}s)")
                 agents[nick]["status"] = "running"
             else:
                 agents[nick]["status"] = "offline"

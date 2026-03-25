@@ -16,6 +16,7 @@ import shutil
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
 from wc_protocol.topics import target_to_buffer_label, parse_input, make_private_pair, extract_other_nick
 from wc_protocol.signals import SIGNAL_MESSAGE_SENT, SIGNAL_MESSAGE_RECEIVED, SIGNAL_PRESENCE_CHANGED
+from wc_protocol.sys_messages import is_sys_message
 from wc_registry import CommandRegistry
 from wc_registry.types import CommandParam, CommandResult, ParsedArgs
 
@@ -438,6 +439,12 @@ def poll_queues_cb(data, remaining_calls):
         nick = msg.get("nick", "???")
         body = msg.get("body", "")
         msg_type = msg.get("type", "msg")
+
+        # Route sys messages to signal, don't display in buffer
+        if is_sys_message(msg):
+            weechat.hook_signal_send("zenoh_sys_message",
+                weechat.WEECHAT_HOOK_SIGNAL_STRING, json.dumps(msg))
+            continue
 
         if msg_type == "msg":
             weechat.prnt(buf, f"{nick}\t{body}")

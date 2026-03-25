@@ -11,6 +11,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
 from wc_protocol.config import build_zenoh_config_dict
 from wc_protocol.topics import make_private_pair, channel_topic, private_topic, presence_topic, channel_presence_topic
+from wc_protocol.sys_messages import is_sys_message, make_sys_message
 from datetime import datetime, timezone
 
 import anyio
@@ -85,6 +86,10 @@ def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
             msg = json.loads(sample.payload.to_string())
             if msg.get("nick") == AGENT_NAME:
                 return
+            # Route sys messages to dedicated handler
+            if is_sys_message(msg):
+                _handle_sys_message(msg, pair, zenoh_session)
+                return
             msg_id = msg.get("id", "")
             if msg_id and dedup.is_duplicate(msg_id):
                 return
@@ -147,6 +152,13 @@ When you receive a channel notification:
 3. For private messages requesting you to stop/exit, save any work and run /exit
 
 Use the "reply" tool to send messages. Use "join_channel" to join new channels."""
+
+
+def _handle_sys_message(msg: dict, reply_topic_key: str, zenoh_session):
+    """Handle incoming system messages. Dispatches by type."""
+    msg_type = msg.get("type", "")
+    # P1 handlers will be added in subsequent tasks
+    pass
 
 
 def create_server():
