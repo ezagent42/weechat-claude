@@ -93,6 +93,23 @@ def _stop_sidecar():
     sidecar_connected = False
 
 
+def _sidecar_raw_publish(topic: str, payload: dict):
+    """Publish raw JSON to a Zenoh topic via sidecar (no msg envelope)."""
+    _sidecar_send({"cmd": "raw_publish", "topic": topic, "payload": payload})
+
+
+def _on_raw_publish_signal(data, signal, signal_data):
+    """Handle raw_publish requests from other plugins (e.g. weechat-agent).
+    signal_data is JSON: {"topic": "wc/...", "payload": {...}}
+    """
+    try:
+        req = json.loads(signal_data)
+        _sidecar_raw_publish(req["topic"], req["payload"])
+    except (json.JSONDecodeError, KeyError):
+        pass
+    return weechat.WEECHAT_RC_OK
+
+
 def _sidecar_send(cmd: dict):
     """Send JSON command to sidecar stdin."""
     if not sidecar_proc or sidecar_proc.poll() is not None:
@@ -232,6 +249,7 @@ def zc_init():
 
     # Timer for queue processing
     weechat.hook_timer(50, 0, 0, "poll_queues_cb", "")
+    weechat.hook_signal("zenoh_raw_publish", "_on_raw_publish_signal", "")
 
     # Autojoin — deferred until ready event arrives
     global pending_autojoin

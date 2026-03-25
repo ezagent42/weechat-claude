@@ -252,6 +252,20 @@ def handle_status(params: dict):
           "channels": len(channels), "privates": len(privates)})
 
 
+def handle_raw_publish(params: dict):
+    """Publish raw JSON payload directly to a Zenoh topic.
+    Used for sys.* messages that need to arrive without envelope wrapping."""
+    topic = params.get("topic")
+    payload = params.get("payload")
+    if not topic or payload is None:
+        emit({"event": "error", "detail": "raw_publish requires 'topic' and 'payload'"})
+        return
+    try:
+        session.put(topic, json.dumps(payload).encode())
+    except Exception as e:
+        emit({"event": "error", "detail": f"raw_publish failed: {e}"})
+
+
 def handle_command(cmd: dict):
     """Dispatch a single command."""
     name = cmd.get("cmd")
@@ -271,6 +285,8 @@ def handle_command(cmd: dict):
         handle_send(cmd)
     elif name == "set_nick":
         handle_set_nick(cmd)
+    elif name == "raw_publish":
+        handle_raw_publish(cmd)
     else:
         emit({"event": "error", "detail": f"Unknown command: {name}"})
 
