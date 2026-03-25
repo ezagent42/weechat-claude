@@ -25,6 +25,7 @@ from mcp.types import JSONRPCMessage, JSONRPCNotification, Tool, TextContent
 from message import MessageDedup, detect_mention, clean_mention, chunk_message
 
 AGENT_NAME = os.environ.get("AGENT_NAME", "agent0")
+_msg_counter = {"sent": 0, "received": 0}
 
 # ============================================================
 # MCP Notification Injection
@@ -96,6 +97,18 @@ def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
             sender = msg.get("nick", "unknown")
             print(f"[channel-server] [private:{sender}] {sender}: {msg.get('body', '')}", file=sys.stderr)
             loop.call_soon_threadsafe(queue.put_nowait, (msg, sender))
+            _msg_counter["received"] += 1
+            # Send delivery ack
+            msg_id = msg.get("id")
+            sender_nick = msg.get("nick", "")
+            if msg_id and sender_nick:
+                try:
+                    ack_pair = make_private_pair(AGENT_NAME, sender_nick)
+                    ack = make_sys_message(AGENT_NAME, "sys.ack", {"status": "ok"}, ref_id=msg_id)
+                    ack_topic = private_topic(ack_pair)
+                    zenoh_session.put(ack_topic, json.dumps(ack).encode())
+                except Exception:
+                    pass
         except Exception as e:
             print(f"[channel-server] private error: {e}", file=sys.stderr)
 
@@ -117,6 +130,18 @@ def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
                 token = zenoh_session.liveliness().declare_token(channel_presence_topic(channel, AGENT_NAME))
                 joined_channels[channel] = token
             loop.call_soon_threadsafe(queue.put_nowait, (msg, f"#{channel}"))
+            _msg_counter["received"] += 1
+            # Send delivery ack
+            msg_id = msg.get("id")
+            sender_nick = msg.get("nick", "")
+            if msg_id and sender_nick:
+                try:
+                    ack_pair = make_private_pair(AGENT_NAME, sender_nick)
+                    ack = make_sys_message(AGENT_NAME, "sys.ack", {"status": "ok"}, ref_id=msg_id)
+                    ack_topic = private_topic(ack_pair)
+                    zenoh_session.put(ack_topic, json.dumps(ack).encode())
+                except Exception:
+                    pass
         except Exception as e:
             print(f"[channel-server] channel error: {e}", file=sys.stderr)
 
@@ -174,6 +199,14 @@ def _handle_sys_message(msg: dict, reply_topic_key: str, zenoh_session, joined_c
                                          {"channel": f"#{channel}"}, ref_id=msg["id"])
             topic = private_topic(reply_topic_key)
             zenoh_session.put(topic, json.dumps(reply_msg).encode())
+    elif msg_type == "sys.status_request":
+        reply_msg = make_sys_message(AGENT_NAME, "sys.status_response", {
+            "channels": list(joined_channels.keys()),
+            "messages_sent": _msg_counter["sent"],
+            "messages_received": _msg_counter["received"],
+        }, ref_id=msg["id"])
+        topic = private_topic(reply_topic_key)
+        zenoh_session.put(topic, json.dumps(reply_msg).encode())
 
 
 def create_server():
@@ -245,6 +278,7 @@ async def _handle_reply(zenoh_session, arguments: dict) -> list[TextContent]:
         else:
             pair = make_private_pair(AGENT_NAME, chat_id)
             zenoh_session.put(private_topic(pair), msg)
+    _msg_counter["sent"] += 1
     return [TextContent(type="text", text=f"Sent to {chat_id}")]
 
 async def _handle_join_channel(zenoh_session, arguments: dict) -> list[TextContent]:

@@ -215,6 +215,20 @@ def _handle_event(event: dict):
         reason = event.get("reason", "unknown error")
         weechat.prnt("", f"[zenoh] Message delivery failed: {reason}. Use /zenoh reconnect")
 
+    elif etype == "who_response":
+        channel_id = event.get("channel_id")
+        members = event.get("members", [])
+        buf = buffers.get(f"channel:{channel_id}")
+        target = buf or ""
+        lines = [f"#{channel_id} members:"]
+        for m in sorted(members, key=lambda x: x["nick"]):
+            indicator = "●" if m["online"] else "○"
+            status = "online" if m["online"] else "offline"
+            lines.append(f"  {indicator} {m['nick']:<20} ({status})")
+        if not members:
+            lines.append("  (no members)")
+        weechat.prnt(target, "[zenoh] " + "\n[zenoh] ".join(lines))
+
     elif etype == "error":
         weechat.prnt("", f"[zenoh] Sidecar error: {event.get('detail')}")
 
@@ -566,16 +580,29 @@ def cmd_zenoh_join(buffer, args: ParsedArgs) -> CommandResult:
 
 @zenoh_registry.command(
     name="leave", args="[target]",
-    description="Leave channel or close private",
-    params=[CommandParam("target", required=False, help="#channel or @nick (default: current buffer)")],
+    description="Leave channel or close private (error on invalid)",
+    params=[CommandParam("target", required=False, help="#channel or @nick")],
 )
 def cmd_zenoh_leave(buffer, args: ParsedArgs) -> CommandResult:
     target = args.get("target")
     if not target:
         target = _buffer_target(buffer)
         if not target:
-            return CommandResult.error("No target specified and current buffer is not a channel/private")
-    leave(target)
+            return CommandResult.error("No target and current buffer is not a channel/private")
+
+    if target.startswith("#"):
+        channel_id = target.lstrip("#")
+        if channel_id not in channels:
+            return CommandResult.error(f"not in #{channel_id}")
+        leave_channel(channel_id)
+    elif target.startswith("@"):
+        nick = target.lstrip("@")
+        pair = make_private_pair(my_nick, nick)
+        if pair not in privates:
+            return CommandResult.error(f"no private chat with @{nick}")
+        leave_private(nick)
+    else:
+        return CommandResult.error(f"invalid target: {target} (use #channel or @nick)")
     return CommandResult.ok(f"Left {target}")
 
 
@@ -646,6 +673,20 @@ def cmd_zenoh_status(buffer, args: ParsedArgs) -> CommandResult:
     pending_status_buffer = buffer
     _sidecar_send({"cmd": "status"})
     return CommandResult.ok("Requesting status...")
+
+
+@zenoh_registry.command(
+    name="who",
+    args="<channel>",
+    description="List channel members with online/offline status",
+    params=[CommandParam("channel", required=True, help="#channel name")],
+)
+def cmd_zenoh_who(buffer, args: ParsedArgs) -> CommandResult:
+    channel = args.get("channel", "").lstrip("#")
+    if channel not in channels:
+        return CommandResult.error(f"not in #{channel}")
+    _sidecar_send({"cmd": "who", "channel_id": channel})
+    return CommandResult.ok(f"Querying #{channel} members...")
 
 
 @zenoh_registry.command(

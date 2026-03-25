@@ -274,6 +274,20 @@ def handle_raw_publish(params: dict):
         emit({"event": "error", "detail": f"raw_publish failed: {e}"})
 
 
+def handle_who(params: dict):
+    channel_id = params.get("channel_id")
+    if channel_id not in channels:
+        emit({"event": "error", "detail": f"Not in #{channel_id}"})
+        return
+    glob = f"wc/channels/{channel_id}/presence/*"
+    tokens = session.liveliness().get(glob)
+    members = []
+    for token in tokens:
+        nick = str(token.key_expr).rsplit("/", 1)[-1]
+        members.append({"nick": nick, "online": True})
+    emit({"event": "who_response", "channel_id": channel_id, "members": members})
+
+
 def handle_command(cmd: dict):
     """Dispatch a single command."""
     name = cmd.get("cmd")
@@ -295,6 +309,8 @@ def handle_command(cmd: dict):
         handle_set_nick(cmd)
     elif name == "raw_publish":
         handle_raw_publish(cmd)
+    elif name == "who":
+        handle_who(cmd)
     else:
         emit({"event": "error", "detail": f"Unknown command: {name}"})
 

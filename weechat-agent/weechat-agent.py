@@ -42,6 +42,7 @@ def scoped_name(name):
 
 pending_stops = {}   # msg_id → {name, buffer, timer}
 pending_joins = {}   # msg_id → {agent_name, channel, buffer, timer}
+pending_status = {}  # msg_id → {name, buffer, timer}
 
 
 def _send_sys_message(target_agent: str, msg: dict):
@@ -64,6 +65,18 @@ def _force_stop_agent(name):
 # ============================================================
 # 初始化
 # ============================================================
+
+def _suggest_channel_plugin_dir():
+    """Try to find weechat-channel-server relative to this plugin."""
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "weechat-channel-server"),
+        os.path.expanduser("~/Workspace/weechat-claude/weechat-channel-server"),
+    ]
+    for path in candidates:
+        if os.path.isdir(path) and os.path.isfile(os.path.join(path, "server.py")):
+            return os.path.realpath(path)
+    return None
+
 
 def agent_init():
     global CHANNEL_PLUGIN_DIR, TMUX_SESSION, USERNAME, PRIMARY_AGENT
@@ -257,11 +270,18 @@ def on_presence_signal_cb(data, signal, signal_data):
                     weechat.prnt("", f"[agent] {nick} is now ready (took {elapsed:.1f}s)")
                 agents[nick]["status"] = "running"
             else:
-                agents[nick]["status"] = "offline"
-                # Clean up workspace when agent goes offline
-                _cleanup_agent_workspace(nick)
-                weechat.prnt("",
-                    f"[agent] {nick} is now offline")
+                if agents[nick].get("pending_restart"):
+                    workspace = agents[nick].pop("restart_workspace", agents[nick]["workspace"])
+                    agents[nick].pop("pending_restart", None)
+                    weechat.prnt("", f"[agent] Restarting {nick}...")
+                    weechat.hook_timer(1000, 0, 1, "restart_timer_cb",
+                                       json.dumps({"name": nick, "workspace": workspace}))
+                else:
+                    agents[nick]["status"] = "offline"
+                    # Clean up workspace when agent goes offline
+                    _cleanup_agent_workspace(nick)
+                    weechat.prnt("",
+                        f"[agent] {nick} is now offline")
     except Exception:
         pass
     return weechat.WEECHAT_RC_OK
@@ -295,6 +315,15 @@ def on_sys_message_cb(data, signal, signal_data):
             if channel not in agents[agent_name]["channels"]:
                 agents[agent_name]["channels"].append(channel)
 
+    elif msg_type == "sys.status_response" and ref_id in pending_status:
+        info = pending_status.pop(ref_id)
+        weechat.unhook(info["timer"])
+        result = _format_agent_status(info["name"], remote=msg.get("body", {}))
+        weechat.prnt(info["buffer"], f"[agent] {result.message}")
+
+    elif msg_type == "sys.ack":
+        pass  # Delivery confirmed — silent tracking for now
+
     return weechat.WEECHAT_RC_OK
 
 
@@ -321,9 +350,16 @@ def cmd_agent_create(buffer, args: ParsedArgs) -> CommandResult:
     if scoped in agents:
         return CommandResult.error(f"{scoped} already exists")
     if not CHANNEL_PLUGIN_DIR:
+        suggested = _suggest_channel_plugin_dir()
+        if suggested:
+            return CommandResult.error(
+                f"channel_plugin_dir not set.\n"
+                f"  Detected: {suggested}\n"
+                f"  Run: /set plugins.var.python.weechat-agent.channel_plugin_dir {suggested}"
+            )
         return CommandResult.error(
-            "channel_plugin_dir not set. "
-            "Use /set plugins.var.python.weechat-agent.channel_plugin_dir"
+            "channel_plugin_dir not set.\n"
+            "  Run: /set plugins.var.python.weechat-agent.channel_plugin_dir /path/to/weechat-channel-server"
         )
     create_agent(scoped, workspace)
     agent = agents[scoped]
@@ -336,17 +372,35 @@ def cmd_agent_create(buffer, args: ParsedArgs) -> CommandResult:
 
 
 @agent_registry.command(
-    name="list",
-    args="",
-    description="List agents, status, and pane IDs",
+    name="list", args="", description="List agents with status, uptime, channels",
     params=[],
 )
 def cmd_agent_list(buffer, args: ParsedArgs) -> CommandResult:
     if not agents:
         return CommandResult.ok("No agents")
-    lines = []
+    lines = ["Agents:"]
     for name, info in agents.items():
-        lines.append(f"  {name}\t{info['status']}\t{info.get('pane_id', '—')}\t{info['workspace']}")
+        status = info["status"]
+        pane = info.get("pane_id", "—")
+        ws = info["workspace"]
+
+        # Uptime
+        if status != "offline" and "created_at" in info:
+            elapsed = time.time() - info["created_at"]
+            if elapsed >= 3600:
+                uptime = f"{elapsed / 3600:.0f}h"
+            elif elapsed >= 60:
+                uptime = f"{elapsed / 60:.0f}m"
+            else:
+                uptime = f"{elapsed:.0f}s"
+        else:
+            uptime = "—"
+
+        # Channels
+        ch_list = info.get("channels", [])
+        ch_str = ", ".join(ch_list) if ch_list else "—"
+
+        lines.append(f"  {name}\t{status}\t{uptime}\t{pane}\t{ch_str}\t{ws}")
     return CommandResult.ok("\n".join(lines))
 
 
@@ -384,6 +438,18 @@ def _join_timeout_cb(data, remaining_calls):
     return weechat.WEECHAT_RC_OK
 
 
+def _initiate_agent_stop(name: str):
+    """Send sys.stop_request or force-stop. Used by both stop and restart commands."""
+    agent = agents[name]
+    if agent["status"] == "starting":
+        _force_stop_agent(name)
+        return
+    msg = make_sys_message(USERNAME, "sys.stop_request", {"reason": "stop requested"})
+    _send_sys_message(name, msg)
+    timer = weechat.hook_timer(5000, 0, 1, "_stop_timeout_cb", name)
+    pending_stops[msg["id"]] = {"name": name, "buffer": "", "timer": timer}
+
+
 @agent_registry.command(
     name="stop",
     args="<name>",
@@ -405,14 +471,27 @@ def cmd_agent_stop(buffer, args: ParsedArgs) -> CommandResult:
         _force_stop_agent(name)
         return CommandResult.ok(f"{name} was still starting, forcing stop...")
 
-    # Send sys.stop_request via raw_publish signal
-    msg = make_sys_message(USERNAME, "sys.stop_request", {"reason": "user requested /agent stop"})
-    _send_sys_message(name, msg)
-
-    timer = weechat.hook_timer(5000, 0, 1, "_stop_timeout_cb", name)
-    pending_stops[msg["id"]] = {"name": name, "buffer": buffer, "timer": timer}
-
+    _initiate_agent_stop(name)
     return CommandResult.ok(f"Stopping {name}...")
+
+
+@agent_registry.command(
+    name="restart",
+    args="<name>",
+    description="Restart agent (stop then re-create with same config)",
+    params=[CommandParam("name", required=True, help="Agent name")],
+)
+def cmd_agent_restart(buffer, args: ParsedArgs) -> CommandResult:
+    name = scoped_name(args.get("name"))
+    if name not in agents:
+        return CommandResult.error(f"Unknown agent: {name}")
+    if name.endswith(":agent0"):
+        return CommandResult.error(f"{name} is the primary agent and cannot be restarted")
+    agent = agents[name]
+    agent["pending_restart"] = True
+    agent["restart_workspace"] = agent["workspace"]
+    _initiate_agent_stop(name)
+    return CommandResult.ok(f"Restarting {name}...")
 
 
 def _stop_timeout_cb(data, remaining_calls):
@@ -424,6 +503,65 @@ def _stop_timeout_cb(data, remaining_calls):
     weechat.prnt("", f"[agent] {name} did not respond, forcing stop...")
     _force_stop_agent(name)
     return weechat.WEECHAT_RC_OK
+
+
+def _format_agent_status(name, remote=None):
+    agent = agents[name]
+    status = agent["status"]
+    if status != "offline" and "created_at" in agent:
+        elapsed = time.time() - agent["created_at"]
+        mins, secs = divmod(int(elapsed), 60)
+        uptime = f"{mins}m {secs}s"
+    else:
+        uptime = "—"
+
+    lines = [f"{name}"]
+    if remote is None and status != "offline":
+        lines[0] += " (agent not responding — showing local info only)"
+    lines.append(f"  status:    {status}")
+    lines.append(f"  uptime:    {uptime}")
+    lines.append(f"  pane:      {agent.get('pane_id', '—')}")
+    lines.append(f"  workspace: {agent['workspace']}")
+    if remote:
+        ch = ", ".join(f"#{c}" for c in remote.get("channels", []))
+        lines.append(f"  channels:  {ch or '—'}")
+        lines.append(f"  messages:  sent {remote.get('messages_sent', 0)}, received {remote.get('messages_received', 0)}")
+    else:
+        ch = ", ".join(agent.get("channels", []))
+        lines.append(f"  channels:  {ch or '—'}")
+    return CommandResult.ok("\n".join(lines))
+
+
+def _status_timeout_cb(data, remaining_calls):
+    msg_id = data
+    if msg_id in pending_status:
+        info = pending_status.pop(msg_id)
+        result = _format_agent_status(info["name"], remote=None)
+        weechat.prnt(info["buffer"], f"[agent] {result.message}")
+    return weechat.WEECHAT_RC_OK
+
+
+@agent_registry.command(
+    name="status",
+    args="<name>",
+    description="Show detailed single-agent info",
+    params=[CommandParam("name", required=True, help="Agent name")],
+)
+def cmd_agent_status(buffer, args: ParsedArgs) -> CommandResult:
+    name = scoped_name(args.get("name"))
+    if name not in agents:
+        return CommandResult.error(f"Unknown agent: {name}")
+
+    agent = agents[name]
+    if agent["status"] == "offline":
+        return _format_agent_status(name, remote=None)
+
+    msg = make_sys_message(USERNAME, "sys.status_request", {})
+    _send_sys_message(name, msg)
+
+    timer = weechat.hook_timer(3000, 0, 1, "_status_timeout_cb", msg["id"])
+    pending_status[msg["id"]] = {"name": name, "buffer": buffer, "timer": timer}
+    return CommandResult.ok(f"Querying {name}...")
 
 
 def agent_cmd_cb(data, buffer, args):
