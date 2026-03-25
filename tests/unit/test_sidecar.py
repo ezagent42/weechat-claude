@@ -37,6 +37,27 @@ def read_event(proc, timeout=5.0) -> dict:
     return json.loads(line)
 
 
+def read_event_type(proc, event_type: str, timeout=5.0, skip_types=None) -> dict:
+    """Read events until we get one matching event_type, skipping skip_types."""
+    import select
+    import time
+    deadline = time.time() + timeout
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            raise TimeoutError(f"No {event_type} event from sidecar")
+        ready, _, _ = select.select([proc.stdout], [], [], remaining)
+        if not ready:
+            raise TimeoutError(f"No {event_type} event from sidecar")
+        line = proc.stdout.readline()
+        event = json.loads(line)
+        if event.get("event") == event_type:
+            return event
+        if skip_types and event.get("event") in skip_types:
+            continue
+        return event  # return unexpected events to caller for assertion
+
+
 class TestSidecarInit:
     def test_init_emits_ready(self):
         proc = start_sidecar(mock=True)
@@ -70,6 +91,10 @@ class TestSidecarJoinChannel:
             read_event(proc)  # ready
             send_cmd(proc, {"cmd": "join_channel", "channel_id": "general"})
             # With mock, liveliness.get() returns empty, so no presence events
+            # join_channel now emits a "joined" event — consume it
+            joined = read_event(proc)
+            assert joined["event"] == "joined"
+            assert joined["channel_id"] == "general"
             # Send a status to confirm sidecar is alive
             send_cmd(proc, {"cmd": "status"})
             event = read_event(proc)
@@ -86,6 +111,7 @@ class TestSidecarJoinChannel:
                             "connect": "tcp/127.0.0.1:7447"})
             read_event(proc)  # ready
             send_cmd(proc, {"cmd": "join_channel", "channel_id": "general"})
+            read_event(proc)  # joined event
             send_cmd(proc, {"cmd": "join_channel", "channel_id": "general"})
             send_cmd(proc, {"cmd": "status"})
             event = read_event(proc)
@@ -134,6 +160,7 @@ class TestSidecarSend:
                             "connect": "tcp/127.0.0.1:7447"})
             read_event(proc)
             send_cmd(proc, {"cmd": "join_channel", "channel_id": "general"})
+            read_event(proc)  # joined event
             send_cmd(proc, {"cmd": "send", "pub_key": "channel:general",
                             "type": "msg", "body": "hello"})
             send_cmd(proc, {"cmd": "status"})
@@ -171,6 +198,7 @@ class TestSidecarNick:
                             "connect": "tcp/127.0.0.1:7447"})
             read_event(proc)  # ready
             send_cmd(proc, {"cmd": "join_channel", "channel_id": "general"})
+            read_event(proc)  # joined event
             # Simulate -r flag setting the correct nick after init
             send_cmd(proc, {"cmd": "set_nick", "nick": "alice"})
             send_cmd(proc, {"cmd": "status"})

@@ -119,15 +119,18 @@ def handle_join_channel(params: dict):
         lambda sample, _cid=channel_id: _on_channel_presence(sample, _cid))
 
     # Query current members
+    members = []
     try:
         replies = session.liveliness().get(
             channel_presence_glob(channel_id))
         for reply in replies:
             nick = str(reply.ok.key_expr).rsplit("/", 1)[-1]
+            members.append(nick)
             emit({"event": "presence", "channel_id": channel_id,
                   "nick": nick, "online": True})
     except Exception:
         pass
+    emit({"event": "joined", "channel_id": channel_id, "members": members})
 
     channels.add(channel_id)
 
@@ -207,7 +210,12 @@ def handle_leave_private(params: dict):
 
 
 def handle_send(params: dict):
-    _publish_event(params["pub_key"], params["type"], params["body"])
+    msg_id = params.get("msg_id")
+    try:
+        _publish_event(params["pub_key"], params["type"], params["body"])
+    except Exception as e:
+        if msg_id:
+            emit({"event": "send_failed", "msg_id": msg_id, "reason": str(e)})
 
 
 def handle_set_nick(params: dict):
@@ -252,6 +260,34 @@ def handle_status(params: dict):
           "channels": len(channels), "privates": len(privates)})
 
 
+def handle_raw_publish(params: dict):
+    """Publish raw JSON payload directly to a Zenoh topic.
+    Used for sys.* messages that need to arrive without envelope wrapping."""
+    topic = params.get("topic")
+    payload = params.get("payload")
+    if not topic or payload is None:
+        emit({"event": "error", "detail": "raw_publish requires 'topic' and 'payload'"})
+        return
+    try:
+        session.put(topic, json.dumps(payload).encode())
+    except Exception as e:
+        emit({"event": "error", "detail": f"raw_publish failed: {e}"})
+
+
+def handle_who(params: dict):
+    channel_id = params.get("channel_id")
+    if channel_id not in channels:
+        emit({"event": "error", "detail": f"Not in #{channel_id}"})
+        return
+    glob = f"wc/channels/{channel_id}/presence/*"
+    tokens = session.liveliness().get(glob)
+    members = []
+    for token in tokens:
+        nick = str(token.key_expr).rsplit("/", 1)[-1]
+        members.append({"nick": nick, "online": True})
+    emit({"event": "who_response", "channel_id": channel_id, "members": members})
+
+
 def handle_command(cmd: dict):
     """Dispatch a single command."""
     name = cmd.get("cmd")
@@ -271,6 +307,10 @@ def handle_command(cmd: dict):
         handle_send(cmd)
     elif name == "set_nick":
         handle_set_nick(cmd)
+    elif name == "raw_publish":
+        handle_raw_publish(cmd)
+    elif name == "who":
+        handle_who(cmd)
     else:
         emit({"event": "error", "detail": f"Unknown command: {name}"})
 

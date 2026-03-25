@@ -16,6 +16,9 @@ import shutil
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
 from wc_protocol.topics import target_to_buffer_label, parse_input, make_private_pair, extract_other_nick
 from wc_protocol.signals import SIGNAL_MESSAGE_SENT, SIGNAL_MESSAGE_RECEIVED, SIGNAL_PRESENCE_CHANGED
+from wc_protocol.sys_messages import is_sys_message
+from wc_registry import CommandRegistry
+from wc_registry.types import CommandParam, CommandResult, ParsedArgs
 
 SCRIPT_NAME = "weechat-zenoh"
 SCRIPT_AUTHOR = "Allen <ezagent42>"
@@ -91,6 +94,23 @@ def _stop_sidecar():
             sidecar_proc.kill()
         sidecar_proc = None
     sidecar_connected = False
+
+
+def _sidecar_raw_publish(topic: str, payload: dict):
+    """Publish raw JSON to a Zenoh topic via sidecar (no msg envelope)."""
+    _sidecar_send({"cmd": "raw_publish", "topic": topic, "payload": payload})
+
+
+def _on_raw_publish_signal(data, signal, signal_data):
+    """Handle raw_publish requests from other plugins (e.g. weechat-agent).
+    signal_data is JSON: {"topic": "wc/...", "payload": {...}}
+    """
+    try:
+        req = json.loads(signal_data)
+        _sidecar_raw_publish(req["topic"], req["payload"])
+    except (json.JSONDecodeError, KeyError):
+        pass
+    return weechat.WEECHAT_RC_OK
 
 
 def _sidecar_send(cmd: dict):
@@ -179,6 +199,36 @@ def _handle_event(event: dict):
                 f"peers={len(event.get('peers', []))}\n"
                 f"  sidecar=running")
 
+    elif etype == "joined":
+        channel_id = event.get("channel_id")
+        members = event.get("members", [])
+        count = len(members)
+        buf = buffers.get(f"channel:{channel_id}")
+        if buf:
+            if count <= 10 and members:
+                names = ", ".join(members)
+                weechat.prnt(buf, f"[zenoh] Joined #{channel_id} ({count} members online: {names})")
+            else:
+                weechat.prnt(buf, f"[zenoh] Joined #{channel_id} ({count} members online)")
+
+    elif etype == "send_failed":
+        reason = event.get("reason", "unknown error")
+        weechat.prnt("", f"[zenoh] Message delivery failed: {reason}. Use /zenoh reconnect")
+
+    elif etype == "who_response":
+        channel_id = event.get("channel_id")
+        members = event.get("members", [])
+        buf = buffers.get(f"channel:{channel_id}")
+        target = buf or ""
+        lines = [f"#{channel_id} members:"]
+        for m in sorted(members, key=lambda x: x["nick"]):
+            indicator = "●" if m["online"] else "○"
+            status = "online" if m["online"] else "offline"
+            lines.append(f"  {indicator} {m['nick']:<20} ({status})")
+        if not members:
+            lines.append("  (no members)")
+        weechat.prnt(target, "[zenoh] " + "\n[zenoh] ".join(lines))
+
     elif etype == "error":
         weechat.prnt("", f"[zenoh] Sidecar error: {event.get('detail')}")
 
@@ -232,6 +282,7 @@ def zc_init():
 
     # Timer for queue processing
     weechat.hook_timer(50, 0, 0, "poll_queues_cb", "")
+    weechat.hook_signal("zenoh_raw_publish", "_on_raw_publish_signal", "")
 
     # Autojoin — deferred until ready event arrives
     global pending_autojoin
@@ -334,10 +385,11 @@ def leave_private(target_nick):
 # ============================================================
 
 def send_message(target, body):
+    msg_id = os.urandom(4).hex()
     if target.startswith("#"):
         channel_id = target.lstrip("#")
         key = f"channel:{channel_id}"
-        _sidecar_send({"cmd": "send", "pub_key": key,
+        _sidecar_send({"cmd": "send", "msg_id": msg_id, "pub_key": key,
                         "type": "msg", "body": body})
         buf = buffers.get(key)
         if buf:
@@ -348,7 +400,7 @@ def send_message(target, body):
         key = f"private:{pair}"
         if pair not in privates:
             join_private(nick)
-        _sidecar_send({"cmd": "send", "pub_key": key,
+        _sidecar_send({"cmd": "send", "msg_id": msg_id, "pub_key": key,
                         "type": "msg", "body": body})
         buf = buffers.get(key)
         if buf:
@@ -418,6 +470,12 @@ def poll_queues_cb(data, remaining_calls):
         nick = msg.get("nick", "???")
         body = msg.get("body", "")
         msg_type = msg.get("type", "msg")
+
+        # Route sys messages to signal, don't display in buffer
+        if is_sys_message(msg):
+            weechat.hook_signal_send("zenoh_sys_message",
+                weechat.WEECHAT_HOOK_SIGNAL_STRING, json.dumps(msg))
+            continue
 
         if msg_type == "msg":
             weechat.prnt(buf, f"{nick}\t{body}")
@@ -493,80 +551,180 @@ def _remove_nick(channel_id, nick):
 # /zenoh command
 # ============================================================
 
-def zenoh_cmd_cb(data, buffer, args):
-    argv = args.split()
-    cmd = argv[0] if argv else "help"
+def _buffer_target(buffer):
+    """Get target string from current buffer localvars."""
+    buf_type = weechat.buffer_get_string(buffer, "localvar_type")
+    target = weechat.buffer_get_string(buffer, "localvar_target")
+    if not target:
+        return None
+    if buf_type == "channel":
+        return f"#{target}"
+    elif buf_type == "private":
+        return f"@{target}"
+    return None
 
-    if cmd == "join" and len(argv) >= 2:
-        join(argv[1])
 
-    elif cmd == "leave":
-        if len(argv) >= 2:
-            leave(argv[1])
-        else:
-            target = weechat.buffer_get_string(buffer, "localvar_target")
-            buf_type = weechat.buffer_get_string(buffer, "localvar_type")
-            if target:
-                leave(f"{'#' if buf_type == 'channel' else '@'}{target}")
+zenoh_registry = CommandRegistry(prefix="zenoh")
 
-    elif cmd == "nick" and len(argv) >= 2:
-        global my_nick
-        old = my_nick
-        my_nick = argv[1]
-        weechat.config_set_plugin("nick", my_nick)
-        weechat.prnt("", f"[zenoh] Nick changed: {old} → {my_nick}")
-        _sidecar_send({"cmd": "set_nick", "nick": my_nick})
-        if privates:
-            weechat.prnt("",
-                f"[zenoh] Warning: {len(privates)} open private(s) still "
-                f"use pair keys with old nick '{old}'. "
-                f"Close and re-open them to update.")
 
-    elif cmd == "list":
-        weechat.prnt(buffer, "[zenoh] Channels:")
-        for r in sorted(channels):
-            weechat.prnt(buffer, f"  #{r}")
-        weechat.prnt(buffer, "[zenoh] Privates:")
-        for d in sorted(privates):
-            weechat.prnt(buffer, f"  {d}")
+@zenoh_registry.command(
+    name="join", args="<target>",
+    description="Join channel (#name) or open private (@nick)",
+    params=[CommandParam("target", required=True, help="#channel or @nick")],
+)
+def cmd_zenoh_join(buffer, args: ParsedArgs) -> CommandResult:
+    target = args.get("target")
+    join(target)
+    return CommandResult.ok(f"Joining {target}")
 
-    elif cmd == "send" and len(argv) >= 3:
-        target = argv[1]
-        body = " ".join(argv[2:])
-        send_message(target, body)
 
-    elif cmd == "status":
-        global pending_status_buffer
-        pending_status_buffer = buffer
-        _sidecar_send({"cmd": "status"})
+@zenoh_registry.command(
+    name="leave", args="[target]",
+    description="Leave channel or close private (error on invalid)",
+    params=[CommandParam("target", required=False, help="#channel or @nick")],
+)
+def cmd_zenoh_leave(buffer, args: ParsedArgs) -> CommandResult:
+    target = args.get("target")
+    if not target:
+        target = _buffer_target(buffer)
+        if not target:
+            return CommandResult.error("No target and current buffer is not a channel/private")
 
-    elif cmd == "reconnect":
-        weechat.prnt("", "[zenoh] Reconnecting...")
-        _stop_sidecar()
-        _start_sidecar()
-        connect = weechat.config_get_plugin("connect")
-        cmd_init = {"cmd": "init", "nick": my_nick}
-        if connect:
-            cmd_init["connect"] = connect
-        _sidecar_send(cmd_init)
-        # Build rejoin targets from local state
-        saved_channels = set(channels)
-        saved_privates = set(privates)
-        channels.clear()
-        privates.clear()
-        rejoin_targets = [f"#{cid}" for cid in saved_channels]
-        for pair in saved_privates:
-            other_nick = extract_other_nick(pair, my_nick)
-            if other_nick != pair:
-                rejoin_targets.append(f"@{other_nick}")
-        # Queue for autojoin on ready event
-        global pending_autojoin
-        pending_autojoin = ",".join(rejoin_targets)
-
+    if target.startswith("#"):
+        channel_id = target.lstrip("#")
+        if channel_id not in channels:
+            return CommandResult.error(f"not in #{channel_id}")
+        leave_channel(channel_id)
+    elif target.startswith("@"):
+        nick = target.lstrip("@")
+        pair = make_private_pair(my_nick, nick)
+        if pair not in privates:
+            return CommandResult.error(f"no private chat with @{nick}")
+        leave_private(nick)
     else:
-        weechat.prnt(buffer,
-            "[zenoh] Usage: /zenoh <join|leave|nick|list|send|status|reconnect>")
+        return CommandResult.error(f"invalid target: {target} (use #channel or @nick)")
+    return CommandResult.ok(f"Left {target}")
 
+
+@zenoh_registry.command(
+    name="nick", args="<newname>",
+    description="Change nickname",
+    params=[CommandParam("newname", required=True, help="New nickname")],
+)
+def cmd_zenoh_nick(buffer, args: ParsedArgs) -> CommandResult:
+    global my_nick
+    new_nick = args.get("newname")
+    old_nick = my_nick
+    my_nick = new_nick
+    weechat.config_set_plugin("nick", my_nick)
+    _sidecar_send({"cmd": "set_nick", "nick": my_nick})
+    msg = f"Nick changed: {old_nick} → {my_nick}"
+    if privates:
+        msg += (f"\nWarning: {len(privates)} open private(s) still "
+                f"use pair keys with old nick '{old_nick}'. "
+                f"Close and re-open them to update.")
+    return CommandResult.ok(msg)
+
+
+@zenoh_registry.command(
+    name="list", args="",
+    description="List joined channels and privates",
+    params=[],
+)
+def cmd_zenoh_list(buffer, args: ParsedArgs) -> CommandResult:
+    lines = []
+    if channels:
+        lines.append("Channels:")
+        for ch in sorted(channels):
+            lines.append(f"  #{ch}")
+    if privates:
+        lines.append("Privates:")
+        for pr in sorted(privates):
+            lines.append(f"  {pr}")
+    if not lines:
+        return CommandResult.ok("Not in any channels or privates")
+    return CommandResult.ok("\n".join(lines))
+
+
+@zenoh_registry.command(
+    name="send", args="<target> <msg>",
+    description="Send message programmatically",
+    params=[
+        CommandParam("target", required=True, help="#channel or @nick"),
+        CommandParam("msg", required=True, help="Message text"),
+    ],
+)
+def cmd_zenoh_send(buffer, args: ParsedArgs) -> CommandResult:
+    target = args.get("target")
+    # msg is everything after target in the raw string
+    raw_tokens = args.raw.split(None, 2)  # ["send", "target", "rest..."]
+    msg = raw_tokens[2] if len(raw_tokens) > 2 else args.get("msg", "")
+    send_message(target, msg)
+    return CommandResult.ok(f"Sent to {target}")
+
+
+@zenoh_registry.command(
+    name="status", args="",
+    description="Show connection status",
+    params=[],
+)
+def cmd_zenoh_status(buffer, args: ParsedArgs) -> CommandResult:
+    global pending_status_buffer
+    pending_status_buffer = buffer
+    _sidecar_send({"cmd": "status"})
+    return CommandResult.ok("Requesting status...")
+
+
+@zenoh_registry.command(
+    name="who",
+    args="<channel>",
+    description="List channel members with online/offline status",
+    params=[CommandParam("channel", required=True, help="#channel name")],
+)
+def cmd_zenoh_who(buffer, args: ParsedArgs) -> CommandResult:
+    channel = args.get("channel", "").lstrip("#")
+    if channel not in channels:
+        return CommandResult.error(f"not in #{channel}")
+    _sidecar_send({"cmd": "who", "channel_id": channel})
+    return CommandResult.ok(f"Querying #{channel} members...")
+
+
+@zenoh_registry.command(
+    name="reconnect", args="",
+    description="Restart sidecar and rejoin",
+    params=[],
+)
+def cmd_zenoh_reconnect(buffer, args: ParsedArgs) -> CommandResult:
+    _stop_sidecar()
+    _start_sidecar()
+    connect = weechat.config_get_plugin("connect")
+    cmd_init = {"cmd": "init", "nick": my_nick}
+    if connect:
+        cmd_init["connect"] = connect
+    _sidecar_send(cmd_init)
+    # Build rejoin targets from local state
+    saved_channels = set(channels)
+    saved_privates = set(privates)
+    channels.clear()
+    privates.clear()
+    rejoin_targets = [f"#{cid}" for cid in saved_channels]
+    for pair in saved_privates:
+        other_nick = extract_other_nick(pair, my_nick)
+        if other_nick != pair:
+            rejoin_targets.append(f"@{other_nick}")
+    global pending_autojoin
+    pending_autojoin = ",".join(rejoin_targets)
+    return CommandResult.ok("Reconnecting...")
+
+
+def zenoh_cmd_cb(data, buffer, args):
+    """WeeChat hook callback — delegates to registry."""
+    result = zenoh_registry.dispatch(buffer, args)
+    prefix = "[zenoh]"
+    if result.success:
+        weechat.prnt(buffer, f"{prefix} {result.message}")
+    else:
+        weechat.prnt(buffer, f"{prefix} Error: {result.message}")
     return weechat.WEECHAT_RC_OK
 
 
@@ -586,16 +744,9 @@ if weechat.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
 
     weechat.hook_command("zenoh",
         "Zenoh P2P chat",
-        "join <#channel|@nick> || leave [target] || nick <n> || "
-        "list || send <target> <msg> || status || reconnect",
-        "    join: Join channel or open private\n"
-        "   leave: Leave channel or close private\n"
-        "    nick: Change nickname\n"
-        "    list: List joined channels and privates\n"
-        "    send: Send message programmatically\n"
-        "  status: Show connection status\n"
-        "reconnect: Restart sidecar and rejoin",
-        "join || leave || nick || list || send || status || reconnect",
+        zenoh_registry.weechat_help_args(),
+        "",
+        zenoh_registry.weechat_completion(),
         "zenoh_cmd_cb", "")
 
     zc_init()

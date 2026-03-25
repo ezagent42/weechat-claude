@@ -4,7 +4,8 @@ import json
 import time
 import pytest
 
-from message import detect_mention, clean_mention, make_private_pair
+from message import detect_mention, clean_mention
+from wc_protocol.topics import make_private_pair
 
 pytestmark = pytest.mark.integration
 

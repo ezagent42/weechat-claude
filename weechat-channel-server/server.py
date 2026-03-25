@@ -11,6 +11,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
 from wc_protocol.config import build_zenoh_config_dict
 from wc_protocol.topics import make_private_pair, channel_topic, private_topic, presence_topic, channel_presence_topic
+from wc_protocol.sys_messages import is_sys_message, make_sys_message
 from datetime import datetime, timezone
 
 import anyio
@@ -24,6 +25,7 @@ from mcp.types import JSONRPCMessage, JSONRPCNotification, Tool, TextContent
 from message import MessageDedup, detect_mention, clean_mention, chunk_message
 
 AGENT_NAME = os.environ.get("AGENT_NAME", "agent0")
+_msg_counter = {"sent": 0, "received": 0}
 
 # ============================================================
 # MCP Notification Injection
@@ -85,12 +87,28 @@ def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
             msg = json.loads(sample.payload.to_string())
             if msg.get("nick") == AGENT_NAME:
                 return
+            # Route sys messages to dedicated handler
+            if is_sys_message(msg):
+                _handle_sys_message(msg, pair, zenoh_session, joined_channels)
+                return
             msg_id = msg.get("id", "")
             if msg_id and dedup.is_duplicate(msg_id):
                 return
             sender = msg.get("nick", "unknown")
             print(f"[channel-server] [private:{sender}] {sender}: {msg.get('body', '')}", file=sys.stderr)
             loop.call_soon_threadsafe(queue.put_nowait, (msg, sender))
+            _msg_counter["received"] += 1
+            # Send delivery ack
+            msg_id = msg.get("id")
+            sender_nick = msg.get("nick", "")
+            if msg_id and sender_nick:
+                try:
+                    ack_pair = make_private_pair(AGENT_NAME, sender_nick)
+                    ack = make_sys_message(AGENT_NAME, "sys.ack", {"status": "ok"}, ref_id=msg_id)
+                    ack_topic = private_topic(ack_pair)
+                    zenoh_session.put(ack_topic, json.dumps(ack).encode())
+                except Exception:
+                    pass
         except Exception as e:
             print(f"[channel-server] private error: {e}", file=sys.stderr)
 
@@ -112,6 +130,18 @@ def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
                 token = zenoh_session.liveliness().declare_token(channel_presence_topic(channel, AGENT_NAME))
                 joined_channels[channel] = token
             loop.call_soon_threadsafe(queue.put_nowait, (msg, f"#{channel}"))
+            _msg_counter["received"] += 1
+            # Send delivery ack
+            msg_id = msg.get("id")
+            sender_nick = msg.get("nick", "")
+            if msg_id and sender_nick:
+                try:
+                    ack_pair = make_private_pair(AGENT_NAME, sender_nick)
+                    ack = make_sys_message(AGENT_NAME, "sys.ack", {"status": "ok"}, ref_id=msg_id)
+                    ack_topic = private_topic(ack_pair)
+                    zenoh_session.put(ack_topic, json.dumps(ack).encode())
+                except Exception:
+                    pass
         except Exception as e:
             print(f"[channel-server] channel error: {e}", file=sys.stderr)
 
@@ -147,6 +177,36 @@ When you receive a channel notification:
 3. For private messages requesting you to stop/exit, save any work and run /exit
 
 Use the "reply" tool to send messages. Use "join_channel" to join new channels."""
+
+
+def _handle_sys_message(msg: dict, reply_topic_key: str, zenoh_session, joined_channels: dict):
+    """Handle incoming system messages. Dispatches by type."""
+    from wc_protocol.topics import private_topic
+    msg_type = msg.get("type", "")
+    if msg_type == "sys.stop_request":
+        reply_msg = make_sys_message(AGENT_NAME, "sys.stop_confirmed", {}, ref_id=msg["id"])
+        topic = private_topic(reply_topic_key)
+        zenoh_session.put(topic, json.dumps(reply_msg).encode())
+    elif msg_type == "sys.join_request":
+        channel = msg.get("body", {}).get("channel", "").lstrip("#")
+        if channel:
+            # Declare liveliness presence for this channel
+            if channel not in joined_channels:
+                token = zenoh_session.liveliness().declare_token(
+                    channel_presence_topic(channel, AGENT_NAME))
+                joined_channels[channel] = token
+            reply_msg = make_sys_message(AGENT_NAME, "sys.join_confirmed",
+                                         {"channel": f"#{channel}"}, ref_id=msg["id"])
+            topic = private_topic(reply_topic_key)
+            zenoh_session.put(topic, json.dumps(reply_msg).encode())
+    elif msg_type == "sys.status_request":
+        reply_msg = make_sys_message(AGENT_NAME, "sys.status_response", {
+            "channels": list(joined_channels.keys()),
+            "messages_sent": _msg_counter["sent"],
+            "messages_received": _msg_counter["received"],
+        }, ref_id=msg["id"])
+        topic = private_topic(reply_topic_key)
+        zenoh_session.put(topic, json.dumps(reply_msg).encode())
 
 
 def create_server():
@@ -231,6 +291,7 @@ async def _handle_reply(zenoh_session, arguments: dict) -> list[TextContent]:
         else:
             pair = make_private_pair(AGENT_NAME, chat_id)
             zenoh_session.put(private_topic(pair), msg)
+    _msg_counter["sent"] += 1
     return [TextContent(type="text", text=f"Sent to {chat_id}")]
 
 async def _handle_join_channel(zenoh_session, arguments: dict) -> list[TextContent]:
