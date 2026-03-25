@@ -16,6 +16,8 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
 from wc_protocol.naming import scoped_name as protocol_scoped_name
 from wc_protocol.signals import SIGNAL_MESSAGE_RECEIVED, SIGNAL_PRESENCE_CHANGED
+from wc_protocol.sys_messages import make_sys_message, is_sys_message
+from wc_protocol.topics import private_topic, make_private_pair
 from wc_registry import CommandRegistry
 from wc_registry.types import CommandParam, CommandResult, ParsedArgs
 
@@ -36,6 +38,27 @@ PRIMARY_AGENT = ""         # 主 agent 全名（如 alice:agent0）
 def scoped_name(name):
     """给 agent 名称加上用户名前缀（如已有前缀则不重复添加）。"""
     return protocol_scoped_name(name, USERNAME)
+
+
+pending_stops = {}   # msg_id → {name, buffer, timer}
+pending_joins = {}   # msg_id → {agent_name, channel, buffer, timer}
+
+
+def _send_sys_message(target_agent: str, msg: dict):
+    """Send a sys message to an agent via the zenoh_raw_publish signal."""
+    pair = make_private_pair(USERNAME, target_agent)
+    topic = private_topic(pair)
+    weechat.hook_signal_send("zenoh_raw_publish",
+        weechat.WEECHAT_HOOK_SIGNAL_STRING,
+        json.dumps({"topic": topic, "payload": msg}))
+
+
+def _force_stop_agent(name):
+    """Force stop via tmux send-keys."""
+    agent = agents.get(name)
+    if agent and agent.get("pane_id"):
+        subprocess.run(["tmux", "send-keys", "-t", agent["pane_id"], "/exit", "Enter"],
+                       capture_output=True)
 
 
 # ============================================================
@@ -70,6 +93,9 @@ def agent_init():
     # 监听 presence signal，更新 Agent 状态
     weechat.hook_signal(SIGNAL_PRESENCE_CHANGED,
                         "on_presence_signal_cb", "")
+
+    # 监听 sys message signal
+    weechat.hook_signal("zenoh_sys_message", "on_sys_message_cb", "")
 
 
 # ============================================================
@@ -211,7 +237,7 @@ def on_message_signal_cb(data, signal, signal_data):
                             cmd.get("workspace", os.getcwd())
                         )
             except (json.JSONDecodeError, KeyError):
-                pass
+                weechat.prnt("", f"[agent] Warning: received malformed structured message from {nick}")
 
     except Exception:
         pass
@@ -238,6 +264,37 @@ def on_presence_signal_cb(data, signal, signal_data):
                     f"[agent] {nick} is now offline")
     except Exception:
         pass
+    return weechat.WEECHAT_RC_OK
+
+
+def on_sys_message_cb(data, signal, signal_data):
+    """Handle sys.* messages from agents."""
+    try:
+        msg = json.loads(signal_data)
+    except json.JSONDecodeError:
+        return weechat.WEECHAT_RC_OK
+
+    msg_type = msg.get("type", "")
+    ref_id = msg.get("ref_id")
+
+    if msg_type == "sys.stop_confirmed" and ref_id in pending_stops:
+        info = pending_stops.pop(ref_id)
+        weechat.unhook(info["timer"])
+        weechat.prnt("", f"[agent] {info['name']} is shutting down...")
+        _force_stop_agent(info["name"])
+
+    elif msg_type == "sys.join_confirmed" and ref_id in pending_joins:
+        info = pending_joins.pop(ref_id)
+        weechat.unhook(info["timer"])
+        channel = msg.get("body", {}).get("channel", info["channel"])
+        weechat.prnt("", f"[agent] {info['agent_name']} joined {channel}")
+        # Track channel membership locally
+        agent_name = info["agent_name"]
+        if agent_name in agents:
+            agents[agent_name].setdefault("channels", [])
+            if channel not in agents[agent_name]["channels"]:
+                agents[agent_name]["channels"].append(channel)
+
     return weechat.WEECHAT_RC_OK
 
 
@@ -296,7 +353,7 @@ def cmd_agent_list(buffer, args: ParsedArgs) -> CommandResult:
 @agent_registry.command(
     name="join",
     args="<agent> <channel>",
-    description="Ask agent to join a channel",
+    description="Ask agent to join a channel (with confirmation)",
     params=[
         CommandParam("agent", required=True, help="Agent name"),
         CommandParam("channel", required=True, help="Channel name (e.g. #dev)"),
@@ -307,10 +364,66 @@ def cmd_agent_join(buffer, args: ParsedArgs) -> CommandResult:
     channel = args.get("channel")
     if agent_name not in agents:
         return CommandResult.error(f"Unknown agent: {agent_name}")
-    weechat.command("",
-        f'/zenoh send @{agent_name} '
-        f'Please join channel {channel} and monitor it for messages mentioning you.')
-    return CommandResult.ok(f"Asked {agent_name} to join {channel}")
+
+    msg = make_sys_message(USERNAME, "sys.join_request", {"channel": channel})
+    _send_sys_message(agent_name, msg)
+
+    timer = weechat.hook_timer(10000, 0, 1, "_join_timeout_cb", msg["id"])
+    pending_joins[msg["id"]] = {
+        "agent_name": agent_name, "channel": channel,
+        "buffer": buffer, "timer": timer,
+    }
+    return CommandResult.ok(f"Asking {agent_name} to join {channel}...")
+
+
+def _join_timeout_cb(data, remaining_calls):
+    msg_id = data
+    if msg_id in pending_joins:
+        info = pending_joins.pop(msg_id)
+        weechat.prnt("", f"[agent] {info['agent_name']} did not confirm joining {info['channel']} (request may still be pending)")
+    return weechat.WEECHAT_RC_OK
+
+
+@agent_registry.command(
+    name="stop",
+    args="<name>",
+    description="Stop a running agent (not agent0)",
+    params=[CommandParam("name", required=True, help="Agent name")],
+)
+def cmd_agent_stop(buffer, args: ParsedArgs) -> CommandResult:
+    name = scoped_name(args.get("name"))
+    if name not in agents:
+        return CommandResult.error(f"Unknown agent: {name}")
+    if name.endswith(":agent0"):
+        return CommandResult.error(f"{name} is the primary agent and cannot be stopped")
+
+    agent = agents[name]
+    if agent["status"] == "offline":
+        return CommandResult.error(f"{name} is already offline")
+
+    if agent["status"] == "starting":
+        _force_stop_agent(name)
+        return CommandResult.ok(f"{name} was still starting, forcing stop...")
+
+    # Send sys.stop_request via raw_publish signal
+    msg = make_sys_message(USERNAME, "sys.stop_request", {"reason": "user requested /agent stop"})
+    _send_sys_message(name, msg)
+
+    timer = weechat.hook_timer(5000, 0, 1, "_stop_timeout_cb", name)
+    pending_stops[msg["id"]] = {"name": name, "buffer": buffer, "timer": timer}
+
+    return CommandResult.ok(f"Stopping {name}...")
+
+
+def _stop_timeout_cb(data, remaining_calls):
+    """Called if agent doesn't respond to sys.stop_request within 5s."""
+    name = data
+    to_remove = [mid for mid, info in pending_stops.items() if info["name"] == name]
+    for mid in to_remove:
+        del pending_stops[mid]
+    weechat.prnt("", f"[agent] {name} did not respond, forcing stop...")
+    _force_stop_agent(name)
+    return weechat.WEECHAT_RC_OK
 
 
 def agent_cmd_cb(data, buffer, args):

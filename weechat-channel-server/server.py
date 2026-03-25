@@ -88,7 +88,7 @@ def setup_zenoh(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
                 return
             # Route sys messages to dedicated handler
             if is_sys_message(msg):
-                _handle_sys_message(msg, pair, zenoh_session)
+                _handle_sys_message(msg, pair, zenoh_session, joined_channels)
                 return
             msg_id = msg.get("id", "")
             if msg_id and dedup.is_duplicate(msg_id):
@@ -154,11 +154,26 @@ When you receive a channel notification:
 Use the "reply" tool to send messages. Use "join_channel" to join new channels."""
 
 
-def _handle_sys_message(msg: dict, reply_topic_key: str, zenoh_session):
+def _handle_sys_message(msg: dict, reply_topic_key: str, zenoh_session, joined_channels: dict):
     """Handle incoming system messages. Dispatches by type."""
+    from wc_protocol.topics import private_topic
     msg_type = msg.get("type", "")
-    # P1 handlers will be added in subsequent tasks
-    pass
+    if msg_type == "sys.stop_request":
+        reply_msg = make_sys_message(AGENT_NAME, "sys.stop_confirmed", {}, ref_id=msg["id"])
+        topic = private_topic(reply_topic_key)
+        zenoh_session.put(topic, json.dumps(reply_msg).encode())
+    elif msg_type == "sys.join_request":
+        channel = msg.get("body", {}).get("channel", "").lstrip("#")
+        if channel:
+            # Declare liveliness presence for this channel
+            if channel not in joined_channels:
+                token = zenoh_session.liveliness().declare_token(
+                    channel_presence_topic(channel, AGENT_NAME))
+                joined_channels[channel] = token
+            reply_msg = make_sys_message(AGENT_NAME, "sys.join_confirmed",
+                                         {"channel": f"#{channel}"}, ref_id=msg["id"])
+            topic = private_topic(reply_topic_key)
+            zenoh_session.put(topic, json.dumps(reply_msg).encode())
 
 
 def create_server():

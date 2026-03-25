@@ -199,6 +199,22 @@ def _handle_event(event: dict):
                 f"peers={len(event.get('peers', []))}\n"
                 f"  sidecar=running")
 
+    elif etype == "joined":
+        channel_id = event.get("channel_id")
+        members = event.get("members", [])
+        count = len(members)
+        buf = buffers.get(f"channel:{channel_id}")
+        if buf:
+            if count <= 10 and members:
+                names = ", ".join(members)
+                weechat.prnt(buf, f"[zenoh] Joined #{channel_id} ({count} members online: {names})")
+            else:
+                weechat.prnt(buf, f"[zenoh] Joined #{channel_id} ({count} members online)")
+
+    elif etype == "send_failed":
+        reason = event.get("reason", "unknown error")
+        weechat.prnt("", f"[zenoh] Message delivery failed: {reason}. Use /zenoh reconnect")
+
     elif etype == "error":
         weechat.prnt("", f"[zenoh] Sidecar error: {event.get('detail')}")
 
@@ -355,10 +371,11 @@ def leave_private(target_nick):
 # ============================================================
 
 def send_message(target, body):
+    msg_id = os.urandom(4).hex()
     if target.startswith("#"):
         channel_id = target.lstrip("#")
         key = f"channel:{channel_id}"
-        _sidecar_send({"cmd": "send", "pub_key": key,
+        _sidecar_send({"cmd": "send", "msg_id": msg_id, "pub_key": key,
                         "type": "msg", "body": body})
         buf = buffers.get(key)
         if buf:
@@ -369,7 +386,7 @@ def send_message(target, body):
         key = f"private:{pair}"
         if pair not in privates:
             join_private(nick)
-        _sidecar_send({"cmd": "send", "pub_key": key,
+        _sidecar_send({"cmd": "send", "msg_id": msg_id, "pub_key": key,
                         "type": "msg", "body": body})
         buf = buffers.get(key)
         if buf:

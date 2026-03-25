@@ -119,15 +119,18 @@ def handle_join_channel(params: dict):
         lambda sample, _cid=channel_id: _on_channel_presence(sample, _cid))
 
     # Query current members
+    members = []
     try:
         replies = session.liveliness().get(
             channel_presence_glob(channel_id))
         for reply in replies:
             nick = str(reply.ok.key_expr).rsplit("/", 1)[-1]
+            members.append(nick)
             emit({"event": "presence", "channel_id": channel_id,
                   "nick": nick, "online": True})
     except Exception:
         pass
+    emit({"event": "joined", "channel_id": channel_id, "members": members})
 
     channels.add(channel_id)
 
@@ -207,7 +210,12 @@ def handle_leave_private(params: dict):
 
 
 def handle_send(params: dict):
-    _publish_event(params["pub_key"], params["type"], params["body"])
+    msg_id = params.get("msg_id")
+    try:
+        _publish_event(params["pub_key"], params["type"], params["body"])
+    except Exception as e:
+        if msg_id:
+            emit({"event": "send_failed", "msg_id": msg_id, "reason": str(e)})
 
 
 def handle_set_nick(params: dict):
