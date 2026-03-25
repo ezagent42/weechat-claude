@@ -19,7 +19,7 @@ pytestmark = pytest.mark.integration
 class TestChannelBridge:
     def test_private_received_by_agent(self, zenoh_session):
         """Publish a private message and verify the agent's filter logic accepts it."""
-        from message import make_private_pair
+        from wc_protocol.topics import make_private_pair
 
         agent_name = "alice:agent0"
         sender = "bob"
