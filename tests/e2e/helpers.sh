@@ -66,6 +66,7 @@ install_weechat_plugins() {
     cp "$PROJECT_DIR/weechat-zenoh/weechat-zenoh.py" "$wc_dir/python/"
     cp "$PROJECT_DIR/weechat-zenoh/zenoh_sidecar.py" "$wc_dir/python/"
     cp -r "$PROJECT_DIR/wc_protocol" "$wc_dir/python/"
+    cp -r "$PROJECT_DIR/wc_registry" "$wc_dir/python/"
     cp "$PROJECT_DIR/weechat-agent/weechat-agent.py" "$wc_dir/python/"
     ln -sf "../weechat-zenoh.py" "$wc_dir/python/autoload/"
 }
