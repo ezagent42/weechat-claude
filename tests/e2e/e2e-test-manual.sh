@@ -54,8 +54,13 @@ if [ -z "$TMUX" ]; then
     return 1 2>/dev/null || exit 1
 fi
 
-# Unique IDs
-export E2E_ID="${E2E_ID:-$$}"
+# Unique IDs — always use fresh $$ unless ergo is still running from a previous source
+if [ -n "$E2E_ERGO_PID" ] && kill -0 "$E2E_ERGO_PID" 2>/dev/null; then
+    echo "(Reusing existing environment id: $E2E_ID)"
+else
+    # Fresh environment
+    export E2E_ID="$$"
+fi
 export E2E_IRC_PORT=$((16667 + (E2E_ID % 1000)))
 export E2E_ERGO_DIR="/tmp/e2e-ergo-${E2E_ID}"
 export WC_AGENT_HOME="/tmp/e2e-wc-agent-${E2E_ID}"
@@ -87,21 +92,25 @@ username = "alice"
 EOF
 echo "e2e" > "$WC_AGENT_HOME/default"
 
-# Start ergo
-mkdir -p "$E2E_ERGO_DIR"
-[ -d "$HOME/.local/share/ergo/languages" ] && [ ! -d "$E2E_ERGO_DIR/languages" ] && \
-    cp -r "$HOME/.local/share/ergo/languages" "$E2E_ERGO_DIR/"
-ergo defaultconfig > "$E2E_ERGO_DIR/ergo.yaml" 2>/dev/null
-sed -i '' "s|\"127.0.0.1:6667\":|\"127.0.0.1:${E2E_IRC_PORT}\":|" "$E2E_ERGO_DIR/ergo.yaml"
-sed -i '' '/\[::1\]:6667/d' "$E2E_ERGO_DIR/ergo.yaml"
-sed -i '' '/"[^"]*:6697":/,/min-tls-version:/d' "$E2E_ERGO_DIR/ergo.yaml"
-(cd "$E2E_ERGO_DIR" && ergo run --conf ergo.yaml &>/dev/null &)
-export E2E_ERGO_PID=$!
-cd "$PROJECT_DIR"
-sleep 2
-
-if ! kill -0 "$E2E_ERGO_PID" 2>/dev/null; then
-    echo "ERROR: ergo failed to start"; return 1 2>/dev/null || exit 1
+# Start ergo (skip if already running for this E2E_ID)
+if [ -n "$E2E_ERGO_PID" ] && kill -0 "$E2E_ERGO_PID" 2>/dev/null; then
+    echo "  ergo already running (pid $E2E_ERGO_PID, port $E2E_IRC_PORT)"
+else
+    mkdir -p "$E2E_ERGO_DIR"
+    [ -d "$HOME/.local/share/ergo/languages" ] && [ ! -d "$E2E_ERGO_DIR/languages" ] && \
+        cp -r "$HOME/.local/share/ergo/languages" "$E2E_ERGO_DIR/"
+    ergo defaultconfig > "$E2E_ERGO_DIR/ergo.yaml" 2>/dev/null
+    sed -i '' "s|\"127.0.0.1:6667\":|\"127.0.0.1:${E2E_IRC_PORT}\":|" "$E2E_ERGO_DIR/ergo.yaml"
+    sed -i '' '/\[::1\]:6667/d' "$E2E_ERGO_DIR/ergo.yaml"
+    sed -i '' '/"[^"]*:6697":/,/min-tls-version:/d' "$E2E_ERGO_DIR/ergo.yaml"
+    (cd "$E2E_ERGO_DIR" && ergo run --conf ergo.yaml &>/dev/null &)
+    export E2E_ERGO_PID=$!
+    cd "$PROJECT_DIR"
+    sleep 2
+    if ! kill -0 "$E2E_ERGO_PID" 2>/dev/null; then
+        echo "ERROR: ergo failed to start"; return 1 2>/dev/null || exit 1
+    fi
+    echo "  ergo started (pid $E2E_ERGO_PID, port $E2E_IRC_PORT)"
 fi
 
 echo ""
