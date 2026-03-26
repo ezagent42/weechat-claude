@@ -123,7 +123,6 @@ class IrcManager:
         tls = self.irc_config.get("tls", False)
         nick = nick_override or self.config.get("agents", {}).get("username") or os.environ.get("USER", "user")
         channels = self.config.get("agents", {}).get("default_channels", ["#general"])
-        channels_str = "; ".join(f"/join {ch}" for ch in channels)
         tls_flag = "" if tls else " -notls"
 
         # Source proxy env if available
@@ -131,7 +130,9 @@ class IrcManager:
         env_file = os.path.join(script_dir, "claude.local.env")
         source_env = f"[ -f '{env_file}' ] && set -a && source '{env_file}' && set +a; " if os.path.isfile(env_file) else ""
 
-        cmd = f"{source_env}weechat -r '/server add wc-local {server}/{port}{tls_flag} -nicks={nick}; /connect wc-local; {channels_str}'"
+        # Use irc.server.wc-local.autojoin instead of /join — /connect is async so /join may run before connected
+        autojoin = ",".join(channels)
+        cmd = f"{source_env}weechat -r '/server add wc-local {server}/{port}{tls_flag} -nicks={nick}; /set irc.server.wc-local.autojoin \"{autojoin}\"; /connect wc-local'"
 
         result = subprocess.run(
             ["tmux", "split-window", "-v", "-P", "-F", "#{pane_id}",

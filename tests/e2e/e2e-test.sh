@@ -97,11 +97,18 @@ fi
 # ============================================================
 step "Phase 3: @mention"
 
+# Ensure alice is in #general (may have failed to join during startup)
+tmux send-keys -t "$PANE_ALICE" "/join #general" Enter
+sleep 3
 tmux send-keys -t "$PANE_ALICE" "@alice-agent0 what is the capital of France?" Enter
 
 if wait_for_pane "$PANE_ALICE" "alice-agent0" 60; then
     pass "agent0: auto-responded to @mention"
 else
+    info "agent0 pane (checking if MCP notification arrived):"
+    tmux capture-pane -t "$PANE_AGENT0" -p -S -10 2>/dev/null || true
+    info "alice pane:"
+    tmux capture-pane -t "$PANE_ALICE" -p -S -5 2>/dev/null || true
     fail "agent0: did not auto-respond to @mention"
 fi
 
