@@ -284,45 +284,23 @@ async def _handle_join_channel(connection, arguments: dict) -> list[TextContent]
 
 
 async def _handle_create_agent(arguments: dict) -> list[TextContent]:
-    """Create a new agent by invoking wc-agent CLI as subprocess."""
-    import subprocess as sp
+    """Create a new agent using AgentManager directly."""
     name = arguments["name"]
-
-    # Extract username prefix from current agent name (e.g., alice-agent0 → alice)
-    # so child agents inherit the same prefix (alice-agent2, not h2oslabs-agent2)
     username = AGENT_NAME.split("-")[0] if "-" in AGENT_NAME else AGENT_NAME
-
-    # Scope the name with the parent's username prefix
-    from wc_protocol.naming import scoped_name, AGENT_SEPARATOR
+    from wc_protocol.naming import scoped_name
     scoped = scoped_name(name, username)
-
-    # Find wc-agent CLI relative to channel-server
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-    cli_path = os.path.join(script_dir, "..", "wc-agent", "cli.py")
-    config_path = os.path.join(script_dir, "..", "weechat-claude.toml")
-
-    # Build command — pass config and tmux session from env if available
-    # Use the already-scoped name so wc-agent doesn't re-scope with wrong username
-    cmd = [sys.executable, cli_path]
-    if os.path.isfile(config_path):
-        cmd.extend(["--config", config_path])
-    tmux_session = os.environ.get("WC_TMUX_SESSION")
-    if tmux_session:
-        cmd.extend(["--tmux-session", tmux_session])
-    cmd.extend(["create", scoped])  # Pass already-scoped name
-
     try:
-        result = sp.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            output = result.stdout.strip()
-            print(f"[channel-server] Created agent {name}: {output}", file=sys.stderr)
-            return [TextContent(type="text", text=f"Agent {name} created. {output}")]
-        else:
-            error = result.stderr.strip() or result.stdout.strip()
-            print(f"[channel-server] Failed to create agent {name}: {error}", file=sys.stderr)
-            return [TextContent(type="text", text=f"Failed to create agent {name}: {error}")]
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+        from wc_agent.agent_manager import AgentManager
+        mgr = AgentManager.from_env()
+        info = mgr.create(scoped)
+        output = f"Created {scoped} (pane: {info.get('pane_id', '?')})"
+        print(f"[channel-server] {output}", file=sys.stderr)
+        return [TextContent(type="text", text=output)]
     except Exception as e:
-        return [TextContent(type="text", text=f"Error creating agent {name}: {e}")]
+        error = f"Failed to create agent {scoped}: {e}"
+        print(f"[channel-server] {error}", file=sys.stderr)
+        return [TextContent(type="text", text=error)]
 
 # ============================================================
 # Main

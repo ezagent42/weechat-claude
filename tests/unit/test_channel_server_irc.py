@@ -45,10 +45,3 @@ def test_detect_mention_with_dash_separator():
     """Agent names use - separator (IRC compliant)."""
     assert detect_mention("@alice-helper hello", "alice-helper") is True
     assert detect_mention("@alice:helper hello", "alice-helper") is False
-
-
-def test_create_agent_tool_cli_path():
-    """Verify the wc-agent CLI path resolution used by create_agent tool."""
-    server_dir = os.path.join(os.path.dirname(__file__), "../../weechat-channel-server")
-    cli_path = os.path.join(server_dir, "..", "wc-agent", "cli.py")
-    assert os.path.isfile(os.path.realpath(cli_path)), f"wc-agent CLI not found at {cli_path}"
