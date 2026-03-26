@@ -56,7 +56,7 @@ fi
 
 # Create agent0 — run directly (not via tmux send-keys)
 wc_agent_exec agent create agent0 2>&1 || true
-sleep 10
+sleep 3
 
 # Find agent0 pane
 PANE_AGENT0=$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id}' | grep -v "$PANE_CMD" | grep -v "$PANE_ALICE" | head -1)
@@ -69,12 +69,12 @@ fi
 
 # Wait for agent to join IRC — query ergo directly via IRC protocol
 info "Waiting for agent0 to join IRC..."
-if wait_for_irc_nick "alice-agent0" 30; then
+if wait_for_irc_nick "alice-agent0" 5; then
     pass "agent0: detected on IRC server"
 else
     info "Agent pane:"
     tmux capture-pane -t "$PANE_AGENT0" -p -S -5 2>/dev/null || true
-    fail "agent0: not detected on IRC after 30s"; exit 1
+    fail "agent0: not detected on IRC after 5s"; exit 1
 fi
 
 # ============================================================
@@ -86,7 +86,7 @@ wc_agent_exec agent send agent0 'Use the reply MCP tool to send "Hello everyone,
 pass "agent send: text sent to agent0 pane"
 
 # Wait for agent to process and reply
-if wait_for_pane "$PANE_ALICE" "agent0" 30; then
+if wait_for_pane "$PANE_ALICE" "agent0" 15; then
     pass "alice: received agent0's message in #general"
 else
     info "alice: agent0 message not visible (may be scrolled)"
@@ -102,7 +102,7 @@ tmux send-keys -t "$PANE_ALICE" "/join #general" Enter
 sleep 3
 tmux send-keys -t "$PANE_ALICE" "@alice-agent0 what is the capital of France?" Enter
 
-if wait_for_pane "$PANE_ALICE" "alice-agent0" 60; then
+if wait_for_pane "$PANE_ALICE" "alice-agent0" 15; then
     pass "agent0: auto-responded to @mention"
 else
     info "agent0 pane (checking if MCP notification arrived):"
@@ -129,7 +129,7 @@ fi
 
 # Wait for agent1 to join IRC
 info "Waiting for agent1 to join IRC..."
-if wait_for_irc_nick "alice-agent1" 30; then
+if wait_for_irc_nick "alice-agent1" 5; then
     pass "agent1: detected on IRC server"
 else
     info "agent1: not detected on IRC (may still be starting)"
@@ -140,7 +140,7 @@ wc_agent_exec agent send agent1 'Use the reply MCP tool to send "hello agent0 fr
 pass "agent send: text sent to agent1 pane"
 
 # Check if agent0 sees agent1's message
-if wait_for_pane "$PANE_ALICE" "agent1" 45; then
+if wait_for_pane "$PANE_ALICE" "agent1" 15; then
     pass "alice: sees agent1's message in #general"
 else
     info "alice: agent1's message not visible (may need more time)"
