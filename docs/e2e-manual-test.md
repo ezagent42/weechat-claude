@@ -69,21 +69,23 @@ pgrep -x ergo && echo "running"
 
 ## Step 2: Start WeeChat
 
-Open a separate terminal, then:
+**Option A — via CLI (recommended):**
 
-```bash
-weechat -r '/server add wc-local 127.0.0.1/6667 -notls -nicks=alice; /connect wc-local; /join #general'
-```
-
-Or use the CLI to start WeeChat in a tmux pane:
 ```bash
 ./wc-agent.sh irc start
 ```
 
-Then attach:
+This creates a tmux session (`weechat-claude`), spawns WeeChat in a pane, and auto-connects to IRC. Then attach to observe:
+
 ```bash
-tmux -CC attach -t weechat-claude    # iTerm2
+tmux -CC attach -t weechat-claude    # iTerm2 (native tabs/panes)
 tmux attach -t weechat-claude        # standard terminal
+```
+
+**Option B — manually in a separate terminal:**
+
+```bash
+weechat -r '/server add wc-local 127.0.0.1/6667 -notls -nicks=alice; /connect wc-local; /join #general'
 ```
 
 ## Step 3: Check IRC status
