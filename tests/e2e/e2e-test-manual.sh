@@ -104,12 +104,20 @@ else
     sed -i '' "s|\"127.0.0.1:6667\":|\"127.0.0.1:${E2E_IRC_PORT}\":|" "$E2E_ERGO_DIR/ergo.yaml"
     sed -i '' '/\[::1\]:6667/d' "$E2E_ERGO_DIR/ergo.yaml"
     sed -i '' '/"[^"]*:6697":/,/min-tls-version:/d' "$E2E_ERGO_DIR/ergo.yaml"
-    (cd "$E2E_ERGO_DIR" && ergo run --conf ergo.yaml &>/dev/null &)
+    local ergo_log="$E2E_ERGO_DIR/ergo.log"
+    (cd "$E2E_ERGO_DIR" && ergo run --conf ergo.yaml >"$ergo_log" 2>&1 &)
     export E2E_ERGO_PID=$!
     cd "$PROJECT_DIR"
     sleep 2
     if ! kill -0 "$E2E_ERGO_PID" 2>/dev/null; then
-        echo "ERROR: ergo failed to start"; return 1 2>/dev/null || exit 1
+        echo "ERROR: ergo failed to start (pid $E2E_ERGO_PID, port $E2E_IRC_PORT)"
+        echo "  ergo dir: $E2E_ERGO_DIR"
+        echo "  log:"
+        cat "$ergo_log" 2>/dev/null | tail -10
+        echo ""
+        echo "  Try: rm -f $E2E_ERGO_DIR/ircd.lock  (stale lock)"
+        echo "       lsof -i :$E2E_IRC_PORT           (port conflict)"
+        return 1 2>/dev/null || exit 1
     fi
     echo "  ergo started (pid $E2E_ERGO_PID, port $E2E_IRC_PORT)"
 fi
