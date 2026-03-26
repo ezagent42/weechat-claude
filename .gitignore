@@ -9,3 +9,4 @@ claude.local.env
 ircd.db
 ircd.lock
 claude.local.env.example
+languages/
