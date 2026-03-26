@@ -1,34 +1,58 @@
 #!/usr/bin/env python3
-# wc-agent/cli.py
 """wc-agent: Claude Code agent lifecycle management CLI."""
+from __future__ import annotations
 
-import argparse
 import os
-import subprocess
 import sys
 import time
+from typing import Optional
+
+import typer
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
-from wc_agent.config import load_config
+
+from wc_agent.project import (
+    WC_AGENT_DIR, create_project_config, list_projects,
+    get_default_project, set_default_project, resolve_project,
+    load_project_config, remove_project, project_dir, state_file_path,
+)
 from wc_agent.agent_manager import AgentManager
+from wc_agent.irc_manager import IrcManager
+
+app = typer.Typer(name="wc-agent", help="Claude Code agent lifecycle management")
+project_app = typer.Typer(help="Project configuration management")
+irc_app = typer.Typer(help="IRC server and client management")
+irc_daemon_app = typer.Typer(help="Local ergo IRC server")
+agent_app = typer.Typer(help="Claude Code agent lifecycle")
+
+app.add_typer(project_app, name="project")
+app.add_typer(irc_app, name="irc")
+irc_app.add_typer(irc_daemon_app, name="daemon")
+app.add_typer(agent_app, name="agent")
 
 
-def find_config() -> str:
-    """Find weechat-claude.toml in current dir or parent dirs."""
-    path = os.getcwd()
-    while path != "/":
-        candidate = os.path.join(path, "weechat-claude.toml")
-        if os.path.isfile(candidate):
-            return candidate
-        path = os.path.dirname(path)
-    return "weechat-claude.toml"
+def _get_config(ctx: typer.Context) -> dict:
+    cfg = ctx.obj.get("config") if ctx.obj else None
+    if not cfg:
+        typer.echo("Error: No project selected. Run 'wc-agent project create <name>' or use '--project <name>'.")
+        raise typer.Exit(1)
+    return cfg
 
 
-def make_manager(args) -> AgentManager:
-    config_path = getattr(args, "config", None) or find_config()
-    cfg = load_config(config_path)
+def _get_irc_manager(ctx: typer.Context) -> IrcManager:
+    cfg = _get_config(ctx)
+    project_name = ctx.obj["project"]
+    return IrcManager(
+        config=cfg,
+        state_file=state_file_path(project_name),
+        tmux_session=ctx.obj.get("tmux_session", "weechat-claude"),
+    )
+
+
+def _get_agent_manager(ctx: typer.Context) -> AgentManager:
+    cfg = _get_config(ctx)
+    project_name = ctx.obj["project"]
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    tmux_session = getattr(args, "tmux_session", None) or "weechat-claude"
     return AgentManager(
         irc_server=cfg["irc"]["server"],
         irc_port=cfg["irc"]["port"],
@@ -36,53 +60,217 @@ def make_manager(args) -> AgentManager:
         channel_server_dir=os.path.join(script_dir, "weechat-channel-server"),
         username=cfg["agents"]["username"],
         default_channels=cfg["agents"]["default_channels"],
-        tmux_session=tmux_session,
+        tmux_session=ctx.obj.get("tmux_session", "weechat-claude"),
+        state_file=state_file_path(project_name),
     )
 
 
-def cmd_start(args):
-    if subprocess.run(["pgrep", "-x", "ergo"], capture_output=True).returncode != 0:
-        ergo_conf = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ergo.yaml")
-        if os.path.isfile(ergo_conf):
-            print("Starting ergo IRC server...")
-            subprocess.Popen(["ergo", "run", "--conf", ergo_conf],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(1)
-    mgr = make_manager(args)
-    workspace = getattr(args, "workspace", None) or os.getcwd()
-    info = mgr.create("agent0", workspace=workspace)
-    print(f"Created {mgr.scoped('agent0')}")
-    print(f"  pane: {info['pane_id']}")
-    print(f"  workspace: {info['workspace']}")
+# ============================================================
+# Global options
+# ============================================================
+
+@app.callback()
+def main(
+    ctx: typer.Context,
+    project: Optional[str] = typer.Option(None, help="Project name (overrides auto-detection)"),
+    tmux_session: str = typer.Option("weechat-claude", "--tmux-session", help="tmux session name"),
+):
+    """Claude Code agent lifecycle management."""
+    ctx.ensure_object(dict)
+    ctx.obj["tmux_session"] = tmux_session
+    resolved = resolve_project(explicit=project)
+    if resolved:
+        try:
+            ctx.obj["project"] = resolved
+            ctx.obj["config"] = load_project_config(resolved)
+        except FileNotFoundError:
+            if ctx.invoked_subcommand != "project":
+                typer.echo(f"Error: Project '{resolved}' not found. Run 'wc-agent project create {resolved}'.")
+                raise typer.Exit(1)
 
 
-def cmd_create(args):
-    mgr = make_manager(args)
-    info = mgr.create(args.name, workspace=args.workspace)
-    print(f"Created {mgr.scoped(args.name)}")
-    print(f"  pane: {info['pane_id']}")
-    print(f"  workspace: {info['workspace']}")
+# ============================================================
+# project commands
+# ============================================================
+
+@project_app.command("create")
+def cmd_project_create(name: str):
+    """Create a new project with interactive config setup."""
+    pdir = project_dir(name)
+    if os.path.exists(pdir):
+        typer.echo(f"Project '{name}' already exists.")
+        raise typer.Exit(1)
+    server = typer.prompt("IRC server", default="127.0.0.1")
+    port = typer.prompt("IRC port", default=6667, type=int)
+    tls = typer.confirm("TLS", default=False)
+    password = typer.prompt("Password", default="", show_default=False)
+    nick = typer.prompt("Nickname", default=os.environ.get("USER", "user"))
+    channels = typer.prompt("Default channels", default="#general")
+    create_project_config(name, server=server, port=port, tls=tls,
+                          password=password, nick=nick, channels=channels)
+    typer.echo(f"\nProject '{name}' created at {pdir}/")
+    typer.echo(f"Config saved to {pdir}/config.toml")
+
+@project_app.command("list")
+def cmd_project_list():
+    """List all projects."""
+    projects = list_projects()
+    default = get_default_project()
+    if not projects:
+        typer.echo("No projects. Run 'wc-agent project create <name>'.")
+        return
+    for p in projects:
+        marker = " (default)" if p == default else ""
+        typer.echo(f"  {p}{marker}")
+
+@project_app.command("use")
+def cmd_project_use(name: str):
+    """Set default project."""
+    if not os.path.isdir(project_dir(name)):
+        typer.echo(f"Project '{name}' does not exist.")
+        raise typer.Exit(1)
+    set_default_project(name)
+    typer.echo(f"Default project set to '{name}'.")
+
+@project_app.command("remove")
+def cmd_project_remove(name: str):
+    """Remove a project and its state."""
+    pdir = project_dir(name)
+    if not os.path.isdir(pdir):
+        typer.echo(f"Project '{name}' does not exist.")
+        raise typer.Exit(1)
+    # Safety: check for running agents
+    try:
+        cfg = load_project_config(name)
+        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        mgr = AgentManager(
+            irc_server=cfg["irc"]["server"], irc_port=cfg["irc"]["port"],
+            irc_tls=cfg["irc"].get("tls", False),
+            channel_server_dir=os.path.join(script_dir, "weechat-channel-server"),
+            username=cfg["agents"]["username"],
+            default_channels=cfg["agents"]["default_channels"],
+            state_file=state_file_path(name),
+        )
+        running = [n for n, i in mgr.list_agents().items() if i["status"] == "running"]
+        if running:
+            typer.echo(f"Error: Running agents: {', '.join(running)}. Stop them first.")
+            raise typer.Exit(1)
+    except FileNotFoundError:
+        pass
+    remove_project(name)
+    typer.echo(f"Project '{name}' removed.")
+
+@project_app.command("show")
+def cmd_project_show(name: Optional[str] = typer.Argument(None)):
+    """Show project config."""
+    if not name:
+        name = resolve_project()
+    if not name:
+        typer.echo("No project selected.")
+        raise typer.Exit(1)
+    try:
+        cfg = load_project_config(name)
+    except FileNotFoundError:
+        typer.echo(f"Project '{name}' does not exist.")
+        raise typer.Exit(1)
+    typer.echo(f"Project: {name}")
+    typer.echo(f"  IRC server: {cfg['irc']['server']}:{cfg['irc']['port']}")
+    typer.echo(f"  TLS: {cfg['irc']['tls']}")
+    typer.echo(f"  Nickname: {cfg['agents']['username']}")
+    typer.echo(f"  Channels: {', '.join(cfg['agents']['default_channels'])}")
 
 
-def cmd_stop(args):
-    mgr = make_manager(args)
-    name = mgr.scoped(args.name)
-    mgr.stop(args.name, force=True)
-    print(f"Stopped {name}")
+# ============================================================
+# irc daemon commands
+# ============================================================
+
+@irc_daemon_app.command("start")
+def cmd_irc_daemon_start(ctx: typer.Context):
+    """Start local ergo IRC server."""
+    mgr = _get_irc_manager(ctx)
+    mgr.daemon_start()
+
+@irc_daemon_app.command("stop")
+def cmd_irc_daemon_stop(ctx: typer.Context):
+    """Stop local ergo IRC server."""
+    mgr = _get_irc_manager(ctx)
+    mgr.daemon_stop()
 
 
-def cmd_restart(args):
-    mgr = make_manager(args)
-    name = mgr.scoped(args.name)
-    mgr.restart(args.name)
-    print(f"Restarted {name}")
+# ============================================================
+# irc client commands
+# ============================================================
+
+@irc_app.command("start")
+def cmd_irc_start(
+    ctx: typer.Context,
+    nick: Optional[str] = typer.Option(None, help="Override nickname from config"),
+):
+    """Start WeeChat in tmux, auto-connect to IRC."""
+    mgr = _get_irc_manager(ctx)
+    mgr.start_weechat(nick_override=nick)
+
+@irc_app.command("stop")
+def cmd_irc_stop(ctx: typer.Context):
+    """Stop WeeChat."""
+    mgr = _get_irc_manager(ctx)
+    mgr.stop_weechat()
+
+@irc_app.command("status")
+def cmd_irc_status(ctx: typer.Context):
+    """Show IRC server and client status."""
+    mgr = _get_irc_manager(ctx)
+    s = mgr.status()
+    typer.echo("IRC Server:")
+    if s["daemon"]["running"]:
+        typer.echo(f"  status: running (pid {s['daemon']['pid'] or 'unknown'})")
+    else:
+        typer.echo("  status: stopped")
+    typer.echo(f"  server: {s['daemon']['server']}:{s['daemon']['port']}")
+    typer.echo("")
+    typer.echo("IRC Client (WeeChat):")
+    if s["weechat"]["running"]:
+        typer.echo(f"  status: running (pane {s['weechat']['pane_id']})")
+    else:
+        typer.echo("  status: stopped")
+    typer.echo(f"  nick: {s['weechat']['nick']}")
 
 
-def cmd_list(args):
-    mgr = make_manager(args)
+# ============================================================
+# agent commands
+# ============================================================
+
+@agent_app.command("create")
+def cmd_agent_create(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent name"),
+    workspace: Optional[str] = typer.Option(None, help="Custom workspace path"),
+    channels: Optional[str] = typer.Option(None, help="Comma-separated channels to join"),
+):
+    """Create and launch a new agent."""
+    mgr = _get_agent_manager(ctx)
+    ch = [c.strip() for c in channels.split(",")] if channels else None
+    info = mgr.create(name, workspace=workspace, channels=ch)
+    scoped = mgr.scoped(name)
+    typer.echo(f"Created {scoped}")
+    typer.echo(f"  pane: {info['pane_id']}")
+    typer.echo(f"  workspace: {info['workspace']}")
+
+@agent_app.command("stop")
+def cmd_agent_stop(ctx: typer.Context, name: str = typer.Argument(...)):
+    """Stop a running agent."""
+    mgr = _get_agent_manager(ctx)
+    scoped = mgr.scoped(name)
+    mgr.stop(name, force=True)
+    typer.echo(f"Stopped {scoped}")
+
+@agent_app.command("list")
+def cmd_agent_list(ctx: typer.Context):
+    """List all agents with status."""
+    mgr = _get_agent_manager(ctx)
     agents = mgr.list_agents()
     if not agents:
-        print("No agents")
+        typer.echo("No agents")
         return
     for name, info in agents.items():
         status = info["status"]
@@ -98,77 +286,69 @@ def cmd_list(args):
                 uptime = f"{elapsed:.0f}s"
         else:
             uptime = "—"
-        channels = ", ".join(info.get("channels", []))
-        print(f"  {name}\t{status}\t{uptime}\t{pane}\t{channels}\t{ws}")
+        ch = ", ".join(info.get("channels", []))
+        typer.echo(f"  {name}\t{status}\t{uptime}\t{pane}\t{ch}\t{ws}")
 
-
-def cmd_status(args):
-    mgr = make_manager(args)
-    info = mgr.get_status(args.name)
-    name = mgr.scoped(args.name)
+@agent_app.command("status")
+def cmd_agent_status(ctx: typer.Context, name: str = typer.Argument(...)):
+    """Show detailed info for a single agent."""
+    mgr = _get_agent_manager(ctx)
+    info = mgr.get_status(name)
+    scoped = mgr.scoped(name)
     elapsed = time.time() - info.get("created_at", time.time())
     mins, secs = divmod(int(elapsed), 60)
-    print(f"{name}")
-    print(f"  status:    {info['status']}")
-    print(f"  uptime:    {mins}m {secs}s")
-    print(f"  pane:      {info.get('pane_id', '—')}")
-    print(f"  workspace: {info.get('workspace', '—')}")
-    print(f"  channels:  {', '.join(info.get('channels', []))}")
+    typer.echo(f"{scoped}")
+    typer.echo(f"  status:    {info['status']}")
+    typer.echo(f"  uptime:    {mins}m {secs}s")
+    typer.echo(f"  pane:      {info.get('pane_id', '—')}")
+    typer.echo(f"  workspace: {info.get('workspace', '—')}")
+    typer.echo(f"  channels:  {', '.join(info.get('channels', []))}")
+
+@agent_app.command("send")
+def cmd_agent_send(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent name"),
+    text: str = typer.Argument(..., help="Text to send to agent's tmux pane"),
+):
+    """Send text to agent's tmux pane (tmux send-keys)."""
+    mgr = _get_agent_manager(ctx)
+    scoped = mgr.scoped(name)
+    mgr.send(name, text)
+    typer.echo(f"Sent to {scoped} (pane {mgr._agents[scoped]['pane_id']})")
+
+@agent_app.command("restart")
+def cmd_agent_restart(ctx: typer.Context, name: str = typer.Argument(...)):
+    """Restart an agent (stop + create with same config)."""
+    mgr = _get_agent_manager(ctx)
+    scoped = mgr.scoped(name)
+    mgr.restart(name)
+    typer.echo(f"Restarted {scoped}")
 
 
-def cmd_shutdown(args):
-    mgr = make_manager(args)
-    agents = mgr.list_agents()
-    for name in list(agents.keys()):
-        if agents[name]["status"] != "offline":
-            mgr.stop(name, force=True)
-            print(f"Stopped {name}")
-    subprocess.run(["pkill", "-x", "ergo"], capture_output=True)
-    print("Shutdown complete")
+# ============================================================
+# shutdown
+# ============================================================
 
-
-def main():
-    parser = argparse.ArgumentParser(prog="wc-agent", description="Claude Code agent lifecycle management")
-    parser.add_argument("--config", help="Path to weechat-claude.toml")
-    parser.add_argument("--tmux-session", dest="tmux_session", help="tmux session name (default: weechat-claude)")
-    sub = parser.add_subparsers(dest="command")
-
-    p_start = sub.add_parser("start", help="Start ergo + primary agent")
-    p_start.add_argument("--workspace", help="Agent workspace path")
-
-    p_create = sub.add_parser("create", help="Create new agent")
-    p_create.add_argument("name")
-    p_create.add_argument("--workspace")
-
-    p_stop = sub.add_parser("stop", help="Stop agent")
-    p_stop.add_argument("name")
-
-    p_restart = sub.add_parser("restart", help="Restart agent")
-    p_restart.add_argument("name")
-
-    sub.add_parser("list", help="List agents")
-
-    p_status = sub.add_parser("status", help="Agent details")
-    p_status.add_argument("name")
-
-    sub.add_parser("shutdown", help="Stop all agents + ergo")
-
-    args = parser.parse_args()
-    if not args.command:
-        parser.print_help()
-        return
-
-    cmds = {
-        "start": cmd_start, "create": cmd_create, "stop": cmd_stop,
-        "restart": cmd_restart, "list": cmd_list, "status": cmd_status,
-        "shutdown": cmd_shutdown,
-    }
+@app.command("shutdown")
+def cmd_shutdown(ctx: typer.Context):
+    """Stop all agents + WeeChat + ergo."""
     try:
-        cmds[args.command](args)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        mgr = _get_agent_manager(ctx)
+        agents = mgr.list_agents()
+        for name in list(agents.keys()):
+            if agents[name]["status"] != "offline":
+                mgr.stop(name, force=True)
+                typer.echo(f"Stopped {name}")
+    except (SystemExit, Exception):
+        pass
+    try:
+        irc = _get_irc_manager(ctx)
+        irc.stop_weechat()
+        irc.daemon_stop()
+    except (SystemExit, Exception):
+        pass
+    typer.echo("Shutdown complete.")
 
 
 if __name__ == "__main__":
-    main()
+    app()
