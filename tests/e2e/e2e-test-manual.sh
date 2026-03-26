@@ -103,10 +103,24 @@ tmux set-environment -t "$E2E_SESSION" E2E_IRC_PORT "$E2E_IRC_PORT"
 tmux set-environment -t "$E2E_SESSION" E2E_ID "$E2E_ID"
 tmux set-environment -t "$E2E_SESSION" E2E_ERGO_PID "$E2E_ERGO_PID"
 
-# Source proxy env in the initial pane
-if [ -f "$PROJECT_DIR/claude.local.env" ]; then
-    tmux send-keys -t "$E2E_SESSION" "set -a && source '$PROJECT_DIR/claude.local.env' && set +a" Enter
-fi
+# Write cleanup script that any pane can run
+cat > "/tmp/e2e-cleanup-${E2E_ID}.sh" << CLEANEOF
+#!/bin/bash
+echo "Cleaning up e2e environment (id: $E2E_ID)..."
+cd "$PROJECT_DIR" && WC_AGENT_HOME="$E2E_WC_AGENT_HOME" ./wc-agent.sh shutdown 2>/dev/null || true
+kill $E2E_ERGO_PID 2>/dev/null
+lsof -ti :${E2E_IRC_PORT} 2>/dev/null | xargs kill 2>/dev/null
+rm -rf "$E2E_ERGO_DIR" "$E2E_WC_AGENT_HOME" "/tmp/e2e-cleanup-${E2E_ID}.sh"
+echo "Done. You can close this tmux session: exit"
+CLEANEOF
+chmod +x "/tmp/e2e-cleanup-${E2E_ID}.sh"
+
+# Source proxy env and define e2e-cleanup alias in initial pane
+tmux send-keys -t "$E2E_SESSION" "
+[ -f '$PROJECT_DIR/claude.local.env' ] && set -a && source '$PROJECT_DIR/claude.local.env' && set +a
+alias e2e-cleanup='bash /tmp/e2e-cleanup-${E2E_ID}.sh'
+" Enter
+sleep 1
 
 # Print the guide in the session
 tmux send-keys -t "$E2E_SESSION" "clear" Enter
@@ -141,12 +155,9 @@ Use ./wc-agent.sh for all commands. cd is: $PROJECT_DIR
   ./wc-agent.sh agent stop helper
 
 ━━━ Cleanup ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ./wc-agent.sh shutdown
-  # Then close this tmux session:
-  exit   (or Ctrl+D, or tmux kill-session -t $E2E_SESSION)
-
-  # If temp files remain:
-  rm -rf /tmp/e2e-*-${E2E_ID}
+  ./wc-agent.sh shutdown              # stop agents + weechat
+  bash /tmp/e2e-cleanup-${E2E_ID}.sh  # kill ergo + remove temp dirs
+  exit                                # close this session
 GUIDE" Enter
 
 # ============================================================
