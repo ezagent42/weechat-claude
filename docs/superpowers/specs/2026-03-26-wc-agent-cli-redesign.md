@@ -177,29 +177,91 @@ def agent_restart(name: str):
     # AgentManager.restart(name)
 ```
 
-### Top-level commands
+### shutdown command
+
+Typer doesn't support mixing `@app.command()` with `app.add_typer()` on the same app. Solution: `shutdown` is a subgroup with `invoke_without_command=True`:
 
 ```python
-@app.command()
+# shutdown as a subgroup that invokes immediately
+@app.command("shutdown")
+# Actually, use Click's underlying group mechanism:
+shutdown_app = typer.Typer(invoke_without_command=True)
+app.add_typer(shutdown_app, name="shutdown")
+
+@shutdown_app.callback(invoke_without_command=True)
 def shutdown():
     """Stop all agents + WeeChat + ergo."""
-    # agent_manager.shutdown() for all agents
-    # irc_stop()
-    # irc_daemon_stop()
+    # agent_manager: stop all agents
+    # irc_stop(): send /quit to WeeChat pane
+    # irc_daemon_stop(): pkill ergo
 ```
 
 ### Global options
 
 ```python
-# Typer callback for global options
 @app.callback()
 def main(
+    ctx: typer.Context,
     config: str = typer.Option(None, help="Path to weechat-claude.toml"),
     tmux_session: str = typer.Option("weechat-claude", help="tmux session name"),
 ):
     """Claude Code agent lifecycle management."""
-    # Store in context or global state
+    # Store in ctx.obj for subcommands to access
+    ctx.ensure_object(dict)
+    ctx.obj["config"] = config
+    ctx.obj["tmux_session"] = tmux_session
 ```
+
+## Idempotency
+
+All start commands are idempotent:
+- `irc daemon start`: if ergo already running (`pgrep -x ergo`), print status and return
+- `irc start`: if WeeChat pane already exists and alive, print status and return
+- `agent create <name>`: if agent already running, error
+
+All stop commands are idempotent:
+- `irc daemon stop`: if ergo not running, print "not running" and return
+- `irc stop`: if WeeChat pane not found, print "not running" and return
+- `agent stop <name>`: if agent already offline, error
+
+## Agent Name Scoping in server.py
+
+When `server.py` directly imports `AgentManager`, it must pass the already-scoped name to avoid double-scoping:
+
+```python
+# In server.py _handle_create_agent:
+from wc_agent.agent_manager import AgentManager
+
+# Extract username from parent agent name
+username = AGENT_NAME.split("-")[0]  # alice-agent0 → alice
+scoped = scoped_name(name, username)  # agent2 → alice-agent2
+
+# Create manager and call create() with scoped name
+# AgentManager.create() will see "-" in name and skip re-scoping
+mgr = AgentManager(...)
+mgr.create(scoped, ...)
+```
+
+## Entry Point
+
+Add to `wc-agent/pyproject.toml` (new file):
+
+```toml
+[project]
+name = "wc-agent"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["typer[all]>=0.9.0"]
+
+[project.scripts]
+wc-agent = "cli:app"
+```
+
+For development, run directly: `python3 wc-agent/cli.py` (Typer supports `if __name__ == "__main__": app()`)
+
+## State File Migration
+
+The current `~/.local/state/wc-agent/agents.json` will be replaced by `state.json` with the new schema. No migration — clean start required. First run of new CLI creates the file fresh. Document in README.
 
 ## State File
 
@@ -340,6 +402,8 @@ Agent should auto-respond in the channel.
 
     $ wc-agent agent create helper
     $ wc-agent agent list
+
+Note: `agent create helper` produces `alice-helper` on IRC (username prefix from config).
 
 ### 9. Agent-to-Agent Communication
 
