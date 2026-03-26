@@ -106,14 +106,19 @@ IRC Client (WeeChat):
 ## Step 4: Create agent0
 
 ```bash
-./wc-agent.sh agent create agent0
+./wc-agent.sh agent create agent0    # workspace defaults to /tmp/wc-agent-<name>/
 ```
 
 Expected:
 ```
 Created alice-agent0
   pane: %X
-  workspace: /tmp/wc-agent-alice_agent0
+  workspace: /tmp/wc-agent-alice_agent0    # default temp workspace
+```
+
+To make the agent work in a specific code directory:
+```bash
+./wc-agent.sh agent create agent0 --workspace /path/to/your/project
 ```
 
 In WeeChat, you should see `alice-agent0` join `#general`.
@@ -161,7 +166,7 @@ alice-agent0
 ## Step 8: Create a second agent
 
 ```bash
-./wc-agent.sh agent create helper
+./wc-agent.sh agent create helper     # or: --workspace /path/to/code
 ./wc-agent.sh agent list
 ```
 
