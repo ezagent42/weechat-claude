@@ -4,7 +4,7 @@ import os
 import shutil
 import tomllib
 
-WC_AGENT_DIR = os.path.expanduser("~/.wc-agent")
+WC_AGENT_DIR = os.environ.get("WC_AGENT_HOME", os.path.expanduser("~/.wc-agent"))
 
 
 def project_dir(name: str) -> str:

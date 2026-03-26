@@ -17,6 +17,9 @@ E2E_ID="$$"
 TMUX_SESSION="e2e-${E2E_ID}"
 TEST_PROJECT="e2e-test-${E2E_ID}"
 
+# Use temp dir for WC_AGENT_HOME — never touch ~/.wc-agent/
+export WC_AGENT_HOME="/tmp/e2e-wc-agent-${E2E_ID}"
+
 # Unique ergo port: 16667 + (PID % 1000) to avoid collisions with default 6667
 E2E_IRC_PORT=$((16667 + (E2E_ID % 1000)))
 E2E_ERGO_DIR="/tmp/e2e-ergo-${E2E_ID}"
@@ -31,8 +34,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.npm-global/bin:$HOME/.local
 CLAUDE_FLAGS="--permission-mode bypassPermissions"
 CLAUDE_CHANNEL_FLAGS="--dangerously-load-development-channels server:weechat-channel"
 
-# WC_AGENT command
-WC_AGENT="uv run --project $PROJECT_DIR/wc-agent python -m wc_agent.cli --project $TEST_PROJECT"
+# WC_AGENT command — includes WC_AGENT_HOME so tmux panes inherit it
+WC_AGENT="WC_AGENT_HOME=$WC_AGENT_HOME uv run --project $PROJECT_DIR/wc-agent python -m wc_agent.cli --project $TEST_PROJECT"
 
 # User directories
 ALICE_WC_DIR="/tmp/e2e-alice-${E2E_ID}"
@@ -62,8 +65,8 @@ setup_test_project() {
     (cd "$PROJECT_DIR/wc-agent" && uv sync --quiet 2>/dev/null || true)
     (cd "$PROJECT_DIR/weechat-channel-server" && uv sync --quiet 2>/dev/null || true)
 
-    # Create test project with unique port
-    local project_dir="$HOME/.wc-agent/projects/$TEST_PROJECT"
+    # Create test project with unique port (in temp WC_AGENT_HOME)
+    local project_dir="$WC_AGENT_HOME/projects/$TEST_PROJECT"
     mkdir -p "$project_dir"
     cat > "$project_dir/config.toml" << TOMLEOF
 [irc]
@@ -133,7 +136,7 @@ cleanup() {
 
     # 5. Clean temp dirs
     rm -rf "$ALICE_WC_DIR" "$BOB_WC_DIR" "$E2E_ERGO_DIR"
-    rm -rf "$HOME/.wc-agent/projects/$TEST_PROJECT"
+    rm -rf "$WC_AGENT_HOME"
 
     info "Cleanup done."
 }
