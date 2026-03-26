@@ -4,7 +4,7 @@
 E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$E2E_DIR/../.." && pwd)"
 TMUX_SESSION="e2e-$$"
-TEST_CONFIG="$E2E_DIR/test-config.toml"
+TEST_PROJECT="e2e-test-$$"
 
 # Source environment
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.npm-global/bin:$HOME/.local/bin:$PATH"
@@ -14,6 +14,9 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.npm-global/bin:$HOME/.local
 # Claude flags
 CLAUDE_FLAGS="--permission-mode bypassPermissions"
 CLAUDE_CHANNEL_FLAGS="--dangerously-load-development-channels server:weechat-channel"
+
+# WC_AGENT command — use uv to run the CLI with proper deps
+WC_AGENT="uv run --project $PROJECT_DIR/wc-agent python -m wc_agent.cli --project $TEST_PROJECT --tmux-session $TMUX_SESSION"
 
 # User directories
 ALICE_WC_DIR="/tmp/e2e-alice-$$"
@@ -38,11 +41,31 @@ step() { echo -e "\n${CYAN}━━━ $1 ━━━${NC}"; }
 
 FAILURES=0
 
+setup_test_project() {
+    # Sync deps
+    (cd "$PROJECT_DIR/wc-agent" && uv sync --quiet 2>/dev/null || true)
+    (cd "$PROJECT_DIR/weechat-channel-server" && uv sync --quiet 2>/dev/null || true)
+
+    # Create test project non-interactively by writing config directly
+    local project_dir="$HOME/.wc-agent/projects/$TEST_PROJECT"
+    mkdir -p "$project_dir"
+    cat > "$project_dir/config.toml" << TOMLEOF
+[irc]
+server = "127.0.0.1"
+port = 6667
+tls = false
+password = ""
+
+[agents]
+default_channels = ["#general"]
+username = "alice"
+TOMLEOF
+}
+
 cleanup() {
     info "Cleaning up..."
-    # Stop all agents via wc-agent
-    uv run --project "$PROJECT_DIR/weechat-channel-server" python3 "$PROJECT_DIR/wc-agent/cli.py" --config "$TEST_CONFIG" --tmux-session "$TMUX_SESSION" shutdown 2>/dev/null || true
-    # Quit WeeChat instances gracefully
+    $WC_AGENT shutdown 2>/dev/null || true
+    # Quit WeeChat instances
     for pane in $(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_index}' 2>/dev/null); do
         cmd=$(tmux display-message -t "$TMUX_SESSION.$pane" -p '#{pane_current_command}' 2>/dev/null)
         if [ "$cmd" = "weechat" ]; then
@@ -51,39 +74,19 @@ cleanup() {
     done
     sleep 2
     tmux kill-session -t "$TMUX_SESSION" 2>/dev/null
-    # Stop test ergo
     pkill -f "ergo.*ergo-test" 2>/dev/null
     rm -rf "$ALICE_WC_DIR" "$BOB_WC_DIR"
+    # Remove test project
+    rm -rf "$HOME/.wc-agent/projects/$TEST_PROJECT"
 }
 trap cleanup EXIT
 
-ERGO_DATA_DIR="${ERGO_DATA_DIR:-$HOME/.local/share/ergo}"
-
 start_ergo() {
-    if ! pgrep -x ergo &>/dev/null; then
-        # Ensure ergo data dir exists with languages
-        mkdir -p "$ERGO_DATA_DIR"
-        if [ ! -d "$ERGO_DATA_DIR/languages" ]; then
-            # Copy languages from ergo binary's directory if available
-            ERGO_BIN=$(which ergo 2>/dev/null)
-            if [ -n "$ERGO_BIN" ]; then
-                ERGO_BIN_DIR=$(dirname "$ERGO_BIN")
-                for candidate in "$ERGO_BIN_DIR/../share/ergo/languages" "$ERGO_BIN_DIR/languages" "/tmp/ergo-dl"/*/languages; do
-                    if [ -d "$candidate" ]; then
-                        cp -r "$candidate" "$ERGO_DATA_DIR/languages"
-                        break
-                    fi
-                done
-            fi
-        fi
-        # Run ergo from its own data directory
-        (cd "$ERGO_DATA_DIR" && ergo run --conf "$E2E_DIR/ergo-test.yaml" &>/dev/null &)
-        sleep 2
-    fi
+    $WC_AGENT irc daemon start 2>/dev/null || true
 }
 
 wc_agent() {
-    uv run --project "$PROJECT_DIR/weechat-channel-server" python3 "$PROJECT_DIR/wc-agent/cli.py" --config "$TEST_CONFIG" "$@"
+    $WC_AGENT "$@"
 }
 
 # Wait for text to appear in a tmux pane

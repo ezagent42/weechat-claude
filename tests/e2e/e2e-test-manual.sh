@@ -24,8 +24,6 @@ trap - EXIT
 
 pause() { echo ""; read -p "  ▶ Press Enter for next phase..."; }
 
-WC_AGENT="uv run --project $PROJECT_DIR/weechat-channel-server python3 $PROJECT_DIR/wc-agent/cli.py --config $TEST_CONFIG --tmux-session $TMUX_SESSION"
-
 echo "╔══════════════════════════════════════╗"
 echo "║  WeeChat-Claude E2E (Manual Mode)   ║"
 echo "║          (IRC Mode)                  ║"
@@ -36,16 +34,15 @@ echo "╚═══════════════════════�
 # ============================================================
 step "Phase 0: Prerequisites"
 
+setup_test_project
+pass "test project created ($TEST_PROJECT)"
+
 start_ergo
 if pgrep -x ergo &>/dev/null; then
     pass "ergo IRC server running"
 else
     fail "ergo not running"; exit 1
 fi
-
-# Sync channel-server deps
-(cd "$PROJECT_DIR/weechat-channel-server" && uv sync --quiet 2>/dev/null || uv sync)
-pass "channel-server deps synced"
 
 # ============================================================
 # Create tmux session and PAUSE for manual attach
@@ -81,14 +78,16 @@ else
     fail "alice: WeeChat failed to connect"; exit 1
 fi
 
-# Join #general (nick already set to alice via -nicks)
+# Join #general
 tmux send-keys -t "$PANE_ALICE" "/join #general" Enter
 sleep 2
 
-# Create agent0 via wc-agent CLI (this creates a new tmux pane with claude)
+# Create a pane for running wc-agent commands
 PANE_CMD=$(split_pane -h "$PANE_ALICE")
+
+# Create agent0 via wc-agent CLI (creates a new tmux pane with claude)
 tmux send-keys -t "$PANE_CMD" \
-    "cd $PROJECT_DIR && $WC_AGENT start --workspace $PROJECT_DIR" Enter
+    "cd $PROJECT_DIR && $WC_AGENT agent create agent0 --workspace $PROJECT_DIR" Enter
 
 # Wait for agent to start and join IRC
 info "Waiting for channel-server to initialize and join IRC..."
@@ -197,17 +196,17 @@ pause
 # ============================================================
 # Phase 5: create agent1 via wc-agent CLI
 # ============================================================
-step "Phase 5: wc-agent create agent1"
+step "Phase 5: wc-agent agent create agent1"
 
-PANE_AGENT1_CMD=$(split_pane -v "$PANE_CMD")
-tmux send-keys -t "$PANE_AGENT1_CMD" \
-    "cd $PROJECT_DIR && $WC_AGENT create agent1 --workspace $PROJECT_DIR" Enter
+PANE_CMD2=$(split_pane -v "$PANE_CMD")
+tmux send-keys -t "$PANE_CMD2" \
+    "cd $PROJECT_DIR && $WC_AGENT agent create agent1 --workspace $PROJECT_DIR" Enter
 sleep 5
 
-tmux send-keys -t "$PANE_AGENT1_CMD" "$WC_AGENT list" Enter
+tmux send-keys -t "$PANE_CMD2" "$WC_AGENT agent list" Enter
 sleep 2
 
-if pane_contains "$PANE_AGENT1_CMD" "agent1"; then
+if pane_contains "$PANE_CMD2" "agent1"; then
     pass "agent1 created and listed"
 else
     fail "agent1 not found in wc-agent list"
@@ -231,12 +230,12 @@ pause
 # ============================================================
 # Phase 6: stop agent1 via wc-agent CLI
 # ============================================================
-step "Phase 6: wc-agent stop agent1"
+step "Phase 6: wc-agent agent stop agent1"
 
-tmux send-keys -t "$PANE_AGENT1_CMD" "$WC_AGENT stop agent1" Enter
+tmux send-keys -t "$PANE_CMD2" "$WC_AGENT agent stop agent1" Enter
 sleep 5
 
-if pane_contains "$PANE_AGENT1_CMD" "Stopped"; then
+if pane_contains "$PANE_CMD2" "Stopped"; then
     pass "agent1: stopped via wc-agent"
 else
     fail "agent1: wc-agent stop failed"
@@ -334,9 +333,9 @@ if [ -n "$AGENT2_PANE" ]; then
     fi
 else
     # Try stopping via wc-agent CLI
-    tmux send-keys -t "$PANE_AGENT1_CMD" "$WC_AGENT stop agent2" Enter
+    tmux send-keys -t "$PANE_CMD2" "$WC_AGENT agent stop agent2" Enter
     sleep 5
-    if pane_contains "$PANE_AGENT1_CMD" "Stopped"; then
+    if pane_contains "$PANE_CMD2" "Stopped"; then
         pass "agent2: stopped via wc-agent"
     else
         info "agent2: pane not found, stop result unclear"
@@ -384,6 +383,8 @@ sleep 2
 pkill -f "ergo.*ergo-test" 2>/dev/null
 tmux kill-session -t "$TMUX_SESSION" 2>/dev/null
 rm -rf "$ALICE_WC_DIR" "$BOB_WC_DIR"
+# Remove test project
+rm -rf "$HOME/.wc-agent/projects/$TEST_PROJECT"
 info "Done."
 
 exit "$FAILURES"

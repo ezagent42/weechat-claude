@@ -23,16 +23,15 @@ echo "╚═══════════════════════�
 # ============================================================
 step "Phase 0: Prerequisites"
 
+setup_test_project
+pass "test project created ($TEST_PROJECT)"
+
 start_ergo
 if pgrep -x ergo &>/dev/null; then
     pass "ergo IRC server running"
 else
     fail "ergo not running"; exit 1
 fi
-
-# Sync channel-server deps
-(cd "$PROJECT_DIR/weechat-channel-server" && uv sync --quiet 2>/dev/null || uv sync)
-pass "channel-server deps synced"
 
 # ============================================================
 # Phase 1: Start alice (WeeChat) + alice-agent0 (claude)
@@ -53,14 +52,16 @@ else
     fail "alice: WeeChat failed to connect"; exit 1
 fi
 
-# Join #general (nick already set to alice via -nicks)
+# Join #general
 tmux send-keys -t "$PANE_ALICE" "/join #general" Enter
 sleep 2
 
-# Create agent0 via wc-agent CLI (this creates a new tmux pane with claude)
+# Create a pane for running wc-agent commands
 PANE_CMD=$(split_pane -h "$PANE_ALICE")
+
+# Create agent0 via wc-agent CLI (creates a new tmux pane with claude)
 tmux send-keys -t "$PANE_CMD" \
-    "cd $PROJECT_DIR && uv run --project $PROJECT_DIR/weechat-channel-server python3 $PROJECT_DIR/wc-agent/cli.py --config $TEST_CONFIG --tmux-session $TMUX_SESSION start --workspace $PROJECT_DIR" Enter
+    "cd $PROJECT_DIR && $WC_AGENT agent create agent0 --workspace $PROJECT_DIR" Enter
 
 # Wait for agent to start and join IRC
 sleep 15
@@ -117,7 +118,6 @@ else
 fi
 
 # Verify alice sees it in WeeChat #general
-# Message was sent by agent0 via IRC — may already be in buffer
 tmux send-keys -t "$PANE_ALICE" "/join #general" Enter
 sleep 2
 
@@ -182,19 +182,19 @@ fi
 # ============================================================
 # Phase 5: create agent1 via wc-agent CLI
 # ============================================================
-step "Phase 5: wc-agent create agent1"
+step "Phase 5: wc-agent agent create agent1"
 
 # Run wc-agent create in a tmux pane
-PANE_CMD=$(split_pane -v "$PANE_AGENT0")
-tmux send-keys -t "$PANE_CMD" \
-    "cd $PROJECT_DIR && uv run --project $PROJECT_DIR/weechat-channel-server python3 $PROJECT_DIR/wc-agent/cli.py --config $TEST_CONFIG --tmux-session $TMUX_SESSION create agent1 --workspace $PROJECT_DIR" Enter
+PANE_CMD2=$(split_pane -v "$PANE_AGENT0")
+tmux send-keys -t "$PANE_CMD2" \
+    "cd $PROJECT_DIR && $WC_AGENT agent create agent1 --workspace $PROJECT_DIR" Enter
 sleep 5
 
 # Check if agent1 appears in wc-agent list
-tmux send-keys -t "$PANE_CMD" "uv run --project $PROJECT_DIR/weechat-channel-server python3 $PROJECT_DIR/wc-agent/cli.py --config $TEST_CONFIG --tmux-session $TMUX_SESSION list" Enter
+tmux send-keys -t "$PANE_CMD2" "$WC_AGENT agent list" Enter
 sleep 2
 
-if pane_contains "$PANE_CMD" "agent1"; then
+if pane_contains "$PANE_CMD2" "agent1"; then
     pass "agent1 created and listed"
 else
     fail "agent1 not found in wc-agent list"
@@ -214,12 +214,12 @@ fi
 # ============================================================
 # Phase 6: stop agent1 via wc-agent CLI
 # ============================================================
-step "Phase 6: wc-agent stop agent1"
+step "Phase 6: wc-agent agent stop agent1"
 
-tmux send-keys -t "$PANE_CMD" "uv run --project $PROJECT_DIR/weechat-channel-server python3 $PROJECT_DIR/wc-agent/cli.py --config $TEST_CONFIG --tmux-session $TMUX_SESSION stop agent1" Enter
+tmux send-keys -t "$PANE_CMD2" "$WC_AGENT agent stop agent1" Enter
 sleep 5
 
-if pane_contains "$PANE_CMD" "Stopped"; then
+if pane_contains "$PANE_CMD2" "Stopped"; then
     pass "agent1: stopped via wc-agent"
 else
     fail "agent1: wc-agent stop failed"
@@ -320,9 +320,9 @@ if [ -n "$AGENT2_PANE" ]; then
     fi
 else
     # Try stopping via wc-agent CLI
-    tmux send-keys -t "$PANE_CMD" "uv run --project $PROJECT_DIR/weechat-channel-server python3 $PROJECT_DIR/wc-agent/cli.py --config $TEST_CONFIG --tmux-session $TMUX_SESSION stop agent2" Enter
+    tmux send-keys -t "$PANE_CMD2" "$WC_AGENT agent stop agent2" Enter
     sleep 5
-    if pane_contains "$PANE_CMD" "Stopped"; then
+    if pane_contains "$PANE_CMD2" "Stopped"; then
         pass "agent2: stopped via wc-agent"
     else
         info "agent2: stop result unclear"
