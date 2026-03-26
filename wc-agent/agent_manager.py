@@ -133,7 +133,11 @@ class AgentManager:
             json.dump(config, f, indent=2)
 
     def _spawn_tmux(self, name: str, workspace: str) -> str:
+        # Source proxy/env settings if available (claude needs proxy to reach API)
+        env_file = os.path.join(self.channel_server_dir, "..", "claude.local.env")
+        source_env = f"[ -f '{env_file}' ] && set -a && source '{env_file}' && set +a; "
         cmd = (
+            f"{source_env}"
             f"cd '{workspace}' && "
             f"AGENT_NAME='{name}' "
             f"claude "

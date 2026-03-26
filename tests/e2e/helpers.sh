@@ -8,7 +8,7 @@ TEST_CONFIG="$E2E_DIR/test-config.toml"
 
 # Source environment
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.npm-global/bin:$HOME/.local/bin:$PATH"
-[ -f "$PROJECT_DIR/claude.local.sh" ] && source "$PROJECT_DIR/claude.local.sh"
+[ -f "$PROJECT_DIR/claude.local.env" ] && set -a && source "$PROJECT_DIR/claude.local.env" && set +a
 [ -f "$PROJECT_DIR/.mcp.env" ] && set -a && source "$PROJECT_DIR/.mcp.env" && set +a
 
 # Claude flags
