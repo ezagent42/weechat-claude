@@ -84,17 +84,17 @@ def test_build_zenoh_client_config_custom():
 
 def test_scoped_name_adds_prefix():
     from wc_protocol.naming import scoped_name
-    assert scoped_name("helper", "alice") == "alice:helper"
+    assert scoped_name("helper", "alice") == "alice-helper"
 
 
 def test_scoped_name_no_double_prefix():
     from wc_protocol.naming import scoped_name
-    assert scoped_name("alice:helper", "alice") == "alice:helper"
+    assert scoped_name("alice-helper", "alice") == "alice-helper"
 
 
 def test_scoped_name_different_prefix():
     from wc_protocol.naming import scoped_name
-    assert scoped_name("bob:helper", "alice") == "bob:helper"
+    assert scoped_name("bob-helper", "alice") == "bob-helper"
 
 
 def test_signal_constants():
