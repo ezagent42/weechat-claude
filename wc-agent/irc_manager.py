@@ -20,14 +20,14 @@ class IrcManager:
     def irc_config(self) -> dict:
         return self.config.get("irc", {})
 
-    def daemon_start(self):
-        """Start local ergo IRC server on the port from project config."""
+    def daemon_start(self, port_override: int | None = None):
+        """Start local ergo IRC server. Uses port_override or project config port."""
         server = self.irc_config.get("server", "127.0.0.1")
         if server not in ("127.0.0.1", "localhost", "::1"):
             print(f"IRC server is remote ({server}), no local daemon needed.")
             return
 
-        port = self.irc_config.get("port", 6667)
+        port = port_override or self.irc_config.get("port", 6667)
 
         # Check if already listening on our port
         if self._port_in_use(port):

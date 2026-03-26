@@ -219,10 +219,13 @@ def cmd_project_show(name: Optional[str] = typer.Argument(None)):
 # ============================================================
 
 @irc_daemon_app.command("start")
-def cmd_irc_daemon_start(ctx: typer.Context):
+def cmd_irc_daemon_start(
+    ctx: typer.Context,
+    port: Optional[int] = typer.Option(None, help="Override IRC port from config"),
+):
     """Start local ergo IRC server."""
     mgr = _get_irc_manager(ctx)
-    mgr.daemon_start()
+    mgr.daemon_start(port_override=port)
 
 @irc_daemon_app.command("stop")
 def cmd_irc_daemon_stop(ctx: typer.Context):
