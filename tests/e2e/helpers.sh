@@ -156,6 +156,30 @@ wc_agent() {
     wc_agent_exec "$@"
 }
 
+# Check if a nick exists on the IRC server via raw IRC protocol
+# Usage: irc_nick_exists "alice-agent0"
+irc_nick_exists() {
+    local nick="$1"
+    local probe="e2e-probe-$$"
+    local result
+    result=$(echo -e "NICK ${probe}\r\nUSER probe 0 * probe\r\nWHOIS ${nick}\r\nQUIT\r\n" \
+        | nc -w 3 127.0.0.1 "$E2E_IRC_PORT" 2>/dev/null)
+    echo "$result" | grep -q "311.*${nick}"  # RPL_WHOISUSER = 311
+}
+
+# Wait for a nick to appear on IRC server
+# Usage: wait_for_irc_nick "alice-agent0" 30
+wait_for_irc_nick() {
+    local nick="$1" timeout="${2:-30}"
+    for i in $(seq 1 "$timeout"); do
+        if irc_nick_exists "$nick"; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
 # Wait for text to appear in a tmux pane
 wait_for_pane() {
     local pane="$1" pattern="$2" timeout="${3:-10}"

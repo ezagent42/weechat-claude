@@ -47,10 +47,11 @@ mkdir -p "$ALICE_WC_DIR"
 tmux send-keys -t "$PANE_ALICE" \
     "weechat --dir $ALICE_WC_DIR -r '/server add wc-local 127.0.0.1/${E2E_IRC_PORT} -notls -nicks=alice; /connect wc-local; /join #general'" Enter
 
-if wait_for_pane "$PANE_ALICE" "Welcome" 20 || wait_for_pane "$PANE_ALICE" "Connected" 10; then
-    pass "alice: WeeChat connected to IRC"
+# Check WeeChat connected — probe IRC for alice nick
+if wait_for_irc_nick "alice" 5; then
+    pass "alice: connected to IRC"
 else
-    fail "alice: WeeChat failed to connect"; exit 1
+    fail "alice: not connected to IRC"; exit 1
 fi
 
 # Create agent0 — run directly (not via tmux send-keys)
@@ -66,19 +67,14 @@ else
     info "agent0: pane not found, using command pane"
 fi
 
-# Wait for agent to join IRC (channel-server sleeps 2s + IRC connect)
+# Wait for agent to join IRC — query ergo directly via IRC protocol
 info "Waiting for agent0 to join IRC..."
-sleep 25
-
-tmux send-keys -t "$PANE_ALICE" "/names #general" Enter
-sleep 3
-
-if pane_contains "$PANE_ALICE" "alice-agent0" || wait_for_pane "$PANE_ALICE" "agent0" 10; then
-    pass "agent0: detected in IRC #general"
+if wait_for_irc_nick "alice-agent0" 30; then
+    pass "agent0: detected on IRC server"
 else
     info "Agent pane:"
     tmux capture-pane -t "$PANE_AGENT0" -p -S -5 2>/dev/null || true
-    fail "agent0: not detected in IRC"; exit 1
+    fail "agent0: not detected on IRC after 30s"; exit 1
 fi
 
 # ============================================================
@@ -126,7 +122,11 @@ fi
 
 # Wait for agent1 to join IRC
 info "Waiting for agent1 to join IRC..."
-sleep 15
+if wait_for_irc_nick "alice-agent1" 30; then
+    pass "agent1: detected on IRC server"
+else
+    info "agent1: not detected on IRC (may still be starting)"
+fi
 
 # agent1 sends message to agent0 via send command
 wc_agent_exec agent send agent1 'Use the reply MCP tool to send "hello agent0 from agent1" to #general' 2>&1 || true
