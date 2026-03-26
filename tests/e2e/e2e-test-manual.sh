@@ -105,11 +105,13 @@ else
     sed -i '' '/\[::1\]:6667/d' "$E2E_ERGO_DIR/ergo.yaml"
     sed -i '' '/"[^"]*:6697":/,/min-tls-version:/d' "$E2E_ERGO_DIR/ergo.yaml"
     local ergo_log="$E2E_ERGO_DIR/ergo.log"
-    (cd "$E2E_ERGO_DIR" && ergo run --conf ergo.yaml >"$ergo_log" 2>&1 &)
+    cd "$E2E_ERGO_DIR"
+    ergo run --conf ergo.yaml >"$ergo_log" 2>&1 &
     export E2E_ERGO_PID=$!
     cd "$PROJECT_DIR"
     sleep 2
-    if ! kill -0 "$E2E_ERGO_PID" 2>/dev/null; then
+    # Check if ergo is listening on the port (PID check unreliable with subshells)
+    if ! lsof -i :"$E2E_IRC_PORT" &>/dev/null; then
         echo "ERROR: ergo failed to start (pid $E2E_ERGO_PID, port $E2E_IRC_PORT)"
         echo "  ergo dir: $E2E_ERGO_DIR"
         echo "  log:"

@@ -102,12 +102,13 @@ start_ergo() {
     # Remove TLS listener (port 6697 requires certs)
     sed -i '' '/"[^"]*:6697":/,/min-tls-version:/d' "$ergo_conf"
 
-    cd "$E2E_ERGO_DIR" && ergo run --conf "$ergo_conf" &>/dev/null &
+    cd "$E2E_ERGO_DIR"
+    ergo run --conf "$ergo_conf" &>/dev/null &
     E2E_ERGO_PID=$!
     cd "$PROJECT_DIR"
     sleep 2
 
-    if kill -0 "$E2E_ERGO_PID" 2>/dev/null; then
+    if lsof -i :"$E2E_IRC_PORT" &>/dev/null; then
         info "ergo running (pid $E2E_ERGO_PID, port $E2E_IRC_PORT)"
         return 0
     else
