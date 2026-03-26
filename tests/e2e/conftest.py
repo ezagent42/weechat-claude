@@ -21,29 +21,20 @@ def e2e_port():
 
 
 @pytest.fixture(scope="session")
-def ergo_server(e2e_port):
-    """Start ergo on unique port, yield config, stop on teardown."""
-    ergo_dir = tempfile.mkdtemp(prefix="e2e-ergo-")
-    # Copy languages
-    system_langs = os.path.expanduser("~/.local/share/ergo/languages")
-    if os.path.isdir(system_langs):
-        shutil.copytree(system_langs, os.path.join(ergo_dir, "languages"))
-    # Generate config — use sed for TLS removal (matches proven bash approach)
-    conf_path = os.path.join(ergo_dir, "ergo.yaml")
-    subprocess.run(["ergo", "defaultconfig"], stdout=open(conf_path, "w"), stderr=subprocess.DEVNULL)
-    # Patch port
-    subprocess.run(["sed", "-i", "", f's|"127.0.0.1:6667":|"127.0.0.1:{e2e_port}":|', conf_path])
-    # Remove IPv6 listener
-    subprocess.run(["sed", "-i", "", '/\\[::1\\]:6667/d', conf_path])
-    # Remove TLS listener block (port 6697 requires certs)
-    subprocess.run(["sed", "-i", "", '/"[^"]*:6697":/,/min-tls-version:/d', conf_path])
-    # Start
-    proc = subprocess.Popen(
-        ["ergo", "run", "--conf", conf_path],
-        cwd=ergo_dir,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    # Wait for ergo to accept connections (socket check, max 10s)
+def ergo_server(e2e_port, e2e_context):
+    """Start ergo via IrcManager.daemon_start() — same code path as production."""
+    import sys
+    project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(0, os.path.join(project_dir, "wc-agent"))
+    sys.path.insert(0, project_dir)
+    from wc_agent.irc_manager import IrcManager
+
+    cfg = {"irc": {"server": "127.0.0.1", "port": e2e_port}}
+    state_file = os.path.join(e2e_context["home"], "projects", e2e_context["project"], "state.json")
+    mgr = IrcManager(config=cfg, state_file=state_file, tmux_session=e2e_context["tmux_session"])
+    mgr.daemon_start()
+
+    # Verify ergo is listening
     deadline = time.time() + 10
     while time.time() < deadline:
         try:
@@ -52,15 +43,10 @@ def ergo_server(e2e_port):
         except OSError:
             time.sleep(0.2)
     else:
-        proc.kill()
-        raise RuntimeError(f"ergo did not accept connections on port {e2e_port}")
-    yield {"host": "127.0.0.1", "port": e2e_port, "proc": proc, "dir": ergo_dir}
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-    shutil.rmtree(ergo_dir, ignore_errors=True)
+        raise RuntimeError(f"ergo did not start on port {e2e_port}")
+
+    yield {"host": "127.0.0.1", "port": e2e_port, "mgr": mgr}
+    mgr.daemon_stop()
 
 
 @pytest.fixture(scope="session")
@@ -73,15 +59,13 @@ def tmux_session():
 
 
 @pytest.fixture(scope="session")
-def e2e_context(ergo_server, tmux_session):
-    """Central context dict shared by all e2e fixtures."""
+def e2e_context(e2e_port, tmux_session):
+    """Central context dict — created BEFORE ergo so ergo can use it."""
     home = tempfile.mkdtemp(prefix="e2e-wc-agent-")
     project_dir = os.path.join(home, "projects", "e2e-test")
     os.makedirs(project_dir)
-    # Write project config
     with open(os.path.join(project_dir, "config.toml"), "w") as f:
-        f.write(f'[irc]\nserver = "{ergo_server["host"]}"\n')
-        f.write(f'port = {ergo_server["port"]}\ntls = false\npassword = ""\n\n')
+        f.write(f'[irc]\nserver = "127.0.0.1"\nport = {e2e_port}\ntls = false\npassword = ""\n\n')
         f.write('[agents]\ndefault_channels = ["#general"]\nusername = "alice"\n')
     with open(os.path.join(home, "default"), "w") as f:
         f.write("e2e-test")
@@ -89,7 +73,7 @@ def e2e_context(ergo_server, tmux_session):
         "home": home,
         "project": "e2e-test",
         "tmux_session": tmux_session,
-        "port": ergo_server["port"],
+        "port": e2e_port,
     }
     yield ctx
     shutil.rmtree(home, ignore_errors=True)
