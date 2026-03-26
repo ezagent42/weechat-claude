@@ -131,7 +131,11 @@ cleanup() {
     # 1. Stop agents via wc-agent
     wc_agent_exec shutdown 2>/dev/null || true
 
-    # 2. Kill weechat processes from THIS test run's dirs
+    # 2. Stop IRC probe
+    stop_irc_probe 2>/dev/null || true
+    rm -f "$E2E_PROBE_LOG"
+
+    # 3. Kill weechat processes from THIS test run's dirs
     pkill -9 -f "weechat.*--dir /tmp/e2e-alice-${E2E_ID}" 2>/dev/null
     pkill -9 -f "weechat.*--dir /tmp/e2e-bob-${E2E_ID}" 2>/dev/null
 
@@ -156,14 +160,79 @@ wc_agent() {
     wc_agent_exec "$@"
 }
 
+# Start an IRC probe that logs all #general messages to a file
+# Usage: start_irc_probe
+# Sets E2E_PROBE_LOG and E2E_PROBE_PID
+E2E_PROBE_LOG="/tmp/e2e-probe-${E2E_ID}.log"
+E2E_PROBE_PID=""
+
+start_irc_probe() {
+    local probe_nick="e2e-probe-${E2E_ID}"
+    rm -f "$E2E_PROBE_LOG"
+    touch "$E2E_PROBE_LOG"
+    # Connect to IRC, join #general, log all PRIVMSG to file
+    (
+        {
+            echo -e "NICK ${probe_nick}\r"
+            echo -e "USER probe 0 * probe\r"
+            sleep 1
+            echo -e "JOIN #general\r"
+            # Keep connection alive
+            while true; do sleep 30; echo -e "PING :keepalive\r"; done
+        } | nc 127.0.0.1 "$E2E_IRC_PORT" 2>/dev/null | \
+            grep --line-buffered "PRIVMSG" >> "$E2E_PROBE_LOG"
+    ) &
+    E2E_PROBE_PID=$!
+    sleep 2
+}
+
+stop_irc_probe() {
+    [ -n "$E2E_PROBE_PID" ] && kill "$E2E_PROBE_PID" 2>/dev/null
+    # Also kill child nc process
+    pkill -P "$E2E_PROBE_PID" 2>/dev/null
+}
+
+# Wait for a message matching pattern in the IRC probe log
+# Usage: wait_for_irc_message "pattern" [timeout]
+wait_for_irc_message() {
+    local pattern="$1" timeout="${2:-15}"
+    for i in $(seq 1 "$timeout"); do
+        if grep -q "$pattern" "$E2E_PROBE_LOG" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+# Check if a nick has LEFT IRC (inverse of irc_nick_exists)
+# Usage: wait_for_irc_nick_gone "alice-agent1" [timeout]
+wait_for_irc_nick_gone() {
+    local nick="$1" timeout="${2:-15}"
+    for i in $(seq 1 "$timeout"); do
+        if ! irc_nick_exists "$nick"; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
 # Check if a nick exists on the IRC server via raw IRC protocol
 # Usage: irc_nick_exists "alice-agent0"
 irc_nick_exists() {
     local nick="$1"
-    local probe="e2e-probe-$$"
+    local probe="e2e-chk-${RANDOM}"
     local result
-    result=$(echo -e "NICK ${probe}\r\nUSER probe 0 * probe\r\nWHOIS ${nick}\r\nQUIT\r\n" \
-        | nc -w 3 127.0.0.1 "$E2E_IRC_PORT" 2>/dev/null)
+    # Send registration + wait for welcome + then WHOIS
+    result=$({
+        echo -e "NICK ${probe}\r"
+        echo -e "USER probe 0 * probe\r"
+        sleep 1  # Wait for welcome response
+        echo -e "WHOIS ${nick}\r"
+        sleep 1  # Wait for WHOIS response
+        echo -e "QUIT\r"
+    } | nc -w 5 127.0.0.1 "$E2E_IRC_PORT" 2>/dev/null)
     echo "$result" | grep -q "311.*${nick}"  # RPL_WHOISUSER = 311
 }
 
