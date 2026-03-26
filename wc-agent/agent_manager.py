@@ -86,7 +86,7 @@ class AgentManager:
     def list_agents(self) -> dict[str, dict]:
         """Return all agents with refreshed status."""
         for name, info in self._agents.items():
-            if info["status"] != "offline":
+            if info.get("status") != "offline":
                 info["status"] = self._check_alive(name)
         self._save_state()
         return dict(self._agents)
@@ -179,12 +179,15 @@ class AgentManager:
         agent = self._agents.get(name)
         if not agent or not agent.get("pane_id"):
             return "offline"
-        result = subprocess.run(
-            ["tmux", "list-panes", "-F", "#{pane_id}"],
-            capture_output=True, text=True,
-        )
-        if agent["pane_id"] in result.stdout:
-            return "running"
+        try:
+            result = subprocess.run(
+                ["tmux", "list-panes", "-t", self.tmux_session, "-F", "#{pane_id}"],
+                capture_output=True, text=True,
+            )
+            if agent["pane_id"] in result.stdout:
+                return "running"
+        except Exception:
+            pass
         return "offline"
 
     def send(self, name: str, text: str):
