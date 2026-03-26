@@ -53,14 +53,16 @@
 ```bash
 ./start.sh ~/workspace                # 启动（ergo + agent0 + WeeChat）
 ./stop.sh                             # 停止 tmux session
-./stop.sh --all                       # 停止 tmux session + ergo
 
-wc-agent start                        # 启动 ergo + agent0
-wc-agent create helper                # 创建新 agent
-wc-agent stop helper                  # 停止 agent
-wc-agent list                         # 列出所有 agent
-wc-agent restart helper               # 重启 agent
-wc-agent shutdown                     # 停止所有 agent + ergo
+wc-agent project create local         # 创建项目
+wc-agent irc daemon start             # 启动 ergo IRC server
+wc-agent irc start                    # 启动 WeeChat
+wc-agent agent create agent0          # 创建 agent
+wc-agent agent send agent0 "..."      # 向 agent 发送文本
+wc-agent agent list                   # 列出所有 agent
+wc-agent agent stop helper            # 停止 agent
+wc-agent agent restart helper         # 重启 agent
+wc-agent shutdown                     # 停止所有 agent
 
 cd weechat-channel-server && uv run python -m pytest ../tests/unit/ -v   # Unit 测试
 bash tests/e2e/e2e-test.sh           # E2E 测试（需要 ergo）
@@ -68,11 +70,13 @@ bash tests/e2e/e2e-test.sh           # E2E 测试（需要 ergo）
 
 ### 配置
 
-`weechat-claude.toml` — 共享配置文件：
+项目配置存储在 `~/.wc-agent/projects/<name>/config.toml`：
 ```toml
 [irc]
-server = "192.168.1.100"
+server = "127.0.0.1"
 port = 6667
+tls = false
+password = ""
 
 [agents]
 default_channels = ["#general"]
@@ -103,6 +107,6 @@ username = ""  # 空则从 $USER 读取
 ### 关键约束
 
 - Channel MCP 需要 `--dangerously-load-development-channels` flag
-- `{username}-agent0` 是 primary agent — 由 `wc-agent start` 创建
+- `{username}-agent0` 是 primary agent — 由 `wc-agent agent create agent0` 创建
 - Agent 的 IRC nick 必须符合 RFC 2812（无 `:` 等特殊字符）
 - channel-server 运行在 IRC reactor 线程中，通过 asyncio.Queue 桥接到 MCP
