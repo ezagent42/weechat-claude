@@ -30,8 +30,7 @@ zchat/                             # repo root (renamed from weechat-claude)
 │   ├── protocol/                  # Protocol specification (authoritative)
 │   │   ├── __init__.py            # PROTOCOL_VERSION = "0.1"
 │   │   ├── naming.py             # AGENT_SEPARATOR, scoped_name()
-│   │   ├── sys_messages.py       # __zchat_sys: prefix, encode/decode
-│   │   └── commands.py           # Command definitions (from commands.json)
+│   │   └── sys_messages.py       # __zchat_sys: prefix, encode/decode
 │   └── cli/                      # CLI tool (renamed from wc-agent)
 │       ├── __init__.py
 │       ├── app.py                # Typer CLI entry point (renamed from cli.py)
@@ -85,8 +84,8 @@ PROTOCOL_VERSION = "0.1"
 - Rename `IRC_SYS_PREFIX` from `"__wc_sys:"` to `"__zchat_sys:"`
 - All functions remain the same
 
-**`zchat/protocol/commands.py`:**
-- Define command specifications in Python (the existing `commands.json` OpenAPI spec serves as reference; `commands.py` is a new Python-native definition, not a file migration)
+**`commands.json`:**
+- Keep as OpenAPI spec (standard format), update `wc-agent` references to `zchat`
 
 ### 1.4 Channel Server Updates
 

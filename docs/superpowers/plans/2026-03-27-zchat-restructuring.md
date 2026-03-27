@@ -24,7 +24,7 @@ to avoid broken intermediate state (server.py imports from wc_protocol).
 - Create: `zchat/protocol/__init__.py`
 - Move: `wc_protocol/naming.py` → `zchat/protocol/naming.py`
 - Move: `wc_protocol/sys_messages.py` → `zchat/protocol/sys_messages.py`
-- Create: `zchat/protocol/commands.py`
+- Modify: `commands.json` (rename wc-agent references)
 - Modify: `weechat-channel-server/server.py` (update imports, remove create_agent)
 - Test: `tests/unit/test_protocol.py` (update imports)
 - Test: `tests/unit/test_sys_messages.py` (update imports)
@@ -66,61 +66,9 @@ IRC_SYS_PREFIX = "__wc_sys:"
 IRC_SYS_PREFIX = "__zchat_sys:"
 ```
 
-- [ ] **Step 6: Create `zchat/protocol/commands.py`**
+- [ ] **Step 6: Update `commands.json`**
 
-Define command specs in Python based on `commands.json` OpenAPI:
-
-```python
-"""zchat command definitions.
-
-Python-native command specs. The OpenAPI file commands.json serves as
-historical reference; this module is the authoritative source.
-"""
-
-COMMANDS = {
-    "agent.start": {
-        "summary": "Start IRC server and primary agent",
-        "params": {
-            "workspace": {"type": "string", "required": True, "description": "Workspace directory"},
-            "project": {"type": "string", "required": False, "description": "Project name"},
-        },
-    },
-    "agent.create": {
-        "summary": "Create and launch a new agent",
-        "params": {
-            "name": {"type": "string", "required": True, "description": "Agent name (without username prefix)"},
-            "workspace": {"type": "string", "required": False, "description": "Workspace directory"},
-            "channels": {"type": "array", "required": False, "description": "IRC channels to join"},
-        },
-    },
-    "agent.stop": {
-        "summary": "Stop a running agent",
-        "params": {
-            "name": {"type": "string", "required": True, "description": "Agent name"},
-        },
-    },
-    "agent.list": {
-        "summary": "List all agents with status",
-        "params": {},
-    },
-    "agent.status": {
-        "summary": "Get detailed agent status",
-        "params": {
-            "name": {"type": "string", "required": True, "description": "Agent name"},
-        },
-    },
-    "agent.restart": {
-        "summary": "Stop and re-create an agent",
-        "params": {
-            "name": {"type": "string", "required": True, "description": "Agent name"},
-        },
-    },
-    "agent.shutdown": {
-        "summary": "Stop all agents and IRC server",
-        "params": {},
-    },
-}
-```
+Keep `commands.json` as OpenAPI spec (standard format, tooling-friendly). Just update `wc-agent` references to `zchat` in the file.
 
 - [ ] **Step 7: Update test imports for protocol**
 
@@ -918,18 +866,11 @@ uv run python -m pytest tests/unit/ -v
 
 Expected: All PASS
 
-- [ ] **Step 4: Delete `commands.json`**
-
-```bash
-git rm commands.json
-```
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add CLAUDE.md
-git rm commands.json
-git commit -m "chore: update CLAUDE.md for zchat rename, remove superseded commands.json"
+git commit -m "chore: update CLAUDE.md for zchat rename"
 ```
 
 ---
