@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../weechat-channe
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from message import detect_mention, clean_mention, chunk_message
-from wc_protocol.sys_messages import encode_sys_for_irc, decode_sys_from_irc, make_sys_message
+from zchat.protocol.sys_messages import encode_sys_for_irc, decode_sys_from_irc, make_sys_message
 
 
 def test_detect_mention():

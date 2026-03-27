@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "WeeChat-Claude Agent Commands",
+    "title": "zchat Agent Commands",
     "version": "1.0.0",
-    "description": "Agent lifecycle management for WeeChat-Claude"
+    "description": "Agent lifecycle management for zchat"
   },
   "paths": {
     "/agent/start": {
@@ -16,7 +16,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "config": {"type": "string", "description": "Path to weechat-claude.toml"}
+                  "config": {"type": "string", "description": "Path to zchat config"}
                 }
               }
             }
