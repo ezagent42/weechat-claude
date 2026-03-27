@@ -23,11 +23,7 @@ def e2e_port():
 @pytest.fixture(scope="session")
 def ergo_server(e2e_port, e2e_context):
     """Start ergo via IrcManager.daemon_start() — same code path as production."""
-    import sys
-    project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    sys.path.insert(0, os.path.join(project_dir, "wc-agent"))
-    sys.path.insert(0, project_dir)
-    from wc_agent.irc_manager import IrcManager
+    from zchat.cli.irc_manager import IrcManager
 
     cfg = {"irc": {"server": "127.0.0.1", "port": e2e_port}}
     state_file = os.path.join(e2e_context["home"], "projects", e2e_context["project"], "state.json")
@@ -61,7 +57,7 @@ def tmux_session():
 @pytest.fixture(scope="session")
 def e2e_context(e2e_port, tmux_session):
     """Central context dict — created BEFORE ergo so ergo can use it."""
-    home = tempfile.mkdtemp(prefix="e2e-wc-agent-")
+    home = tempfile.mkdtemp(prefix="e2e-zchat-")
     project_dir = os.path.join(home, "projects", "e2e-test")
     os.makedirs(project_dir)
     with open(os.path.join(project_dir, "config.toml"), "w") as f:
@@ -80,26 +76,24 @@ def e2e_context(e2e_port, tmux_session):
 
 
 @pytest.fixture(scope="session")
-def wc_agent(e2e_context):
-    """Returns a callable for running wc-agent CLI commands.
+def zchat_cli(e2e_context):
+    """Returns a callable for running zchat CLI commands.
 
-    Passes WC_AGENT_HOME and WC_TMUX_SESSION only to subprocesses —
+    Passes ZCHAT_HOME and ZCHAT_TMUX_SESSION only to subprocesses —
     never mutates os.environ.
     """
     project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    cli_path = os.path.join(project_dir, "wc-agent", "cli.py")
-
     def run(*args):
         cmd = [
-            "uv", "run", "--project", os.path.join(project_dir, "wc-agent"),
-            "python", cli_path,
+            "uv", "run", "--project", project_dir,
+            "python", "-m", "zchat.cli",
             "--project", e2e_context["project"],
             *args,
         ]
         env = os.environ.copy()
-        env["WC_AGENT_HOME"] = e2e_context["home"]
-        env["WC_TMUX_SESSION"] = e2e_context["tmux_session"]
+        env["ZCHAT_HOME"] = e2e_context["home"]
+        env["ZCHAT_TMUX_SESSION"] = e2e_context["tmux_session"]
         return subprocess.run(cmd, env=env, capture_output=True, text=True)
 
     return run
@@ -130,7 +124,7 @@ def irc_probe(ergo_server):
 
 @pytest.fixture(scope="session")
 def weechat_pane(ergo_server, e2e_context, tmux_session):
-    """Start WeeChat directly in tmux (bypass wc-agent for reliability)."""
+    """Start WeeChat directly in tmux (bypass zchat CLI for reliability)."""
     port = ergo_server["port"]
     weechat_dir = os.path.join(e2e_context["home"], "weechat")
     os.makedirs(weechat_dir, exist_ok=True)

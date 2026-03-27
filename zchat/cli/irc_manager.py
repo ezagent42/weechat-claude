@@ -1,4 +1,4 @@
-# wc-agent/irc_manager.py
+# zchat/cli/irc_manager.py
 """IRC daemon (ergo) and WeeChat pane management."""
 import json
 import os
@@ -9,7 +9,7 @@ import time
 class IrcManager:
     """Manage ergo IRC daemon and WeeChat tmux pane."""
 
-    def __init__(self, config: dict, state_file: str, tmux_session: str = "weechat-claude"):
+    def __init__(self, config: dict, state_file: str, tmux_session: str = "zchat"):
         self.config = config
         self._state_file = state_file
         self.tmux_session = tmux_session
@@ -126,13 +126,18 @@ class IrcManager:
         tls_flag = "" if tls else " -notls"
 
         # Source proxy env if available
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         env_file = os.path.join(script_dir, "claude.local.env")
         source_env = f"[ -f '{env_file}' ] && set -a && source '{env_file}' && set +a; " if os.path.isfile(env_file) else ""
 
         # Use irc.server.wc-local.autojoin instead of /join — /connect is async so /join may run before connected
         autojoin = ",".join(channels)
-        cmd = f"{source_env}weechat -r '/server add wc-local {server}/{port}{tls_flag} -nicks={nick}; /set irc.server.wc-local.autojoin \"{autojoin}\"; /connect wc-local'"
+        # Load zchat plugin if available
+        plugin_dir = os.path.join(script_dir, "weechat-zchat-plugin")
+        plugin_path = os.path.join(plugin_dir, "zchat.py")
+        load_plugin = f"; /script load {plugin_path}" if os.path.isfile(plugin_path) else ""
+
+        cmd = f"{source_env}weechat -r '/server add wc-local {server}/{port}{tls_flag} -nicks={nick}; /set irc.server.wc-local.autojoin \"{autojoin}\"; /connect wc-local{load_plugin}'"
 
         result = subprocess.run(
             ["tmux", "split-window", "-v", "-P", "-F", "#{pane_id}",

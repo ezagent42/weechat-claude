@@ -1,4 +1,4 @@
-from wc_protocol.sys_messages import (
+from zchat.protocol.sys_messages import (
     SYS_PREFIX, IRC_SYS_PREFIX, is_sys_message, make_sys_message,
     encode_sys_for_irc, decode_sys_from_irc,
 )
@@ -9,7 +9,7 @@ def test_sys_prefix():
 
 
 def test_irc_sys_prefix():
-    assert IRC_SYS_PREFIX == "__wc_sys:"
+    assert IRC_SYS_PREFIX == "__zchat_sys:"
 
 
 def test_is_sys_message_true():
@@ -40,7 +40,7 @@ def test_make_sys_message_with_ref_id():
 def test_encode_sys_for_irc():
     msg = make_sys_message("alice", "sys.ping", {})
     encoded = encode_sys_for_irc(msg)
-    assert encoded.startswith("__wc_sys:")
+    assert encoded.startswith("__zchat_sys:")
     assert '"sys.ping"' in encoded
 
 
@@ -59,4 +59,4 @@ def test_decode_sys_from_irc_not_sys():
 
 
 def test_decode_sys_from_irc_bad_json():
-    assert decode_sys_from_irc("__wc_sys:not-json") is None
+    assert decode_sys_from_irc("__zchat_sys:not-json") is None

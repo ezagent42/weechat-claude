@@ -6,7 +6,7 @@ import os
 import time
 
 SYS_PREFIX = "sys."
-IRC_SYS_PREFIX = "__wc_sys:"
+IRC_SYS_PREFIX = "__zchat_sys:"
 
 
 def _random_hex(n: int) -> str:

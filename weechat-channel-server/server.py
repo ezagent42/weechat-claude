@@ -10,7 +10,7 @@ import sys
 import time
 import threading
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
-from wc_protocol.sys_messages import (
+from zchat.protocol.sys_messages import (
     is_sys_message, make_sys_message,
     encode_sys_for_irc, decode_sys_from_irc,
 )
@@ -116,7 +116,7 @@ def setup_irc(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
         if nick == AGENT_NAME:
             return
         body = event.arguments[0]
-        # Check for sys message (__wc_sys: prefix)
+        # Check for sys message (__zchat_sys: prefix)
         sys_msg = decode_sys_from_irc(body)
         if sys_msg is not None:
             _handle_sys_message(sys_msg, nick, conn, joined_channels)
@@ -200,8 +200,7 @@ When you receive a channel notification:
 2. If addressed to you or relevant, respond using the "reply" tool with the same chat_id
 3. For private messages requesting you to stop/exit, save any work and run /exit
 
-Use the "reply" tool to send messages. Use "join_channel" to join new channels.
-Use "create_agent" to spawn a new agent that can help with tasks."""
+Use the "reply" tool to send messages. Use "join_channel" to join new channels."""
 
 
 def create_server():
@@ -243,17 +242,6 @@ def register_tools(server: Server, state: dict):
                     "required": ["channel_name"],
                 },
             ),
-            Tool(
-                name="create_agent",
-                description="Create a new Claude Code agent that joins IRC and can collaborate with you.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string", "description": "Agent name (e.g. 'agent2', 'helper')"},
-                    },
-                    "required": ["name"],
-                },
-            ),
         ]
 
     @server.call_tool()
@@ -263,8 +251,6 @@ def register_tools(server: Server, state: dict):
             return await _handle_reply(conn, arguments)
         elif name == "join_channel":
             return await _handle_join_channel(conn, arguments)
-        elif name == "create_agent":
-            return await _handle_create_agent(arguments)
         raise ValueError(f"Unknown tool: {name}")
 
 async def _handle_reply(connection, arguments: dict) -> list[TextContent]:
@@ -282,25 +268,6 @@ async def _handle_join_channel(connection, arguments: dict) -> list[TextContent]
     connection.join(f"#{channel}")
     return [TextContent(type="text", text=f"Joined #{channel}")]
 
-
-async def _handle_create_agent(arguments: dict) -> list[TextContent]:
-    """Create a new agent using AgentManager directly."""
-    name = arguments["name"]
-    username = AGENT_NAME.split("-")[0] if "-" in AGENT_NAME else AGENT_NAME
-    from wc_protocol.naming import scoped_name
-    scoped = scoped_name(name, username)
-    try:
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
-        from wc_agent.agent_manager import AgentManager
-        mgr = AgentManager.from_env()
-        info = mgr.create(scoped)
-        output = f"Created {scoped} (pane: {info.get('pane_id', '?')})"
-        print(f"[channel-server] {output}", file=sys.stderr)
-        return [TextContent(type="text", text=output)]
-    except Exception as e:
-        error = f"Failed to create agent {scoped}: {e}"
-        print(f"[channel-server] {error}", file=sys.stderr)
-        return [TextContent(type="text", text=error)]
 
 # ============================================================
 # Main

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""wc-agent: Claude Code agent lifecycle management CLI."""
+"""zchat: Claude Code agent lifecycle management CLI."""
 from __future__ import annotations
 
 import os
@@ -10,17 +10,16 @@ from typing import Optional
 
 import typer
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
 
-from wc_agent.project import (
-    WC_AGENT_DIR, create_project_config, list_projects,
+from zchat.cli.project import (
+    ZCHAT_DIR, create_project_config, list_projects,
     get_default_project, set_default_project, resolve_project,
     load_project_config, remove_project, project_dir, state_file_path,
 )
-from wc_agent.agent_manager import AgentManager
-from wc_agent.irc_manager import IrcManager
+from zchat.cli.agent_manager import AgentManager
+from zchat.cli.irc_manager import IrcManager
 
-app = typer.Typer(name="wc-agent", help="Claude Code agent lifecycle management")
+app = typer.Typer(name="zchat", help="Claude Code agent lifecycle management")
 project_app = typer.Typer(help="Project configuration management")
 irc_app = typer.Typer(help="IRC server and client management")
 irc_daemon_app = typer.Typer(help="Local ergo IRC server")
@@ -35,7 +34,7 @@ app.add_typer(agent_app, name="agent")
 def _get_config(ctx: typer.Context) -> dict:
     cfg = ctx.obj.get("config") if ctx.obj else None
     if not cfg:
-        typer.echo("Error: No project selected. Run 'wc-agent project create <name>' or use '--project <name>'.")
+        typer.echo("Error: No project selected. Run 'zchat project create <name>' or use '--project <name>'.")
         raise typer.Exit(1)
     return cfg
 
@@ -46,14 +45,14 @@ def _get_irc_manager(ctx: typer.Context) -> IrcManager:
     return IrcManager(
         config=cfg,
         state_file=state_file_path(project_name),
-        tmux_session=ctx.obj.get("tmux_session", "weechat-claude"),
+        tmux_session=ctx.obj.get("tmux_session", "zchat"),
     )
 
 
 def _get_agent_manager(ctx: typer.Context) -> AgentManager:
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
-    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return AgentManager(
         irc_server=cfg["irc"]["server"],
         irc_port=cfg["irc"]["port"],
@@ -61,7 +60,7 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
         channel_server_dir=os.path.join(script_dir, "weechat-channel-server"),
         username=cfg["agents"]["username"],
         default_channels=cfg["agents"]["default_channels"],
-        tmux_session=ctx.obj.get("tmux_session", "weechat-claude"),
+        tmux_session=ctx.obj.get("tmux_session", "zchat"),
         state_file=state_file_path(project_name),
     )
 
@@ -71,22 +70,22 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
 # ============================================================
 
 def _check_tmux():
-    """Ensure we're running inside tmux (or WC_TMUX_SESSION is set). Exit with help if not."""
-    if not os.environ.get("TMUX") and not os.environ.get("WC_TMUX_SESSION"):
-        typer.echo("Error: wc-agent must be run inside a tmux session.")
+    """Ensure we're running inside tmux (or ZCHAT_TMUX_SESSION is set). Exit with help if not."""
+    if not os.environ.get("TMUX") and not os.environ.get("ZCHAT_TMUX_SESSION"):
+        typer.echo("Error: zchat must be run inside a tmux session.")
         typer.echo("")
         typer.echo("Start a new tmux session first:")
-        typer.echo("  tmux -CC new -s weechat-claude    # iTerm2 native integration")
-        typer.echo("  tmux new -s weechat-claude         # standard terminal")
+        typer.echo("  tmux -CC new -s zchat    # iTerm2 native integration")
+        typer.echo("  tmux new -s zchat         # standard terminal")
         typer.echo("")
-        typer.echo("Or set WC_TMUX_SESSION=<session-name> for headless use.")
+        typer.echo("Or set ZCHAT_TMUX_SESSION=<session-name> for headless use.")
         raise typer.Exit(1)
 
 
 def _current_tmux_session() -> str:
     """Get tmux session name from env override or tmux query."""
-    # WC_TMUX_SESSION allows running outside tmux (e.g., from test scripts)
-    env_session = os.environ.get("WC_TMUX_SESSION")
+    # ZCHAT_TMUX_SESSION allows running outside tmux (e.g., from test scripts)
+    env_session = os.environ.get("ZCHAT_TMUX_SESSION")
     if env_session:
         return env_session
     result = subprocess.run(
@@ -114,7 +113,7 @@ def main(
     if os.environ.get("TMUX"):
         ctx.obj["tmux_session"] = _current_tmux_session()
     else:
-        ctx.obj["tmux_session"] = "weechat-claude"  # fallback for non-pane commands
+        ctx.obj["tmux_session"] = "zchat"  # fallback for non-pane commands
 
     resolved = resolve_project(explicit=project)
     if resolved:
@@ -123,7 +122,7 @@ def main(
             ctx.obj["config"] = load_project_config(resolved)
         except FileNotFoundError:
             if ctx.invoked_subcommand != "project":
-                typer.echo(f"Error: Project '{resolved}' not found. Run 'wc-agent project create {resolved}'.")
+                typer.echo(f"Error: Project '{resolved}' not found. Run 'zchat project create {resolved}'.")
                 raise typer.Exit(1)
 
 
@@ -155,7 +154,7 @@ def cmd_project_list():
     projects = list_projects()
     default = get_default_project()
     if not projects:
-        typer.echo("No projects. Run 'wc-agent project create <name>'.")
+        typer.echo("No projects. Run 'zchat project create <name>'.")
         return
     for p in projects:
         marker = " (default)" if p == default else ""
@@ -180,7 +179,7 @@ def cmd_project_remove(name: str):
     # Safety: check for running agents
     try:
         cfg = load_project_config(name)
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mgr = AgentManager(
             irc_server=cfg["irc"]["server"], irc_port=cfg["irc"]["port"],
             irc_tls=cfg["irc"].get("tls", False),
