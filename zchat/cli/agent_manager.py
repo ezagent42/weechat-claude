@@ -7,19 +7,17 @@ import subprocess
 import tempfile
 import time
 
-import sys as _sys
-_sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from wc_protocol.naming import scoped_name, AGENT_SEPARATOR
+from zchat.protocol.naming import scoped_name, AGENT_SEPARATOR
 
 
-DEFAULT_STATE_FILE = os.path.expanduser("~/.local/state/wc-agent/agents.json")
+DEFAULT_STATE_FILE = os.path.expanduser("~/.local/state/zchat/agents.json")
 
 
 class AgentManager:
     def __init__(self, irc_server: str, irc_port: int, irc_tls: bool,
                  channel_server_dir: str, username: str,
                  default_channels: list[str],
-                 tmux_session: str = "weechat-claude",
+                 tmux_session: str = "zchat",
                  state_file: str = DEFAULT_STATE_FILE):
         self.irc_server = irc_server
         self.irc_port = irc_port
@@ -124,8 +122,8 @@ class AgentManager:
                         "IRC_PORT": str(self.irc_port),
                         "IRC_CHANNELS": channels_str,
                         "IRC_TLS": str(self.irc_tls).lower(),
-                        "WC_TMUX_SESSION": self.tmux_session,
-                        "WC_PROJECT_DIR": os.path.dirname(self._state_file),
+                        "ZCHAT_TMUX_SESSION": self.tmux_session,
+                        "ZCHAT_PROJECT_DIR": os.path.dirname(self._state_file),
                         "no_proxy": f"localhost,127.0.0.1,{self.irc_server}",
                         "NO_PROXY": f"localhost,127.0.0.1,{self.irc_server}",
                     },
@@ -204,21 +202,6 @@ class AgentManager:
             raise ValueError(f"{name} is not running")
         subprocess.run(["tmux", "send-keys", "-t", pane, text, "Enter"],
                        capture_output=True)
-
-    @classmethod
-    def from_env(cls) -> "AgentManager":
-        """Create AgentManager from environment variables (for use in channel-server)."""
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        return cls(
-            irc_server=os.environ.get("IRC_SERVER", "127.0.0.1"),
-            irc_port=int(os.environ.get("IRC_PORT", "6667")),
-            irc_tls=os.environ.get("IRC_TLS", "false").lower() == "true",
-            channel_server_dir=os.path.join(script_dir, "..", "weechat-channel-server"),
-            username=os.environ.get("AGENT_NAME", "agent0").split("-")[0],
-            default_channels=[f"#{ch}" for ch in os.environ.get("IRC_CHANNELS", "general").split(",")],
-            tmux_session=os.environ.get("WC_TMUX_SESSION", "weechat-claude"),
-            state_file=os.path.join(os.environ.get("WC_PROJECT_DIR", os.path.expanduser("~/.wc-agent/projects/default")), "state.json"),
-        )
 
     def _load_state(self):
         if os.path.isfile(self._state_file):

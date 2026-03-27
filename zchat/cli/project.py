@@ -1,14 +1,14 @@
-# wc-agent/project.py
+# zchat/cli/project.py
 """Project management: create, list, use, remove, resolve."""
 import os
 import shutil
 import tomllib
 
-WC_AGENT_DIR = os.environ.get("WC_AGENT_HOME", os.path.expanduser("~/.wc-agent"))
+ZCHAT_DIR = os.environ.get("ZCHAT_HOME", os.path.expanduser("~/.zchat"))
 
 
 def project_dir(name: str) -> str:
-    return os.path.join(WC_AGENT_DIR, "projects", name)
+    return os.path.join(ZCHAT_DIR, "projects", name)
 
 
 def create_project_config(name: str, server: str, port: int, tls: bool,
@@ -33,7 +33,7 @@ username = "{nick}"
 
 
 def list_projects() -> list[str]:
-    projects_dir = os.path.join(WC_AGENT_DIR, "projects")
+    projects_dir = os.path.join(ZCHAT_DIR, "projects")
     if not os.path.isdir(projects_dir):
         return []
     return sorted(d for d in os.listdir(projects_dir)
@@ -41,25 +41,25 @@ def list_projects() -> list[str]:
 
 
 def get_default_project() -> str | None:
-    default_file = os.path.join(WC_AGENT_DIR, "default")
+    default_file = os.path.join(ZCHAT_DIR, "default")
     if os.path.isfile(default_file):
         return open(default_file).read().strip() or None
     return None
 
 
 def set_default_project(name: str):
-    os.makedirs(WC_AGENT_DIR, exist_ok=True)
-    with open(os.path.join(WC_AGENT_DIR, "default"), "w") as f:
+    os.makedirs(ZCHAT_DIR, exist_ok=True)
+    with open(os.path.join(ZCHAT_DIR, "default"), "w") as f:
         f.write(name)
 
 
 def resolve_project(explicit: str | None = None) -> str | None:
-    """Resolve project: explicit > .wc-agent file > default."""
+    """Resolve project: explicit > .zchat file > default."""
     if explicit:
         return explicit
     path = os.getcwd()
     while path != "/":
-        marker = os.path.join(path, ".wc-agent")
+        marker = os.path.join(path, ".zchat")
         if os.path.isfile(marker):
             return open(marker).read().strip() or None
         path = os.path.dirname(path)

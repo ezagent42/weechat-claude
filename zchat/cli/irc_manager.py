@@ -1,4 +1,4 @@
-# wc-agent/irc_manager.py
+# zchat/cli/irc_manager.py
 """IRC daemon (ergo) and WeeChat pane management."""
 import json
 import os
@@ -9,7 +9,7 @@ import time
 class IrcManager:
     """Manage ergo IRC daemon and WeeChat tmux pane."""
 
-    def __init__(self, config: dict, state_file: str, tmux_session: str = "weechat-claude"):
+    def __init__(self, config: dict, state_file: str, tmux_session: str = "zchat"):
         self.config = config
         self._state_file = state_file
         self.tmux_session = tmux_session

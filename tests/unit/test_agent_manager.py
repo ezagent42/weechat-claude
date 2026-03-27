@@ -1,10 +1,8 @@
 import os
-import sys
 import json
 import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
-from wc_agent.agent_manager import AgentManager
+from zchat.cli.agent_manager import AgentManager
 
 
 def test_scope_agent_name():
