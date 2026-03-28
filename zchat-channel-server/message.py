@@ -1,5 +1,5 @@
 """
-Message utilities for weechat-channel-server.
+Message utilities for zchat-channel-server.
 Handles mention detection and text chunking.
 """
 

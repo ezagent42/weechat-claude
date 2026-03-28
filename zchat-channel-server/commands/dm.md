@@ -1,7 +1,7 @@
 ---
 description: "Send a private message to an IRC user. Usage: /zchat:dm -u alice -t \"hey\""
 argument-hint: "--user <nick> --text <message>"
-allowed-tools: ["mcp__weechat-channel__reply"]
+allowed-tools: ["mcp__zchat-channel__reply"]
 ---
 
 # Direct Message

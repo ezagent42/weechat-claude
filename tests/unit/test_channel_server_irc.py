@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../weechat-channel-server"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../zchat-channel-server"))
 
 from message import detect_mention, clean_mention, chunk_message
 from zchat_protocol.sys_messages import encode_sys_for_irc, decode_sys_from_irc, make_sys_message

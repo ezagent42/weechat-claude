@@ -1,7 +1,7 @@
 ---
 description: "Reply to an IRC channel or user. Usage: /zchat:reply -c #general -t \"hello world\""
 argument-hint: "--channel <#channel|nick> --text <message>"
-allowed-tools: ["mcp__weechat-channel__reply"]
+allowed-tools: ["mcp__zchat-channel__reply"]
 ---
 
 # Reply to IRC

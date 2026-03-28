@@ -12,7 +12,7 @@
 ## 架构
 
 四个组件，通过 IRC 协议连接：
-- `weechat-channel-server/` — MCP server 桥接 IRC ↔ Claude Code（每个 agent 一个实例）
+- `zchat-channel-server/` — MCP server 桥接 IRC ↔ Claude Code（每个 agent 一个实例）
 - `zchat/cli/` — CLI 工具，管理 agent 生命周期（create/stop/list/restart）
 - `zchat/protocol/` — 协议规范（命名、系统消息）
 - `weechat-zchat-plugin/` — WeeChat Python script（/agent 命令、状态显示、系统消息渲染）
@@ -65,7 +65,7 @@ zchat agent stop helper               # 停止 agent
 zchat agent restart helper            # 重启 agent
 zchat shutdown                        # 停止所有 agent
 
-cd weechat-channel-server && uv run python -m pytest ../tests/unit/ -v   # Unit 测试
+cd zchat-channel-server && uv run python -m pytest ../tests/unit/ -v   # Unit 测试
 pytest tests/e2e/ -v -m e2e          # E2E 测试（需要 ergo + tmux）
 ```
 

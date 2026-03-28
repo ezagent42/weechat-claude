@@ -25,7 +25,7 @@ fi
 # Ensure deps
 echo "  Syncing deps..."
 (cd "$SCRIPT_DIR" && uv sync --quiet 2>/dev/null || true)
-(cd "$SCRIPT_DIR/weechat-channel-server" && uv sync --quiet 2>/dev/null || true)
+(cd "$SCRIPT_DIR/zchat-channel-server" && uv sync --quiet 2>/dev/null || true)
 
 ZCHAT="ZCHAT_TMUX_SESSION=$SESSION uv run --project $SCRIPT_DIR python -m zchat.cli --project $PROJECT"
 
