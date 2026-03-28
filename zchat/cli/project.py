@@ -12,12 +12,19 @@ def project_dir(name: str) -> str:
 
 
 def create_project_config(name: str, server: str, port: int, tls: bool,
-                          password: str, nick: str, channels: str):
+                          password: str, nick: str, channels: str,
+                          env_file: str = "", claude_args: list[str] | None = None):
     """Create project directory and write config.toml."""
     pdir = project_dir(name)
     os.makedirs(pdir, exist_ok=True)
     channels_list = [ch.strip() for ch in channels.split(",") if ch.strip()]
     channels_toml = ", ".join(f'"{ch}"' for ch in channels_list)
+    if claude_args is None:
+        claude_args = [
+            "--permission-mode", "bypassPermissions",
+            "--dangerously-load-development-channels", "server:zchat-channel",
+        ]
+    args_toml = ", ".join(f'"{a}"' for a in claude_args)
     config_content = f'''[irc]
 server = "{server}"
 port = {port}
@@ -27,6 +34,8 @@ password = "{password}"
 [agents]
 default_channels = [{channels_toml}]
 username = "{nick}"
+env_file = "{env_file}"
+claude_args = [{args_toml}]
 '''
     with open(os.path.join(pdir, "config.toml"), "w") as f:
         f.write(config_content)
@@ -80,6 +89,11 @@ def load_project_config(name: str) -> dict:
     agents.setdefault("default_channels", ["#general"])
     if not agents.get("username"):
         agents["username"] = os.environ.get("USER", "user")
+    agents.setdefault("env_file", "")
+    agents.setdefault("claude_args", [
+        "--permission-mode", "bypassPermissions",
+        "--dangerously-load-development-channels", "server:zchat-channel",
+    ])
     return cfg
 
 

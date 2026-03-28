@@ -59,3 +59,24 @@ def test_load_project_config(tmp_path, monkeypatch):
     assert cfg["irc"]["server"] == "10.0.0.1"
     assert cfg["irc"]["tls"] is True
     assert cfg["agents"]["username"] == "bob"
+
+
+def test_config_has_agent_launch_fields(tmp_path, monkeypatch):
+    """config.toml should support env_file and claude_args."""
+    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    create_project_config("test", server="127.0.0.1", port=6667, tls=False,
+                          password="", nick="alice", channels="#general",
+                          env_file="/path/to/env", claude_args=["--permission-mode", "bypassPermissions"])
+    cfg = load_project_config("test")
+    assert cfg["agents"]["env_file"] == "/path/to/env"
+    assert cfg["agents"]["claude_args"] == ["--permission-mode", "bypassPermissions"]
+
+
+def test_config_defaults_without_agent_launch_fields(tmp_path, monkeypatch):
+    """env_file defaults to empty, claude_args has sensible defaults."""
+    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    create_project_config("test2", server="127.0.0.1", port=6667, tls=False,
+                          password="", nick="alice", channels="#general")
+    cfg = load_project_config("test2")
+    assert cfg["agents"]["env_file"] == ""
+    assert isinstance(cfg["agents"]["claude_args"], list)

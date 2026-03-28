@@ -145,8 +145,11 @@ def cmd_project_create(name: str):
     password = typer.prompt("Password", default="", show_default=False)
     nick = typer.prompt("Nickname", default=os.environ.get("USER", "user"))
     channels = typer.prompt("Default channels", default="#general")
+    env_file = typer.prompt("Environment file (proxy, API keys — leave empty if not needed)",
+                            default="", show_default=False)
     create_project_config(name, server=server, port=port, tls=tls,
-                          password=password, nick=nick, channels=channels)
+                          password=password, nick=nick, channels=channels,
+                          env_file=env_file)
     typer.echo(f"\nProject '{name}' created at {pdir}/")
     typer.echo(f"Config saved to {pdir}/config.toml")
 
