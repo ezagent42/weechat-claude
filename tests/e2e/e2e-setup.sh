@@ -89,6 +89,7 @@ password = ""
 [agents]
 default_channels = ["#general"]
 username = "alice"
+mcp_server_cmd = ["uv", "run", "--project", "${PROJECT_DIR}/zchat-channel-server", "zchat-channel"]
 EOF
 echo "e2e" > "$ZCHAT_HOME/default"
 
