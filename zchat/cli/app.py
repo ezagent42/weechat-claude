@@ -23,11 +23,13 @@ project_app = typer.Typer(help="Project configuration management")
 irc_app = typer.Typer(help="IRC server and client management")
 irc_daemon_app = typer.Typer(help="Local ergo IRC server")
 agent_app = typer.Typer(help="Claude Code agent lifecycle")
+setup_app = typer.Typer(help="Install and configure components")
 
 app.add_typer(project_app, name="project")
 app.add_typer(irc_app, name="irc")
 irc_app.add_typer(irc_daemon_app, name="daemon")
 app.add_typer(agent_app, name="agent")
+app.add_typer(setup_app, name="setup")
 
 
 def _get_config(ctx: typer.Context) -> dict:
@@ -146,13 +148,27 @@ def cmd_project_create(name: str):
     password = typer.prompt("Password", default="", show_default=False)
     nick = typer.prompt("Nickname", default=os.environ.get("USER", "user"))
     channels = typer.prompt("Default channels", default="#general")
-    env_file = typer.prompt("Environment file (proxy, API keys — leave empty if not needed)",
-                            default="", show_default=False)
+    proxy = typer.prompt("HTTP proxy (ip:port, leave empty for direct connection)",
+                         default="", show_default=False)
+
+    # Generate env file if proxy is set
+    env_file = ""
+    if proxy:
+        proxy_url = proxy if proxy.startswith("http") else f"http://{proxy}"
+        env_path = os.path.join(pdir, "claude.local.env")
+        os.makedirs(pdir, exist_ok=True)
+        with open(env_path, "w") as f:
+            f.write(f"HTTP_PROXY={proxy_url}\n")
+            f.write(f"HTTPS_PROXY={proxy_url}\n")
+        env_file = env_path
+
     create_project_config(name, server=server, port=port, tls=tls,
                           password=password, nick=nick, channels=channels,
                           env_file=env_file)
     typer.echo(f"\nProject '{name}' created at {pdir}/")
     typer.echo(f"Config saved to {pdir}/config.toml")
+    if proxy:
+        typer.echo(f"Proxy config saved to {pdir}/claude.local.env")
 
 @project_app.command("list")
 def cmd_project_list():
@@ -396,6 +412,30 @@ def cmd_shutdown(ctx: typer.Context):
     except (SystemExit, Exception):
         pass
     typer.echo("Shutdown complete.")
+
+
+# ============================================================
+# doctor
+# ============================================================
+
+@app.command("doctor")
+def cmd_doctor():
+    """Check environment dependencies and project status."""
+    from zchat.cli.doctor import run_doctor
+    run_doctor()
+
+
+# ============================================================
+# setup commands
+# ============================================================
+
+@setup_app.command("weechat")
+def cmd_setup_weechat(
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing plugin"),
+):
+    """Download and install the WeeChat zchat plugin."""
+    from zchat.cli.doctor import setup_weechat
+    setup_weechat(force=force)
 
 
 if __name__ == "__main__":
