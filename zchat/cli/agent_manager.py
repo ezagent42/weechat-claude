@@ -114,7 +114,23 @@ class AgentManager:
         safe = name.replace(AGENT_SEPARATOR, "_")
         workspace = os.path.join(tempfile.gettempdir(), f"zchat-{safe}")
         os.makedirs(workspace, exist_ok=True)
+        self._write_claude_settings(workspace)
         return workspace
+
+    def _write_claude_settings(self, workspace: str):
+        """Write .claude/settings.local.json so Claude auto-allows MCP tools."""
+        claude_dir = os.path.join(workspace, ".claude")
+        os.makedirs(claude_dir, exist_ok=True)
+        settings = {
+            "permissions": {
+                "allow": [
+                    "mcp__zchat-channel__reply",
+                    "mcp__zchat-channel__join_channel",
+                ]
+            }
+        }
+        with open(os.path.join(claude_dir, "settings.local.json"), "w") as f:
+            json.dump(settings, f, indent=2)
 
     def _spawn_tmux(self, name: str, workspace: str) -> str:
         source_env = ""

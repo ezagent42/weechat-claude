@@ -1,9 +1,12 @@
 """Tests for weechat-zchat-plugin protocol helpers.
 
 The WeeChat plugin implements protocol independently. These tests verify
-the local protocol implementation matches zchat.protocol behavior.
+the local protocol implementation matches zchat_protocol behavior.
 """
 import json
+import os
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from zchat_protocol.naming import scoped_name, AGENT_SEPARATOR
 from zchat_protocol.sys_messages import (
@@ -12,7 +15,7 @@ from zchat_protocol.sys_messages import (
 
 
 class TestPluginProtocolParity:
-    """Verify the plugin's protocol constants match zchat.protocol."""
+    """Verify the plugin's protocol constants match zchat_protocol."""
 
     def test_agent_separator(self):
         assert AGENT_SEPARATOR == "-"

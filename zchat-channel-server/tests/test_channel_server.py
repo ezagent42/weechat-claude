@@ -1,8 +1,9 @@
 import os
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../zchat-channel-server"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from message import detect_mention, clean_mention, chunk_message
+from server import CHANNEL_INSTRUCTIONS
 from zchat_protocol.sys_messages import encode_sys_for_irc, decode_sys_from_irc, make_sys_message
 
 
@@ -48,11 +49,9 @@ def test_detect_mention_with_dash_separator():
 
 def test_channel_instructions_mention_slash_commands():
     """CHANNEL_INSTRUCTIONS should reference available /zchat: commands."""
-    from server import CHANNEL_INSTRUCTIONS
     assert "/zchat:reply" in CHANNEL_INSTRUCTIONS
     assert "/zchat:join" in CHANNEL_INSTRUCTIONS
     assert "/zchat:dm" in CHANNEL_INSTRUCTIONS
     assert "/zchat:broadcast" in CHANNEL_INSTRUCTIONS
-    # Verify original core instructions are preserved
     assert "chat_id" in CHANNEL_INSTRUCTIONS
     assert "reply" in CHANNEL_INSTRUCTIONS
