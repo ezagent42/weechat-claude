@@ -51,14 +51,15 @@ def _get_irc_manager(ctx: typer.Context) -> IrcManager:
 def _get_agent_manager(ctx: typer.Context) -> AgentManager:
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
-    script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return AgentManager(
         irc_server=cfg["irc"]["server"],
         irc_port=cfg["irc"]["port"],
         irc_tls=cfg["irc"].get("tls", False),
-        channel_server_dir=os.path.join(script_dir, "weechat-channel-server"),
         username=cfg["agents"]["username"],
         default_channels=cfg["agents"]["default_channels"],
+        env_file=cfg["agents"].get("env_file", ""),
+        claude_args=cfg["agents"].get("claude_args"),
+        mcp_server_cmd=cfg["agents"].get("mcp_server_cmd"),
         tmux_session=ctx.obj.get("tmux_session", "zchat"),
         state_file=state_file_path(project_name),
     )
@@ -145,8 +146,11 @@ def cmd_project_create(name: str):
     password = typer.prompt("Password", default="", show_default=False)
     nick = typer.prompt("Nickname", default=os.environ.get("USER", "user"))
     channels = typer.prompt("Default channels", default="#general")
+    env_file = typer.prompt("Environment file (proxy, API keys — leave empty if not needed)",
+                            default="", show_default=False)
     create_project_config(name, server=server, port=port, tls=tls,
-                          password=password, nick=nick, channels=channels)
+                          password=password, nick=nick, channels=channels,
+                          env_file=env_file)
     typer.echo(f"\nProject '{name}' created at {pdir}/")
     typer.echo(f"Config saved to {pdir}/config.toml")
 
@@ -181,11 +185,9 @@ def cmd_project_remove(name: str):
     # Safety: check for running agents
     try:
         cfg = load_project_config(name)
-        script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         mgr = AgentManager(
             irc_server=cfg["irc"]["server"], irc_port=cfg["irc"]["port"],
             irc_tls=cfg["irc"].get("tls", False),
-            channel_server_dir=os.path.join(script_dir, "weechat-channel-server"),
             username=cfg["agents"]["username"],
             default_channels=cfg["agents"]["default_channels"],
             state_file=state_file_path(name),

@@ -1,7 +1,7 @@
 ---
 description: "Broadcast a message to all joined IRC channels. Usage: /zchat:broadcast -t \"deploying v2.1\""
 argument-hint: "--text <message> [--channels <#ch1,#ch2>]"
-allowed-tools: ["mcp__weechat-channel__reply"]
+allowed-tools: ["mcp__zchat-channel__reply"]
 ---
 
 # Broadcast to All Channels

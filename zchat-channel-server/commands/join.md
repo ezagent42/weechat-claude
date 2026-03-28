@@ -1,7 +1,7 @@
 ---
 description: "Join an IRC channel. Usage: /zchat:join -c dev"
 argument-hint: "--channel <channel-name>"
-allowed-tools: ["mcp__weechat-channel__join_channel"]
+allowed-tools: ["mcp__zchat-channel__join_channel"]
 ---
 
 # Join IRC Channel

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-weechat-channel-server: Claude Code Channel MCP Server
+zchat-channel-server: Claude Code Channel MCP Server
 Bridges IRC messaging <-> Claude Code via MCP stdio protocol.
 """
 import asyncio
@@ -9,8 +9,7 @@ import os
 import sys
 import time
 import threading
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
-from zchat.protocol.sys_messages import (
+from zchat_protocol.sys_messages import (
     is_sys_message, make_sys_message,
     encode_sys_for_irc, decode_sys_from_irc,
 )
@@ -191,7 +190,7 @@ def _handle_sys_message(msg: dict, sender_nick: str, connection, joined_channels
 
 CHANNEL_INSTRUCTIONS = f"""You are {AGENT_NAME}, a Claude Code agent connected to an IRC chat system.
 
-Messages arrive as <channel source="weechat-channel" chat_id="..." user="..." ts="...">content</channel>.
+Messages arrive as <channel source="zchat-channel" chat_id="..." user="..." ts="...">content</channel>.
 - chat_id starting with "#" is a channel message (e.g. "#general")
 - chat_id without "#" is a private message from that user
 
@@ -216,7 +215,7 @@ You can also call "reply" and "join_channel" tools directly when responding to c
 
 
 def create_server():
-    server = Server("weechat-channel", instructions=CHANNEL_INSTRUCTIONS)
+    server = Server("zchat-channel", instructions=CHANNEL_INSTRUCTIONS)
     return server
 
 def register_tools(server: Server, state: dict):
@@ -292,7 +291,7 @@ async def main():
     state: dict = {}
     register_tools(server, state)
     init_opts = InitializationOptions(
-        server_name=f"weechat-channel-{AGENT_NAME}",
+        server_name=f"zchat-channel-{AGENT_NAME}",
         server_version="0.2.0",
         capabilities=server.get_capabilities(
             notification_options=NotificationOptions(),
@@ -310,5 +309,9 @@ async def main():
         finally:
             connection.disconnect("Agent shutting down")
 
-if __name__ == "__main__":
+def entry_point():
+    """Synchronous entry point for console_scripts."""
     asyncio.run(main())
+
+if __name__ == "__main__":
+    entry_point()

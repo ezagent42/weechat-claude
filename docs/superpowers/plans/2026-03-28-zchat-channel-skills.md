@@ -182,7 +182,7 @@ git commit -m "feat(channel): scaffold zchat plugin manifest and registration"
 ---
 description: "Reply to an IRC channel or user. Usage: /zchat:reply -c #general -t \"hello world\""
 argument-hint: "--channel <#channel|nick> --text <message>"
-allowed-tools: ["mcp__weechat-channel__reply"]
+allowed-tools: ["mcp__zchat-channel__reply"]
 ---
 
 # Reply to IRC
@@ -230,7 +230,7 @@ git commit -m "feat(channel): add /zchat:reply command"
 ---
 description: "Join an IRC channel. Usage: /zchat:join -c dev"
 argument-hint: "--channel <channel-name>"
-allowed-tools: ["mcp__weechat-channel__join_channel"]
+allowed-tools: ["mcp__zchat-channel__join_channel"]
 ---
 
 # Join IRC Channel
@@ -276,7 +276,7 @@ git commit -m "feat(channel): add /zchat:join command"
 ---
 description: "Send a private message to an IRC user. Usage: /zchat:dm -u alice -t \"hey\""
 argument-hint: "--user <nick> --text <message>"
-allowed-tools: ["mcp__weechat-channel__reply"]
+allowed-tools: ["mcp__zchat-channel__reply"]
 ---
 
 # Direct Message
@@ -324,7 +324,7 @@ git commit -m "feat(channel): add /zchat:dm command"
 ---
 description: "Broadcast a message to all joined IRC channels. Usage: /zchat:broadcast -t \"deploying v2.1\""
 argument-hint: "--text <message> [--channels <#ch1,#ch2>]"
-allowed-tools: ["mcp__weechat-channel__reply"]
+allowed-tools: ["mcp__zchat-channel__reply"]
 ---
 
 # Broadcast to All Channels

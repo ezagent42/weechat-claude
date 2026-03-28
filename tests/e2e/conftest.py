@@ -62,9 +62,15 @@ def e2e_context(e2e_port, tmux_session):
     home = tempfile.mkdtemp(prefix="e2e-zchat-")
     project_dir = os.path.join(home, "projects", "e2e-test")
     os.makedirs(project_dir)
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    channel_server_dir = os.path.join(repo_root, "zchat-channel-server")
+    env_file = os.path.join(repo_root, "claude.local.env")
+    env_file_val = env_file if os.path.isfile(env_file) else ""
     with open(os.path.join(project_dir, "config.toml"), "w") as f:
         f.write(f'[irc]\nserver = "127.0.0.1"\nport = {e2e_port}\ntls = false\npassword = ""\n\n')
         f.write('[agents]\ndefault_channels = ["#general"]\nusername = "alice"\n')
+        f.write(f'env_file = "{env_file_val}"\n')
+        f.write(f'mcp_server_cmd = ["uv", "run", "--project", "{channel_server_dir}", "zchat-channel"]\n')
     with open(os.path.join(home, "default"), "w") as f:
         f.write("e2e-test")
     ctx = {

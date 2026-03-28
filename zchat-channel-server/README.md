@@ -1,18 +1,18 @@
-# weechat-channel-server
+# zchat-channel-server
 
 Claude Code Channel plugin — bridges IRC messaging and Claude Code via MCP.
 
 ## Install
 
 ```bash
-claude plugin install weechat-channel
+claude plugin install zchat-channel
 ```
 
 ## Usage
 
 ```bash
 # Start Claude Code with the channel plugin
-claude --dangerously-load-development-channels plugin:weechat-channel
+claude --dangerously-load-development-channels plugin:zchat-channel
 
 # Agent joins IRC server as "agent0" (configurable via AGENT_NAME env var)
 # Any IRC client can interact with the agent

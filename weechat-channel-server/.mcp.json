@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "weechat-channel": {
-      "command": "uv",
-      "args": ["run", "--project", "${CLAUDE_PLUGIN_ROOT}", "weechat-channel"]
-    }
-  }
-}

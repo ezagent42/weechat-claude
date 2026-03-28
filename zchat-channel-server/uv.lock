@@ -1007,12 +1007,13 @@ wheels = [
 ]
 
 [[package]]
-name = "weechat-channel-server"
+name = "zchat-channel-server"
 version = "0.2.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "irc" },
     { name = "mcp", extra = ["cli"] },
+    { name = "zchat-protocol" },
 ]
 
 [package.optional-dependencies]
@@ -1037,6 +1038,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'test'" },
     { name = "pytest-order", marker = "extra == 'test'", specifier = ">=1.3.0" },
     { name = "pytest-timeout", marker = "extra == 'test'" },
+    { name = "zchat-protocol", editable = "../zchat-protocol" },
 ]
 provides-extras = ["test"]
 
@@ -1045,3 +1047,13 @@ dev = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
 ]
+
+[[package]]
+name = "zchat-protocol"
+version = "0.1.0"
+source = { editable = "../zchat-protocol" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0.2" }]
