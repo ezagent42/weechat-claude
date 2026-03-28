@@ -1,0 +1,9 @@
+[submodule "zchat-protocol"]
+	path = zchat-protocol
+	url = git@github.com:ezagent42/zchat-protocol.git
+[submodule "zchat-channel-server"]
+	path = zchat-channel-server
+	url = git@github.com:ezagent42/claude-zchat-channel.git
+[submodule "weechat-zchat-plugin"]
+	path = weechat-zchat-plugin
+	url = git@github.com:ezagent42/weechat-zchat-plugin.git
