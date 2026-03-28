@@ -291,7 +291,7 @@ async def main():
     state: dict = {}
     register_tools(server, state)
     init_opts = InitializationOptions(
-        server_name=f"weechat-channel-{AGENT_NAME}",
+        server_name=f"zchat-channel-{AGENT_NAME}",
         server_version="0.2.0",
         capabilities=server.get_capabilities(
             notification_options=NotificationOptions(),

@@ -75,7 +75,7 @@ echo "Setting up e2e environment (id: $E2E_ID, port: $E2E_IRC_PORT)..."
 
 # Sync deps
 (cd "$PROJECT_DIR" && uv sync --quiet 2>/dev/null || true)
-(cd "$PROJECT_DIR/weechat-channel-server" && uv sync --quiet 2>/dev/null || true)
+(cd "$PROJECT_DIR/zchat-channel-server" && uv sync --quiet 2>/dev/null || true)
 
 # Create project with unique port
 mkdir -p "$ZCHAT_HOME/projects/e2e"
