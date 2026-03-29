@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 import time
 from typing import Optional
 
@@ -40,13 +39,24 @@ def _get_config(ctx: typer.Context) -> dict:
     return cfg
 
 
+def _get_tmux_session(ctx: typer.Context) -> str:
+    """Get tmux session name from project config."""
+    cfg = _get_config(ctx)
+    session = cfg.get("tmux", {}).get("session")
+    if not session:
+        # Fallback for projects created before tmux session tracking
+        project_name = ctx.obj["project"]
+        session = f"zchat-{project_name}"
+    return session
+
+
 def _get_irc_manager(ctx: typer.Context) -> IrcManager:
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
     return IrcManager(
         config=cfg,
         state_file=state_file_path(project_name),
-        tmux_session=ctx.obj.get("tmux_session", "zchat"),
+        tmux_session=_get_tmux_session(ctx),
     )
 
 
@@ -62,48 +72,9 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
         env_file=cfg["agents"].get("env_file", ""),
         claude_args=cfg["agents"].get("claude_args"),
         mcp_server_cmd=cfg["agents"].get("mcp_server_cmd"),
-        tmux_session=ctx.obj.get("tmux_session", "zchat"),
+        tmux_session=_get_tmux_session(ctx),
         state_file=state_file_path(project_name),
     )
-
-
-# ============================================================
-# Global options
-# ============================================================
-
-def _check_tmux():
-    """Ensure we're running inside tmux (or ZCHAT_TMUX_SESSION is set). Exit with help if not."""
-    if not os.environ.get("TMUX") and not os.environ.get("ZCHAT_TMUX_SESSION"):
-        typer.echo("Error: zchat must be run inside a tmux session.")
-        typer.echo("")
-        typer.echo("Start a new tmux session first:")
-        typer.echo("  tmux -CC new -s zchat    # iTerm2 native integration")
-        typer.echo("  tmux new -s zchat         # standard terminal")
-        typer.echo("")
-        typer.echo("Or set ZCHAT_TMUX_SESSION=<session-name> for headless use.")
-        raise typer.Exit(1)
-
-
-def _current_tmux_session() -> str:
-    """Get tmux session name from env override or tmux query."""
-    # ZCHAT_TMUX_SESSION allows running outside tmux (e.g., from test scripts)
-    env_session = os.environ.get("ZCHAT_TMUX_SESSION")
-    if env_session:
-        return env_session
-    from zchat.cli.tmux import server
-    s = server()
-    attached = s.attached_sessions
-    if attached:
-        return attached[0].session_name
-    if s.sessions:
-        return s.sessions[0].session_name
-    return "zchat"
-
-
-def _require_tmux(ctx: typer.Context):
-    """Check tmux and set session in context. Call from commands that create panes."""
-    _check_tmux()
-    ctx.obj["tmux_session"] = _current_tmux_session()
 
 
 @app.callback()
@@ -114,19 +85,13 @@ def main(
     """Claude Code agent lifecycle management."""
     ctx.ensure_object(dict)
 
-    # Set tmux session if inside tmux (optional for daemon/project/shutdown commands)
-    if os.environ.get("TMUX"):
-        ctx.obj["tmux_session"] = _current_tmux_session()
-    else:
-        ctx.obj["tmux_session"] = "zchat"  # fallback for non-pane commands
-
     resolved = resolve_project(explicit=project)
     if resolved:
         try:
             ctx.obj["project"] = resolved
             ctx.obj["config"] = load_project_config(resolved)
         except FileNotFoundError:
-            if ctx.invoked_subcommand != "project":
+            if ctx.invoked_subcommand not in ("project", "doctor", "setup"):
                 typer.echo(f"Error: Project '{resolved}' not found. Run 'zchat project create {resolved}'.")
                 raise typer.Exit(1)
 
@@ -184,12 +149,22 @@ def cmd_project_list():
 
 @project_app.command("use")
 def cmd_project_use(name: str):
-    """Set default project."""
+    """Set default project and attach to its tmux session."""
     if not os.path.isdir(project_dir(name)):
         typer.echo(f"Project '{name}' does not exist.")
         raise typer.Exit(1)
     set_default_project(name)
+    cfg = load_project_config(name)
+    session_name = cfg.get("tmux", {}).get("session", f"zchat-{name}")
     typer.echo(f"Default project set to '{name}'.")
+    # Attach to the project's tmux session
+    import subprocess
+    if os.environ.get("TMUX"):
+        # Already inside tmux — switch client
+        subprocess.run(["tmux", "switch-client", "-t", session_name])
+    else:
+        # Outside tmux — attach
+        subprocess.run(["tmux", "attach", "-t", session_name])
 
 @project_app.command("remove")
 def cmd_project_remove(name: str):
@@ -267,7 +242,7 @@ def cmd_irc_start(
     nick: Optional[str] = typer.Option(None, help="Override nickname from config"),
 ):
     """Start WeeChat in tmux, auto-connect to IRC."""
-    _require_tmux(ctx)
+
     mgr = _get_irc_manager(ctx)
     mgr.start_weechat(nick_override=nick)
 
@@ -309,7 +284,7 @@ def cmd_agent_create(
     channels: Optional[str] = typer.Option(None, help="Comma-separated channels to join"),
 ):
     """Create and launch a new agent."""
-    _require_tmux(ctx)
+
     mgr = _get_agent_manager(ctx)
     ch = [c.strip() for c in channels.split(",")] if channels else None
     info = mgr.create(name, workspace=workspace, channels=ch)
@@ -373,7 +348,7 @@ def cmd_agent_send(
     text: str = typer.Argument(..., help="Text to send to agent's tmux pane"),
 ):
     """Send text to agent's tmux pane (tmux send-keys)."""
-    _require_tmux(ctx)
+
     mgr = _get_agent_manager(ctx)
     scoped = mgr.scoped(name)
     mgr.send(name, text)
@@ -382,7 +357,7 @@ def cmd_agent_send(
 @agent_app.command("restart")
 def cmd_agent_restart(ctx: typer.Context, name: str = typer.Argument(...)):
     """Restart an agent (stop + create with same config)."""
-    _require_tmux(ctx)
+
     mgr = _get_agent_manager(ctx)
     scoped = mgr.scoped(name)
     mgr.restart(name)
