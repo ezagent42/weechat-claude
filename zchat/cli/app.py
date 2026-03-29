@@ -223,6 +223,22 @@ def cmd_project_show(name: Optional[str] = typer.Argument(None)):
     typer.echo(f"  Channels: {', '.join(cfg['agents']['default_channels'])}")
 
 
+@app.command("set")
+def cmd_set(
+    ctx: typer.Context,
+    key: str = typer.Argument(..., help="Config key (dotted, e.g. agents.default_type)"),
+    value: str = typer.Argument(..., help="Value to set"),
+):
+    """Set a project config value."""
+    from zchat.cli.project import set_config_value
+    project_name = ctx.obj.get("project")
+    if not project_name:
+        typer.echo("Error: No project selected.")
+        raise typer.Exit(1)
+    set_config_value(project_name, key, value)
+    typer.echo(f"Set {key} = {value}")
+
+
 # ============================================================
 # irc daemon commands
 # ============================================================

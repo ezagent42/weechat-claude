@@ -1,7 +1,7 @@
 from zchat.cli.project import (
     create_project_config, list_projects, get_default_project,
     set_default_project, resolve_project, load_project_config,
-    remove_project,
+    remove_project, set_config_value,
 )
 
 def test_create_project_config(tmp_path, monkeypatch):
@@ -69,3 +69,12 @@ def test_config_has_default_type(tmp_path, monkeypatch):
     cfg = load_project_config("test")
     assert cfg["agents"]["default_type"] == "claude"
     assert "claude_args" not in cfg["agents"]
+
+
+def test_set_config_value(tmp_path, monkeypatch):
+    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    create_project_config("test-set", server="127.0.0.1", port=6667,
+                          tls=False, password="", nick="alice", channels="#general")
+    set_config_value("test-set", "agents.default_type", "codex")
+    cfg = load_project_config("test-set")
+    assert cfg["agents"]["default_type"] == "codex"

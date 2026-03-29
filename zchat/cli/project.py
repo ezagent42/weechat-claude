@@ -3,6 +3,7 @@
 import os
 import shutil
 import tomllib
+import tomli_w
 import uuid
 
 ZCHAT_DIR = os.environ.get("ZCHAT_HOME", os.path.expanduser("~/.zchat"))
@@ -109,3 +110,29 @@ def remove_project(name: str):
 def state_file_path(name: str) -> str:
     """Return path to project state.json."""
     return os.path.join(project_dir(name), "state.json")
+
+
+def set_config_value(name: str, key: str, value: str):
+    """Set a dotted key in project config.toml. e.g., 'agents.default_type' = 'codex'."""
+    config_path = os.path.join(project_dir(name), "config.toml")
+    with open(config_path, "rb") as f:
+        cfg = tomllib.load(f)
+
+    # Navigate dotted key
+    parts = key.split(".")
+    target = cfg
+    for part in parts[:-1]:
+        target = target.setdefault(part, {})
+
+    # Type coercion: try int, bool, then string
+    if value.lower() in ("true", "false"):
+        value = value.lower() == "true"
+    else:
+        try:
+            value = int(value)
+        except ValueError:
+            pass
+    target[parts[-1]] = value
+
+    with open(config_path, "wb") as f:
+        tomli_w.dump(cfg, f)
