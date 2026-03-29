@@ -433,7 +433,8 @@ def cmd_self_update():
     python = sys.executable
     typer.echo("Updating zchat from GitHub (main)...")
     result = subprocess.run(
-        [python, "-m", "pip", "install", "--force-reinstall", "--no-deps"] + _GIT_REPOS,
+        [python, "-m", "pip", "install", "--force-reinstall", "--no-deps",
+         "--ignore-installed"] + _GIT_REPOS,
         capture_output=True, text=True,
     )
     if result.returncode != 0:
