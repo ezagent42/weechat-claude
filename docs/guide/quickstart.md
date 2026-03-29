@@ -1,47 +1,97 @@
 # 安装与启动
 
-## 前置条件
-
-| 依赖 | 最低版本 | 说明 |
-|------|----------|------|
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | ≥ 2.1.80 | Anthropic 的 CLI AI 助手 |
-| [uv](https://docs.astral.sh/uv/) | ≥ 0.4 | Python 包管理器（类似 npm） |
-| [WeeChat](https://weechat.org/) | ≥ 4.0 | 终端聊天客户端 |
-| [tmux](https://github.com/tmux/tmux) | — | 终端多窗口管理器 |
-| Python | ≥ 3.10 | 运行时 |
-| [ergo](https://ergo.chat/) | ≥ 2.0 | 本地 IRC server |
-
-## 一键启动
+## 安装 zchat
 
 ```bash
-git clone https://github.com/ezagent42/zchat.git
-cd zchat
-./start.sh ~/my-project
+brew tap ezagent42/zchat
+brew install zchat
 ```
 
-`start.sh` 会自动完成以下步骤：
+## 安装依赖
 
-1. **检查依赖** — 确认 claude、uv、weechat、tmux、ergo 都已安装
-2. **确保 ergo 运行** — 启动本地 IRC server（如果尚未运行）
-3. **安装依赖** — `uv sync` 安装 channel-server 依赖
-4. **创建 tmux session** — 分为多个 pane：
-   - Claude Code (`agent0`) + channel plugin
-   - WeeChat 连接到本地 IRC server
+zchat 依赖几个外部工具。运行 `zchat doctor` 查看哪些已安装、哪些缺失：
+
+```bash
+zchat doctor
+```
+
+输出示例：
+
+```
+  ✓ tmux              3.6a  (required)
+  ✓ claude            2.1.86 (Claude Code)  (required)
+  ✓ zchat-channel     (required)
+  ✗ ergo              (optional, brew install ezagent42/zchat/ergo)
+  ✗ weechat           (optional, brew install weechat)
+  ✗ weechat plugin    (optional, run: zchat setup weechat)
+```
+
+按提示安装缺失的组件：
+
+```bash
+# 必需（brew install zchat 已包含 tmux 和 zchat-channel）
+# Claude Code 需要单独安装：https://docs.anthropic.com/en/docs/claude-code
+
+# 可选
+brew install ezagent42/zchat/ergo   # 本地 IRC server
+brew install weechat                 # IRC 客户端 UI
+zchat setup weechat                  # WeeChat zchat 插件（自动下载）
+```
+
+## 创建项目
+
+```bash
+zchat project create local
+```
+
+交互式向导会询问：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| IRC server | `127.0.0.1` | IRC 服务器地址 |
+| IRC port | `6667` | IRC 端口 |
+| TLS | `N` | 是否启用 TLS |
+| Password | （空） | IRC 密码 |
+| Nickname | `$USER` | 你的 IRC 昵称 |
+| Default channels | `#general` | 默认加入的频道 |
+| HTTP proxy | （空） | 代理地址（ip:port），留空直连 |
+
+## 启动
+
+```bash
+zchat irc daemon start               # 1. 启动 ergo IRC server
+zchat irc start                      # 2. 启动 WeeChat
+zchat agent create agent0            # 3. 创建 AI agent
+```
+
+进入项目的 tmux session 查看所有窗口：
+
+```bash
+zchat project use local
+```
+
+在 tmux 里用 `Ctrl-b n` / `Ctrl-b p` 切换 window。
 
 ## 第一次对话
 
-启动后，你会看到 WeeChat 界面。和 agent0 打个招呼：
+在 WeeChat 中，向 agent0 发消息：
 
 ```
-/msg agent0 hello，你能帮我做什么？
+@agent0 hello，你能帮我做什么？
 ```
 
-agent0 会通过 IRC 收到你的消息，然后通过 MCP channel 回复到你的 WeeChat buffer 中。
+agent0 会通过 IRC 收到你的消息，然后回复到 channel 中。
 
-## 停止系统
+## 停止
 
 ```bash
-./stop.sh
+zchat shutdown                       # 停止所有 agent + WeeChat + ergo
+```
+
+## 更新
+
+```bash
+zchat self-update                    # 从 GitHub 更新到最新版本
 ```
 
 ## 下一步

@@ -6,12 +6,49 @@
 
 在终端内运行多个 Claude Code 实例作为聊天参与者——和它们对话、让它们互相协作、管理它们的生命周期。支持人与人、人与 Agent、Agent 与 Agent 的实时通信，所有数据不出本机/局域网。
 
-## 快速导航
+## 安装
+
+```bash
+brew tap ezagent42/zchat
+brew install zchat
+```
+
+安装后运行 `zchat doctor` 检查环境：
+
+```bash
+zchat doctor
+```
+
+安装可选组件：
+
+```bash
+brew install ezagent42/zchat/ergo   # 本地 IRC server
+brew install weechat                 # IRC 客户端
+zchat setup weechat                  # WeeChat zchat 插件
+```
+
+## 快速开始
+
+```bash
+zchat project create local           # 创建项目（交互式配置）
+zchat irc daemon start               # 启动 IRC server
+zchat irc start                      # 启动 WeeChat
+zchat agent create agent0            # 创建 AI agent
+zchat project use local              # 进入项目 tmux session
+```
+
+## 更新
+
+```bash
+zchat self-update                    # 更新到 GitHub 最新版本
+```
+
+## 文档
 
 ### 用户文档
 
 - [概念入门](docs/guide/getting-started.md) — 第一次用？从这里开始
-- [安装与启动](docs/guide/quickstart.md) — 环境准备、一键启动
+- [安装与启动](docs/guide/quickstart.md) — 环境准备、安装、首次运行
 - [使用指南](docs/guide/usage.md) — 命令参考、使用场景
 - [限制与路线图](docs/guide/constraints.md) — 已知限制、未来方向
 
