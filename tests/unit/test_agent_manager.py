@@ -1,6 +1,4 @@
 import os
-import json
-import tempfile
 
 from zchat.cli.agent_manager import AgentManager
 

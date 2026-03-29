@@ -67,11 +67,11 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
         irc_server=cfg["irc"]["server"],
         irc_port=cfg["irc"]["port"],
         irc_tls=cfg["irc"].get("tls", False),
+        irc_password=cfg["irc"].get("password", ""),
         username=cfg["agents"]["username"],
         default_channels=cfg["agents"]["default_channels"],
         env_file=cfg["agents"].get("env_file", ""),
-        claude_args=cfg["agents"].get("claude_args"),
-        mcp_server_cmd=cfg["agents"].get("mcp_server_cmd"),
+        default_type=cfg["agents"].get("default_type", "claude"),
         tmux_session=_get_tmux_session(ctx),
         state_file=state_file_path(project_name),
     )
@@ -189,6 +189,7 @@ def cmd_project_remove(name: str):
         mgr = AgentManager(
             irc_server=cfg["irc"]["server"], irc_port=cfg["irc"]["port"],
             irc_tls=cfg["irc"].get("tls", False),
+            irc_password=cfg["irc"].get("password", ""),
             username=cfg["agents"]["username"],
             default_channels=cfg["agents"]["default_channels"],
             state_file=state_file_path(name),
@@ -292,14 +293,14 @@ def cmd_agent_create(
     name: str = typer.Argument(..., help="Agent name"),
     workspace: Optional[str] = typer.Option(None, help="Custom workspace path"),
     channels: Optional[str] = typer.Option(None, help="Comma-separated channels to join"),
+    agent_type: Optional[str] = typer.Option(None, "--type", "-t", help="Template type (default: from config)"),
 ):
     """Create and launch a new agent."""
-
     mgr = _get_agent_manager(ctx)
     ch = [c.strip() for c in channels.split(",")] if channels else None
-    info = mgr.create(name, workspace=workspace, channels=ch)
+    info = mgr.create(name, workspace=workspace, channels=ch, agent_type=agent_type)
     scoped = mgr.scoped(name)
-    typer.echo(f"Created {scoped}")
+    typer.echo(f"Created {scoped} (type: {info['type']})")
     typer.echo(f"  pane: {info['pane_id']}")
     typer.echo(f"  workspace: {info['workspace']}")
 
