@@ -16,12 +16,21 @@ def server() -> libtmux.Server:
     return _server
 
 
+def get_or_create_session(name: str) -> Session:
+    """Get an existing tmux session by name, or create a new detached one."""
+    s = server()
+    session = s.sessions.get(session_name=name, default=None)
+    if session is not None:
+        return session
+    return s.new_session(session_name=name, detach=True)
+
+
 def get_session(name: str) -> Session:
     """Look up a tmux session by name. Raises KeyError if not found."""
-    try:
-        return server().sessions.get(session_name=name)
-    except Exception:
+    session = server().sessions.get(session_name=name, default=None)
+    if session is None:
         raise KeyError(f"tmux session not found: {name}")
+    return session
 
 
 def find_pane(session: Session, pane_id: str) -> Pane | None:

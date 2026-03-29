@@ -7,7 +7,7 @@ import time
 
 import libtmux
 
-from zchat.cli.tmux import get_session, find_pane, pane_alive
+from zchat.cli.tmux import get_or_create_session, find_pane, pane_alive
 
 
 class IrcManager:
@@ -24,7 +24,7 @@ class IrcManager:
     @property
     def tmux_session(self) -> libtmux.Session:
         if self._tmux_session is None:
-            self._tmux_session = get_session(self._tmux_session_name)
+            self._tmux_session = get_or_create_session(self._tmux_session_name)
         return self._tmux_session
 
     @property

@@ -3,12 +3,19 @@
 import os
 import shutil
 import tomllib
+import uuid
 
 ZCHAT_DIR = os.environ.get("ZCHAT_HOME", os.path.expanduser("~/.zchat"))
 
 
 def project_dir(name: str) -> str:
     return os.path.join(ZCHAT_DIR, "projects", name)
+
+
+def _generate_tmux_session_name(project_name: str) -> str:
+    """Generate a unique tmux session name for a project."""
+    short_id = uuid.uuid4().hex[:8]
+    return f"zchat-{short_id}-{project_name}"
 
 
 def create_project_config(name: str, server: str, port: int, tls: bool,
@@ -25,6 +32,7 @@ def create_project_config(name: str, server: str, port: int, tls: bool,
             "--dangerously-load-development-channels", "server:zchat-channel",
         ]
     args_toml = ", ".join(f'"{a}"' for a in claude_args)
+    tmux_session = _generate_tmux_session_name(name)
     config_content = f'''[irc]
 server = "{server}"
 port = {port}
@@ -36,6 +44,9 @@ default_channels = [{channels_toml}]
 username = "{nick}"
 env_file = "{env_file}"
 claude_args = [{args_toml}]
+
+[tmux]
+session = "{tmux_session}"
 '''
     with open(os.path.join(pdir, "config.toml"), "w") as f:
         f.write(config_content)
