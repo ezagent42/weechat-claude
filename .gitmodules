@@ -10,3 +10,6 @@
 [submodule "homebrew-zchat"]
 	path = homebrew-zchat
 	url = https://github.com/ezagent42/homebrew-zchat.git
+[submodule "ergo-inside"]
+	path = ergo-inside
+	url = https://github.com/ezagent42/ergo-inside.git
