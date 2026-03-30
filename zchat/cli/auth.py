@@ -58,6 +58,21 @@ def discover_oidc_endpoints(issuer: str, client: httpx.Client | None = None) -> 
     return resp.json()  # unreachable, but satisfies type checker
 
 
+def _extract_username(userinfo: dict) -> str:
+    """Extract username from OIDC userinfo with fallback chain.
+
+    Priority: username → preferred_username → name → email (local part) → sub
+    """
+    for field in ("username", "preferred_username", "name"):
+        val = userinfo.get(field)
+        if val:
+            return val
+    email = userinfo.get("email", "")
+    if email:
+        return email.split("@")[0]
+    return userinfo.get("sub", "")
+
+
 def device_code_flow(
     issuer: str,
     client_id: str,
@@ -113,7 +128,7 @@ def device_code_flow(
         "access_token": token_data["access_token"],
         "refresh_token": token_data.get("refresh_token", ""),
         "expires_at": time.time() + token_data.get("expires_in", 300),
-        "username": userinfo.get("username") or userinfo.get("preferred_username", ""),
+        "username": _extract_username(userinfo),
         "client_id": client_id,
         "token_endpoint": endpoints["token_endpoint"],
         "userinfo_endpoint": endpoints["userinfo_endpoint"],
