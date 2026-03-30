@@ -131,16 +131,25 @@ def cmd_project_create(name: str):
     proxy = typer.prompt("HTTP proxy (ip:port, leave empty for direct connection)",
                          default="", show_default=False)
 
-    # OIDC authentication
+    # Authentication
+    typer.echo("Authentication:")
+    typer.echo("  1) EZagent login (recommended)")
+    typer.echo("  2) Custom OIDC provider")
+    typer.echo("  3) None (manual nickname)")
+    auth_choice = typer.prompt("Choose", default="1")
     auth_provider = "none"
     auth_issuer = ""
     auth_client_id = ""
-    if typer.confirm("Enable OIDC authentication?", default=False):
+    if auth_choice == "1":
         auth_provider = "oidc"
-        auth_issuer = typer.prompt("OIDC issuer URL (e.g., https://keycloak.company.com/realms/zchat)")
-        auth_client_id = typer.prompt("OIDC client ID", default="zchat-cli")
+        auth_issuer = "https://6fzzkh.logto.app/"
+        auth_client_id = "t7ddhdfqrfgwpmounxdsx"
+    elif auth_choice == "2":
+        auth_provider = "oidc"
+        auth_issuer = typer.prompt("OIDC issuer URL")
+        auth_client_id = typer.prompt("OIDC client ID")
 
-    # Nickname — skip when OIDC enabled (username comes from Keycloak)
+    # Nickname — skip when OIDC enabled (username comes from IdP after auth login)
     if auth_provider == "oidc":
         nick = ""
     else:
