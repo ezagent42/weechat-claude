@@ -294,49 +294,32 @@ def cmd_set(
 # ============================================================
 
 @auth_app.command("login")
-def cmd_auth_login(ctx: typer.Context):
+def cmd_auth_login(
+    issuer: str = typer.Option("https://6fzzkh.logto.app/", help="OIDC issuer URL"),
+    client_id: str = typer.Option("t7ddhdfqrfgwpmounxdsx", help="OIDC client ID"),
+):
     """Authenticate via OIDC device code flow."""
-    # Check if already logged in
     from zchat.cli.auth import _global_auth_dir
-    existing = load_cached_token(_global_auth_dir())
+    auth_dir = _global_auth_dir()
+    existing = load_cached_token(auth_dir)
     if existing:
         typer.echo(f"Already logged in as: {existing.get('username', '?')} ({existing.get('email', '')})")
         typer.echo("Run 'zchat auth logout' first to re-login.")
         raise typer.Exit(0)
-    cfg = _get_config(ctx)
-    auth_cfg = cfg.get("auth", {})
-    if auth_cfg.get("provider") != "oidc":
-        typer.echo("Auth not configured. Set [auth] provider = 'oidc' in project config.")
-        raise typer.Exit(1)
-    issuer = auth_cfg["issuer"]
-    client_id = auth_cfg["client_id"]
-    if not issuer or not client_id:
-        typer.echo("Error: auth.issuer and auth.client_id must be set in config.")
-        raise typer.Exit(1)
-    irc = cfg.get("irc", {})
-    server = irc.get("server", "127.0.0.1")
-    if server not in ("127.0.0.1", "localhost", "::1") and not irc.get("tls", False):
-        typer.echo("WARNING: OIDC auth with remote IRC server without TLS is insecure!")
-        if not typer.confirm("Continue anyway?"):
-            raise typer.Exit(1)
     try:
         result = device_code_flow(issuer=issuer, client_id=client_id)
     except Exception as e:
         typer.echo(f"Login failed: {e}")
         raise typer.Exit(1)
-    from zchat.cli.auth import _global_auth_dir
-    save_token(_global_auth_dir(), result)
     email = result.get("email", result["username"])
     nick = email.split("@")[0] if "@" in email else email
     result["username"] = nick
-    save_token(_global_auth_dir(), result)
-    from zchat.cli.project import set_config_value
-    set_config_value(ctx.obj["project"], "agents.username", nick)
+    save_token(auth_dir, result)
     typer.echo(f"\nLogged in as: {nick} ({email})")
 
 
 @auth_app.command("status")
-def cmd_auth_status(ctx: typer.Context):
+def cmd_auth_status():
     """Show current authentication status."""
     from zchat.cli.auth import _global_auth_dir
     data = load_cached_token(_global_auth_dir())
@@ -350,19 +333,25 @@ def cmd_auth_status(ctx: typer.Context):
 
 
 @auth_app.command("refresh")
-def cmd_auth_refresh(ctx: typer.Context):
+def cmd_auth_refresh():
     """Manually refresh access token."""
-    cfg = _get_config(ctx)
-    auth_cfg = cfg.get("auth", {})
-    if auth_cfg.get("provider") != "oidc":
-        typer.echo("Auth not configured.")
+    import json
+    from zchat.cli.auth import _global_auth_dir
+    auth_path = os.path.join(_global_auth_dir(), "auth.json")
+    if not os.path.isfile(auth_path):
+        typer.echo("Not logged in. Run 'zchat auth login'.")
         raise typer.Exit(1)
-    from zchat.cli.auth import _global_auth_dir, discover_oidc_endpoints
-    endpoints = discover_oidc_endpoints(auth_cfg["issuer"])
+    with open(auth_path) as f:
+        data = json.load(f)
+    token_endpoint = data.get("token_endpoint", "")
+    client_id = data.get("client_id", "")
+    if not token_endpoint or not client_id:
+        typer.echo("Token data incomplete. Run 'zchat auth login' again.")
+        raise typer.Exit(1)
     result = refresh_token_if_needed(
         _global_auth_dir(),
-        token_endpoint=endpoints["token_endpoint"],
-        client_id=auth_cfg["client_id"],
+        token_endpoint=token_endpoint,
+        client_id=client_id,
     )
     if result:
         typer.echo(f"Token refreshed for {result['username']}")
@@ -372,7 +361,7 @@ def cmd_auth_refresh(ctx: typer.Context):
 
 
 @auth_app.command("logout")
-def cmd_auth_logout(ctx: typer.Context):
+def cmd_auth_logout():
     """Clear cached authentication tokens."""
     from zchat.cli.auth import _global_auth_dir
     auth_path = os.path.join(_global_auth_dir(), "auth.json")
