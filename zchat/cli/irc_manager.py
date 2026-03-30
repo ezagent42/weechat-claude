@@ -19,6 +19,7 @@ class IrcManager:
         self._tmux_session_name = tmux_session
         self._tmux_session: libtmux.Session | None = None
         self._state: dict = {}
+        self._auth_config = config.get("auth", {})
         self._load_state()
 
     @property
@@ -78,6 +79,10 @@ class IrcManager:
         with open(ergo_conf, 'w') as f:
             f.write(config_text)
 
+        # Inject auth-script config if OIDC is enabled
+        if self._auth_config.get("provider") == "oidc":
+            self._inject_auth_script(ergo_data_dir, ergo_conf)
+
         # Remove stale lock
         lock_file = os.path.join(ergo_data_dir, "ircd.lock")
         if os.path.exists(lock_file):
@@ -106,6 +111,50 @@ class IrcManager:
                         print(f"  {line.rstrip()}")
             except Exception:
                 pass
+
+    def _inject_auth_script(self, ergo_data_dir: str, ergo_conf: str):
+        """Inject auth-script and require-sasl settings into ergo config."""
+        import shutil
+        import sys as _sys
+        script_src = os.path.join(os.path.dirname(__file__), "ergo_auth_script.py")
+        script_dst = os.path.join(ergo_data_dir, "ergo_auth_script.py")
+        shutil.copy2(script_src, script_dst)
+        os.chmod(script_dst, 0o755)
+
+        from zchat.cli.auth import discover_oidc_endpoints
+        try:
+            endpoints = discover_oidc_endpoints(self._auth_config["issuer"])
+            config_file = os.path.join(ergo_data_dir, "auth_script_config.json")
+            import json as _json
+            with open(config_file, "w") as f:
+                _json.dump({"userinfo_url": endpoints["userinfo_endpoint"]}, f)
+        except Exception as e:
+            print(f"Warning: Could not discover OIDC endpoints: {e}")
+
+        python_path = _sys.executable
+
+        with open(ergo_conf) as f:
+            config_text = f.read()
+
+        import re
+        config_text = re.sub(
+            r'(auth-script:\s*\n\s*enabled:\s*)false',
+            r'\1true',
+            config_text,
+        )
+        config_text = re.sub(
+            r'(command:\s*)"[^"]*authenticate-irc-user"',
+            f'\\1"{python_path} {script_dst}"',
+            config_text,
+        )
+        config_text = re.sub(
+            r'(require-sasl:\s*\n\s*enabled:\s*)false',
+            r'\1true',
+            config_text,
+        )
+
+        with open(ergo_conf, 'w') as f:
+            f.write(config_text)
 
     def daemon_stop(self):
         """Stop local ergo IRC server (by PID or port)."""
