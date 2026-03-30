@@ -16,6 +16,7 @@ from zchat.cli.project import (
 )
 from zchat.cli.agent_manager import AgentManager
 from zchat.cli.irc_manager import IrcManager
+from zchat.cli.auth import device_code_flow, save_token, get_credentials, load_cached_token, refresh_token_if_needed
 
 app = typer.Typer(name="zchat", help="Claude Code agent lifecycle management")
 project_app = typer.Typer(help="Project configuration management")
@@ -24,6 +25,7 @@ irc_daemon_app = typer.Typer(help="Local ergo IRC server")
 agent_app = typer.Typer(help="Claude Code agent lifecycle")
 setup_app = typer.Typer(help="Install and configure components")
 template_app = typer.Typer(help="Agent template management")
+auth_app = typer.Typer(help="Authentication management")
 
 app.add_typer(project_app, name="project")
 app.add_typer(irc_app, name="irc")
@@ -31,6 +33,7 @@ irc_app.add_typer(irc_daemon_app, name="daemon")
 app.add_typer(agent_app, name="agent")
 app.add_typer(setup_app, name="setup")
 app.add_typer(template_app, name="template")
+app.add_typer(auth_app, name="auth")
 
 
 def _get_config(ctx: typer.Context) -> dict:
@@ -76,6 +79,7 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
         default_type=cfg["agents"].get("default_type", "claude"),
         tmux_session=_get_tmux_session(ctx),
         state_file=state_file_path(project_name),
+        project_dir=project_dir(project_name),
     )
 
 
@@ -123,10 +127,33 @@ def cmd_project_create(name: str):
         port = typer.prompt("IRC port", default=6667, type=int)
         tls = typer.confirm("TLS", default=False)
         password = typer.prompt("Password", default="", show_default=False)
-    nick = typer.prompt("Nickname", default=os.environ.get("USER", "user"))
     channels = typer.prompt("Default channels", default="#general")
     proxy = typer.prompt("HTTP proxy (ip:port, leave empty for direct connection)",
                          default="", show_default=False)
+
+    # Authentication
+    typer.echo("Authentication:")
+    typer.echo("  1) EZagent login (recommended)")
+    typer.echo("  2) Custom OIDC provider")
+    typer.echo("  3) None (manual nickname)")
+    auth_choice = typer.prompt("Choose", default="1")
+    auth_provider = "none"
+    auth_issuer = ""
+    auth_client_id = ""
+    if auth_choice == "1":
+        auth_provider = "oidc"
+        auth_issuer = "https://6fzzkh.logto.app/"
+        auth_client_id = "t7ddhdfqrfgwpmounxdsx"
+    elif auth_choice == "2":
+        auth_provider = "oidc"
+        auth_issuer = typer.prompt("OIDC issuer URL")
+        auth_client_id = typer.prompt("OIDC client ID")
+
+    # Nickname — skip when OIDC enabled (username comes from IdP after auth login)
+    if auth_provider == "oidc":
+        nick = ""
+    else:
+        nick = typer.prompt("Nickname", default=os.environ.get("USER", "user"))
 
     # Generate env file if proxy is set
     env_file = ""
@@ -141,11 +168,16 @@ def cmd_project_create(name: str):
 
     create_project_config(name, server=server, port=port, tls=tls,
                           password=password, nick=nick, channels=channels,
-                          env_file=env_file)
+                          env_file=env_file,
+                          auth_provider=auth_provider,
+                          auth_issuer=auth_issuer,
+                          auth_client_id=auth_client_id)
     typer.echo(f"\nProject '{name}' created at {pdir}/")
     typer.echo(f"Config saved to {pdir}/config.toml")
     if proxy:
         typer.echo(f"Proxy config saved to {pdir}/claude.local.env")
+    if auth_provider == "oidc":
+        typer.echo(f"\nOIDC auth configured. Run 'zchat auth login --project {name}' to authenticate.")
 
 @project_app.command("list")
 def cmd_project_list():
@@ -239,6 +271,97 @@ def cmd_set(
         raise typer.Exit(1)
     set_config_value(project_name, key, value)
     typer.echo(f"Set {key} = {value}")
+
+
+# ============================================================
+# auth commands
+# ============================================================
+
+@auth_app.command("login")
+def cmd_auth_login(ctx: typer.Context):
+    """Authenticate via OIDC device code flow."""
+    cfg = _get_config(ctx)
+    auth_cfg = cfg.get("auth", {})
+    if auth_cfg.get("provider") != "oidc":
+        typer.echo("Auth not configured. Set [auth] provider = 'oidc' in project config.")
+        raise typer.Exit(1)
+    issuer = auth_cfg["issuer"]
+    client_id = auth_cfg["client_id"]
+    if not issuer or not client_id:
+        typer.echo("Error: auth.issuer and auth.client_id must be set in config.")
+        raise typer.Exit(1)
+    irc = cfg.get("irc", {})
+    server = irc.get("server", "127.0.0.1")
+    if server not in ("127.0.0.1", "localhost", "::1") and not irc.get("tls", False):
+        typer.echo("WARNING: OIDC auth with remote IRC server without TLS is insecure!")
+        if not typer.confirm("Continue anyway?"):
+            raise typer.Exit(1)
+    try:
+        result = device_code_flow(issuer=issuer, client_id=client_id)
+    except Exception as e:
+        typer.echo(f"Login failed: {e}")
+        raise typer.Exit(1)
+    pdir = project_dir(ctx.obj["project"])
+    save_token(pdir, result)
+    # Write authenticated username back to config.toml
+    from zchat.cli.project import set_config_value
+    set_config_value(ctx.obj["project"], "agents.username", result["username"])
+    typer.echo(f"\nLogged in as: {result['username']}")
+
+
+@auth_app.command("status")
+def cmd_auth_status(ctx: typer.Context):
+    """Show current authentication status."""
+    cfg = _get_config(ctx)
+    if cfg.get("auth", {}).get("provider") != "oidc":
+        typer.echo("Auth provider: none")
+        return
+    pdir = project_dir(ctx.obj["project"])
+    data = load_cached_token(pdir)
+    if data:
+        import datetime
+        exp = datetime.datetime.fromtimestamp(data["expires_at"])
+        typer.echo(f"Auth provider: oidc")
+        typer.echo(f"Username: {data['username']}")
+        typer.echo(f"Token expires: {exp.isoformat()}")
+    else:
+        typer.echo("Auth provider: oidc")
+        typer.echo("Status: not logged in (run 'zchat auth login')")
+
+
+@auth_app.command("refresh")
+def cmd_auth_refresh(ctx: typer.Context):
+    """Manually refresh access token."""
+    cfg = _get_config(ctx)
+    auth_cfg = cfg.get("auth", {})
+    if auth_cfg.get("provider") != "oidc":
+        typer.echo("Auth not configured.")
+        raise typer.Exit(1)
+    pdir = project_dir(ctx.obj["project"])
+    from zchat.cli.auth import discover_oidc_endpoints
+    endpoints = discover_oidc_endpoints(auth_cfg["issuer"])
+    result = refresh_token_if_needed(
+        pdir,
+        token_endpoint=endpoints["token_endpoint"],
+        client_id=auth_cfg["client_id"],
+    )
+    if result:
+        typer.echo(f"Token refreshed for {result['username']}")
+    else:
+        typer.echo("Refresh failed. Run 'zchat auth login'.")
+        raise typer.Exit(1)
+
+
+@auth_app.command("logout")
+def cmd_auth_logout(ctx: typer.Context):
+    """Clear cached authentication tokens."""
+    pdir = project_dir(ctx.obj["project"])
+    auth_path = os.path.join(pdir, "auth.json")
+    if os.path.isfile(auth_path):
+        os.remove(auth_path)
+        typer.echo("Logged out.")
+    else:
+        typer.echo("Not logged in.")
 
 
 # ============================================================
