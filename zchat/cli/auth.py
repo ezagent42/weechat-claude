@@ -58,6 +58,20 @@ def discover_oidc_endpoints(issuer: str, client: httpx.Client | None = None) -> 
     return resp.json()  # unreachable, but satisfies type checker
 
 
+def _print_qr(url: str):
+    """Print QR code to terminal using segno (if available) or skip."""
+    try:
+        import segno
+        import io
+        qr = segno.make(url)
+        buf = io.StringIO()
+        qr.terminal(out=buf, compact=True)
+        print(buf.getvalue())
+    except ImportError:
+        # segno not installed — just show URL
+        print(f"\n  {url}\n")
+
+
 def _extract_username(userinfo: dict) -> str:
     """Extract username from OIDC userinfo with fallback chain.
 
@@ -90,8 +104,14 @@ def device_code_flow(
     resp.raise_for_status()
     device = resp.json()
 
-    print(f"\nOpen this URL in your browser:\n  {device['verification_uri']}")
-    print(f"\nEnter code: {device['user_code']}\n")
+    # Show verification URL + QR code if verification_uri_complete is available
+    complete_uri = device.get("verification_uri_complete", "")
+    if complete_uri:
+        _print_qr(complete_uri)
+        print(f"  Scan the QR code, or open: {complete_uri}\n")
+    else:
+        print(f"\nOpen this URL in your browser:\n  {device['verification_uri']}")
+        print(f"\nEnter code: {device['user_code']}\n")
     print("Waiting for authentication...")
 
     interval = device.get("interval", 5)
