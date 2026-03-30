@@ -16,7 +16,7 @@ from zchat.cli.project import (
 )
 from zchat.cli.agent_manager import AgentManager
 from zchat.cli.irc_manager import IrcManager
-from zchat.cli.auth import device_code_flow, save_token, get_credentials, load_cached_token, refresh_token_if_needed
+from zchat.cli.auth import device_code_flow, save_token, load_cached_token, refresh_token_if_needed
 
 app = typer.Typer(name="zchat", help="Claude Code agent lifecycle management")
 project_app = typer.Typer(help="Project configuration management")
@@ -301,8 +301,8 @@ def cmd_auth_login(ctx: typer.Context):
     except Exception as e:
         typer.echo(f"Login failed: {e}")
         raise typer.Exit(1)
-    pdir = project_dir(ctx.obj["project"])
-    save_token(pdir, result)
+    from zchat.cli.auth import _global_auth_dir
+    save_token(_global_auth_dir(), result)
     # Write authenticated username back to config.toml
     from zchat.cli.project import set_config_value
     set_config_value(ctx.obj["project"], "agents.username", result["username"])
@@ -312,21 +312,15 @@ def cmd_auth_login(ctx: typer.Context):
 @auth_app.command("status")
 def cmd_auth_status(ctx: typer.Context):
     """Show current authentication status."""
-    cfg = _get_config(ctx)
-    if cfg.get("auth", {}).get("provider") != "oidc":
-        typer.echo("Auth provider: none")
-        return
-    pdir = project_dir(ctx.obj["project"])
-    data = load_cached_token(pdir)
+    from zchat.cli.auth import _global_auth_dir
+    data = load_cached_token(_global_auth_dir())
     if data:
         import datetime
         exp = datetime.datetime.fromtimestamp(data["expires_at"])
-        typer.echo(f"Auth provider: oidc")
         typer.echo(f"Username: {data['username']}")
         typer.echo(f"Token expires: {exp.isoformat()}")
     else:
-        typer.echo("Auth provider: oidc")
-        typer.echo("Status: not logged in (run 'zchat auth login')")
+        typer.echo("Not logged in. Run 'zchat auth login'.")
 
 
 @auth_app.command("refresh")
@@ -337,11 +331,10 @@ def cmd_auth_refresh(ctx: typer.Context):
     if auth_cfg.get("provider") != "oidc":
         typer.echo("Auth not configured.")
         raise typer.Exit(1)
-    pdir = project_dir(ctx.obj["project"])
-    from zchat.cli.auth import discover_oidc_endpoints
+    from zchat.cli.auth import _global_auth_dir, discover_oidc_endpoints
     endpoints = discover_oidc_endpoints(auth_cfg["issuer"])
     result = refresh_token_if_needed(
-        pdir,
+        _global_auth_dir(),
         token_endpoint=endpoints["token_endpoint"],
         client_id=auth_cfg["client_id"],
     )
@@ -355,8 +348,8 @@ def cmd_auth_refresh(ctx: typer.Context):
 @auth_app.command("logout")
 def cmd_auth_logout(ctx: typer.Context):
     """Clear cached authentication tokens."""
-    pdir = project_dir(ctx.obj["project"])
-    auth_path = os.path.join(pdir, "auth.json")
+    from zchat.cli.auth import _global_auth_dir
+    auth_path = os.path.join(_global_auth_dir(), "auth.json")
     if os.path.isfile(auth_path):
         os.remove(auth_path)
         typer.echo("Logged out.")

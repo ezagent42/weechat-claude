@@ -9,17 +9,24 @@ import httpx
 AUTH_FILE = "auth.json"
 
 
-def save_token(project_dir: str, token_data: dict):
+def _global_auth_dir() -> str:
+    """Return the global zchat directory for auth storage (~/.zchat/)."""
+    from zchat.cli.project import ZCHAT_DIR
+    return ZCHAT_DIR
+
+
+def save_token(base_dir: str, token_data: dict):
     """Save token data to auth.json with restricted permissions (0600)."""
-    auth_path = os.path.join(project_dir, AUTH_FILE)
+    os.makedirs(base_dir, exist_ok=True)
+    auth_path = os.path.join(base_dir, AUTH_FILE)
     fd = os.open(auth_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(token_data, f, indent=2)
 
 
-def load_cached_token(project_dir: str) -> dict | None:
+def load_cached_token(base_dir: str) -> dict | None:
     """Load cached token if it exists and is not expired. Returns None otherwise."""
-    auth_path = os.path.join(project_dir, AUTH_FILE)
+    auth_path = os.path.join(base_dir, AUTH_FILE)
     if not os.path.isfile(auth_path):
         return None
     try:
@@ -104,13 +111,13 @@ def device_code_flow(
 
 
 def refresh_token_if_needed(
-    project_dir: str,
+    base_dir: str,
     token_endpoint: str,
     client_id: str,
     http_client: httpx.Client | None = None,
 ) -> dict | None:
     """Refresh the access token using the refresh_token. Returns updated token data or None."""
-    auth_path = os.path.join(project_dir, AUTH_FILE)
+    auth_path = os.path.join(base_dir, AUTH_FILE)
     if not os.path.isfile(auth_path):
         return None
     with open(auth_path) as f:
@@ -130,24 +137,27 @@ def refresh_token_if_needed(
     data["access_token"] = new_tokens["access_token"]
     data["refresh_token"] = new_tokens.get("refresh_token", refresh_tok)
     data["expires_at"] = time.time() + new_tokens.get("expires_in", 300)
-    save_token(project_dir, data)
+    save_token(base_dir, data)
     return data
 
 
 def get_credentials(
-    project_dir: str,
+    base_dir: str | None = None,
     client_id: str = "",
     http_client: httpx.Client | None = None,
 ) -> tuple[str, str] | None:
     """Return (username, access_token) if valid credentials exist.
 
+    Uses global ~/.zchat/auth.json by default.
     Auto-refreshes if access_token is expired but refresh_token + token_endpoint are available.
     client_id is read from stored auth.json if not provided (saved during device_code_flow).
     Returns None if no valid credentials can be obtained.
     """
-    data = load_cached_token(project_dir)
+    if base_dir is None:
+        base_dir = _global_auth_dir()
+    data = load_cached_token(base_dir)
     if data is None:
-        auth_path = os.path.join(project_dir, AUTH_FILE)
+        auth_path = os.path.join(base_dir, AUTH_FILE)
         if not os.path.isfile(auth_path):
             return None
         with open(auth_path) as f:
@@ -156,7 +166,7 @@ def get_credentials(
         cid = client_id or stored.get("client_id", "")
         if token_endpoint and cid and stored.get("refresh_token"):
             data = refresh_token_if_needed(
-                project_dir, token_endpoint=token_endpoint,
+                base_dir, token_endpoint=token_endpoint,
                 client_id=cid, http_client=http_client,
             )
         if data is None:

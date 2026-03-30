@@ -140,13 +140,13 @@ class AgentManager:
             "auth_token_file": "",
         }
         if self.project_dir:
-            from zchat.cli.auth import get_credentials
-            creds = get_credentials(self.project_dir)
+            from zchat.cli.auth import get_credentials, _global_auth_dir
+            creds = get_credentials()
             if creds:
                 _, sasl_pass = creds
                 context["irc_sasl_user"] = name
                 context["irc_sasl_pass"] = sasl_pass
-                context["auth_token_file"] = os.path.join(self.project_dir, "auth.json")
+                context["auth_token_file"] = os.path.join(_global_auth_dir(), "auth.json")
         return context
 
     def _spawn_tmux(self, name: str, workspace: str, agent_type: str,

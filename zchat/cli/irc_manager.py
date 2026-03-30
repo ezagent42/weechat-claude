@@ -189,8 +189,7 @@ class IrcManager:
         sasl_cmds = ""
         if self._auth_config.get("provider") == "oidc":
             from zchat.cli.auth import get_credentials
-            pdir = os.path.dirname(self._state_file)
-            creds = get_credentials(pdir, client_id=self._auth_config.get("client_id", ""))
+            creds = get_credentials(client_id=self._auth_config.get("client_id", ""))
             if creds:
                 sasl_user, sasl_pass = creds
                 nick = sasl_user
