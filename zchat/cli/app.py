@@ -289,6 +289,13 @@ def cmd_set(
 @auth_app.command("login")
 def cmd_auth_login(ctx: typer.Context):
     """Authenticate via OIDC device code flow."""
+    # Check if already logged in
+    from zchat.cli.auth import _global_auth_dir
+    existing = load_cached_token(_global_auth_dir())
+    if existing:
+        typer.echo(f"Already logged in as: {existing.get('username', '?')} ({existing.get('email', '')})")
+        typer.echo("Run 'zchat auth logout' first to re-login.")
+        raise typer.Exit(0)
     cfg = _get_config(ctx)
     auth_cfg = cfg.get("auth", {})
     if auth_cfg.get("provider") != "oidc":
