@@ -126,6 +126,13 @@ mcp_server_cmd = ["zchat-channel"]  # 开发时可用 ["uv", "run", "--project",
 - channel-server 运行在 IRC reactor 线程中，通过 asyncio.Queue 桥接到 MCP
 - tmux session 名为 `zchat-{project}`（如 `zchat-local`），避免多项目冲突
 
+### 发布
+
+PR 合并后需更新 PyPI 和 Homebrew，详见 [docs/releasing.md](docs/releasing.md)。
+
+**快速参考：** 打 tag → CI 发布 PyPI → 更新 Homebrew formula → `brew upgrade zchat`。
+除非明确说明，只推 dev 版本（`X.Y.Z.devN`），不 bump 主版本号。
+
 ### Git Submodules
 
 三个组件是独立仓库，通过 git submodule 引入：
