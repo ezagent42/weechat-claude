@@ -70,6 +70,37 @@ def test_cleanup_workspace_only_removes_ready_marker(tmp_path):
     assert not ready.exists(), "ready marker should be deleted"
 
 
+def test_wait_for_ready_detects_marker(tmp_path):
+    """_wait_for_ready should return True when .ready file appears."""
+    import threading
+    mgr = _make_manager(
+        state_file=str(tmp_path / "agents.json"),
+        project_dir=str(tmp_path),
+    )
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+
+    def touch_ready():
+        import time; time.sleep(0.5)
+        (agents_dir / "alice-helper.ready").touch()
+
+    t = threading.Thread(target=touch_ready, daemon=True)
+    t.start()
+    result = mgr._wait_for_ready("alice-helper", timeout=5)
+    assert result is True
+
+
+def test_wait_for_ready_timeout(tmp_path):
+    """_wait_for_ready should return False on timeout."""
+    mgr = _make_manager(
+        state_file=str(tmp_path / "agents.json"),
+        project_dir=str(tmp_path),
+    )
+    (tmp_path / "agents").mkdir()
+    result = mgr._wait_for_ready("alice-helper", timeout=0.5)
+    assert result is False
+
+
 def test_agent_state_persistence(tmp_path):
     state_file = str(tmp_path / "agents.json")
     mgr = _make_manager(state_file=state_file)

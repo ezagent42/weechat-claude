@@ -5,6 +5,7 @@ import os
 import shlex
 import shutil
 import tempfile
+import threading
 import time
 
 import libtmux
@@ -72,6 +73,13 @@ class AgentManager:
             "created_at": time.time(),
             "channels": channels,
         }
+        self._save_state()
+
+        # Wait for ready marker (SessionStart hook)
+        if self._wait_for_ready(name, timeout=60):
+            self._agents[name]["status"] = "running"
+        else:
+            self._agents[name]["status"] = "error"
         self._save_state()
         return self._agents[name]
 
@@ -178,6 +186,8 @@ class AgentManager:
         window = self.tmux_session.new_window(
             window_name=name, window_shell=cmd, attach=False,
         )
+        # Start background confirmation polling
+        self._auto_confirm_startup(window.window_name)
         return window.window_name
 
     def _force_stop(self, name: str):
@@ -227,6 +237,50 @@ class AgentManager:
                 ws = agent.get("workspace", "")
                 if ws.startswith(tempfile.gettempdir()):
                     shutil.rmtree(ws, ignore_errors=True)
+
+    def _wait_for_ready(self, name: str, timeout: int = 60) -> bool:
+        """Poll for .agents/<name>.ready file. Returns True if found within timeout."""
+        if not self.project_dir:
+            return True
+        ready_path = os.path.join(self.project_dir, "agents", f"{name}.ready")
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if os.path.isfile(ready_path):
+                return True
+            time.sleep(0.5)
+        return False
+
+    def _auto_confirm_startup(self, window_name: str, timeout: int = 60):
+        """Background thread: poll capture-pane for confirmation prompts, send Enter."""
+        from zchat.cli.tmux import find_window
+
+        def _poll():
+            deadline = time.time() + timeout
+            confirm_patterns = ["I trust this folder", "local development", "Enter to confirm"]
+            confirmed: set[str] = set()
+            while time.time() < deadline:
+                window = find_window(self.tmux_session, window_name)
+                if not window or not window.active_pane:
+                    time.sleep(0.5)
+                    continue
+                try:
+                    lines = window.active_pane.capture_pane()
+                    content = "\n".join(lines)
+                    sent = False
+                    for pattern in confirm_patterns:
+                        if pattern in content and pattern not in confirmed:
+                            window.active_pane.send_keys("", enter=True)
+                            confirmed.add(pattern)
+                            sent = True
+                            time.sleep(1)
+                            break
+                    if not sent:
+                        time.sleep(0.5)
+                except Exception:
+                    time.sleep(0.5)
+
+        thread = threading.Thread(target=_poll, daemon=True)
+        thread.start()
 
     def _check_alive(self, name: str) -> str:
         from zchat.cli.tmux import window_alive
