@@ -259,8 +259,8 @@ def pytest_collection_modifyitems(items):
 | `test_irc_stop_weechat` | 停止 WeeChat |
 | `test_irc_status_weechat_stopped` | status 确认 weechat stopped |
 | `test_irc_start_weechat_again` | 重新启动 WeeChat（为后续 agent 测试准备） |
-| `test_irc_daemon_stop` | 停止 ergo daemon，验证端口释放 |
-| `test_irc_daemon_restart` | 重新启动 ergo（为后续 agent 测试准备） |
+
+注：ergo daemon stop/restart 测试放在 `test_08_shutdown.py` 中，因为停止 ergo 会断开 session-scoped `irc_probe` 的持久连接，影响后续 agent 测试的 `wait_for_message()`。
 
 ### `test_04_agent.py` — Agent 完整生命周期
 
@@ -299,7 +299,9 @@ def pytest_collection_modifyitems(items):
 
 | 用例 | 说明 |
 |------|------|
-| `test_shutdown` | `zchat shutdown`，验证所有 agent 下线、ergo 停止 |
+| `test_irc_daemon_stop` | 停止 ergo daemon，验证端口释放 |
+| `test_irc_daemon_restart` | 重新启动 ergo，验证 start-after-stop |
+| `test_shutdown` | `zchat shutdown`，验证全量停止 |
 | `test_irc_status_after_shutdown` | 确认一切已清理 |
 
 ## pytest mark 与运行方式
