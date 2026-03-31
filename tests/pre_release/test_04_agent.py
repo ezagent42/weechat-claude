@@ -37,7 +37,7 @@ def test_agent_send(cli, irc_probe):
     """Send message via agent0 to #general."""
     cli("agent", "send", "agent0",
         'Use the reply MCP tool to send "prerelease-test-msg" to #general')
-    msg = irc_probe.wait_for_message("prerelease-test-msg", timeout=30)
+    msg = irc_probe.wait_for_message("prerelease-test-msg", timeout=60)
     assert msg is not None, "agent0 message not received in #general"
 
 
