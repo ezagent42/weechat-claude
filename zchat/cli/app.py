@@ -615,7 +615,7 @@ def cmd_agent_restart(ctx: typer.Context, name: str = typer.Argument(...)):
 
 @app.command("shutdown")
 def cmd_shutdown(ctx: typer.Context):
-    """Stop all agents + WeeChat + ergo."""
+    """Stop all agents + WeeChat + ergo + tmux session."""
     try:
         mgr = _get_agent_manager(ctx)
         agents = mgr.list_agents()
@@ -630,6 +630,14 @@ def cmd_shutdown(ctx: typer.Context):
         irc.stop_weechat()
         irc.daemon_stop()
     except (SystemExit, Exception):
+        pass
+    # Kill tmux session
+    try:
+        session_name = _get_tmux_session(ctx)
+        from zchat.cli.tmux import get_session
+        session = get_session(session_name)
+        session.kill()
+    except (KeyError, SystemExit, Exception):
         pass
     typer.echo("Shutdown complete.")
 
