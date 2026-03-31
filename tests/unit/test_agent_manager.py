@@ -32,7 +32,7 @@ def test_create_workspace_exists():
 
 def test_build_env_context():
     """_build_env_context renders all required placeholders."""
-    mgr = _make_manager()
+    mgr = _make_manager(project_dir="/tmp/test-project")
     ctx = mgr._build_env_context("alice-bot", "/tmp/ws", ["#general", "#dev"])
     assert ctx["agent_name"] == "alice-bot"
     assert ctx["irc_server"] == "localhost"
@@ -40,6 +40,7 @@ def test_build_env_context():
     assert ctx["irc_channels"] == "general,dev"
     assert ctx["irc_tls"] == "false"
     assert ctx["workspace"] == "/tmp/ws"
+    assert ctx["zchat_project_dir"] == "/tmp/test-project"
 
 
 def test_create_workspace_persistent(tmp_path):
@@ -74,10 +75,10 @@ def test_agent_state_persistence(tmp_path):
     mgr = _make_manager(state_file=state_file)
     mgr._agents["alice-helper"] = {
         "type": "claude",
-        "workspace": "/tmp/x", "pane_id": "%42", "status": "running",
+        "workspace": "/tmp/x", "window_name": "alice-helper", "status": "running",
         "created_at": 0, "channels": ["#general"],
     }
     mgr._save_state()
     mgr2 = _make_manager(state_file=state_file)
     assert "alice-helper" in mgr2._agents
-    assert mgr2._agents["alice-helper"]["type"] == "claude"
+    assert mgr2._agents["alice-helper"]["window_name"] == "alice-helper"

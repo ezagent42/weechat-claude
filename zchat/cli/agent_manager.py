@@ -4,13 +4,12 @@ import json
 import os
 import shlex
 import shutil
-import subprocess
 import tempfile
 import time
 
 import libtmux
 
-from zchat.cli.tmux import get_or_create_session, find_pane, pane_alive
+from zchat.cli.tmux import get_or_create_session, pane_alive
 from zchat.cli.template_loader import load_template, render_env, get_start_script, _parse_env_file
 from zchat_protocol.naming import scoped_name, AGENT_SEPARATOR
 
@@ -63,12 +62,12 @@ class AgentManager:
         channels = channels or list(self.default_channels)
         agent_workspace = workspace or self._create_workspace(name)
 
-        pane_id = self._spawn_tmux(name, agent_workspace, agent_type, channels)
+        window_name = self._spawn_tmux(name, agent_workspace, agent_type, channels)
 
         self._agents[name] = {
             "type": agent_type,
             "workspace": agent_workspace,
-            "pane_id": pane_id,
+            "window_name": window_name,
             "status": "starting",
             "created_at": time.time(),
             "channels": channels,
@@ -138,6 +137,7 @@ class AgentManager:
             "irc_tls": str(self.irc_tls).lower(),
             "irc_password": self.irc_password,
             "workspace": workspace,
+            "zchat_project_dir": self.project_dir,
             "irc_sasl_user": "",
             "irc_sasl_pass": "",
             "auth_token_file": "",
@@ -166,7 +166,7 @@ class AgentManager:
 
         start_script = get_start_script(agent_type)
 
-        # Write env to a temp file to avoid shell quoting issues
+        # Write env to workspace
         env_file_path = os.path.join(workspace, ".zchat-env")
         with open(env_file_path, "w") as f:
             for k, v in env.items():
@@ -174,23 +174,22 @@ class AgentManager:
 
         cmd = f"cd '{workspace}' && source .zchat-env && bash '{start_script}'"
 
-        window = self.tmux_session.active_window
-        pane = window.split(attach=False, direction=libtmux.constants.PaneDirection.Below, shell=cmd)
-        pane_id = pane.pane_id
-        pane.cmd("select-pane", "-T", f"agent: {name}")
-        # Auto-confirm development channels prompt after 3s (needed for Claude)
-        subprocess.Popen(
-            ["bash", "-c", f"sleep 3 && tmux send-keys -t {pane_id} Enter"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        # Create dedicated window (not pane) for this agent
+        window = self.tmux_session.new_window(
+            window_name=name, window_shell=cmd, attach=False,
         )
-        return pane_id
+        return window.window_name
 
     def _force_stop(self, name: str):
+        from zchat.cli.tmux import find_window, window_alive
         agent = self._agents.get(name)
-        if not agent or not agent.get("pane_id"):
+        if not agent:
             return
-        pane = find_pane(self.tmux_session, agent["pane_id"])
-        if not pane:
+        wname = agent.get("window_name")
+        if not wname:
+            return
+        window = find_window(self.tmux_session, wname)
+        if not window:
             return
 
         agent_type = agent.get("type", self.default_type)
@@ -201,15 +200,17 @@ class AgentManager:
             pre_stop = ""
 
         if pre_stop:
-            pane.send_keys(pre_stop, enter=True)
-            # Poll for up to 5 seconds
-            for _ in range(10):
+            pane = window.active_pane
+            if pane:
+                pane.send_keys(pre_stop, enter=True)
+            # Poll for up to 10 seconds
+            for _ in range(20):
                 time.sleep(0.5)
-                if not pane_alive(self.tmux_session, agent["pane_id"]):
+                if not window_alive(self.tmux_session, wname):
                     return
-        # Kill pane as fallback
+        # Kill window as fallback
         try:
-            pane.cmd("kill-pane")
+            window.kill()
         except Exception:
             pass
 
@@ -228,24 +229,31 @@ class AgentManager:
                     shutil.rmtree(ws, ignore_errors=True)
 
     def _check_alive(self, name: str) -> str:
+        from zchat.cli.tmux import window_alive
         agent = self._agents.get(name)
-        if not agent or not agent.get("pane_id"):
+        if not agent:
             return "offline"
-        if pane_alive(self.tmux_session, agent["pane_id"]):
-            return "running"
+        # Support both new (window_name) and legacy (pane_id) state
+        wname = agent.get("window_name")
+        if wname:
+            return "running" if window_alive(self.tmux_session, wname) else "offline"
+        pid = agent.get("pane_id")
+        if pid:
+            return "running" if pane_alive(self.tmux_session, pid) else "offline"
         return "offline"
 
     def send(self, name: str, text: str):
-        """Send text to agent's tmux pane."""
+        """Send text to agent's tmux window."""
+        from zchat.cli.tmux import find_window
         name = self.scoped(name)
         agent = self._agents.get(name)
         if not agent:
             raise ValueError(f"Unknown agent: {name}")
         if self._check_alive(name) != "running":
             raise ValueError(f"{name} is not running")
-        pane = find_pane(self.tmux_session, agent["pane_id"])
-        if pane:
-            pane.send_keys(text, enter=True)
+        window = find_window(self.tmux_session, agent["window_name"])
+        if window and window.active_pane:
+            window.active_pane.send_keys(text, enter=True)
 
     def _load_state(self):
         if os.path.isfile(self._state_file):
