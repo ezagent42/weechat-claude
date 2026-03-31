@@ -119,7 +119,7 @@ def test_send_succeeds_when_ready(tmp_path):
     mock_window = MagicMock()
     mock_window.active_pane = mock_pane
     with patch.object(mgr, "_check_alive", return_value="running"), \
-         patch("zchat.cli.agent_manager.find_window", return_value=mock_window):
+         patch("zchat.cli.tmux.find_window", return_value=mock_window):
         mgr.send("helper", "hello")
     mock_pane.send_keys.assert_called_once_with("hello", enter=True)
 
@@ -159,7 +159,7 @@ def test_send_raises_on_missing_window(tmp_path):
     }
     from unittest.mock import patch
     with patch.object(mgr, "_check_alive", return_value="running"), \
-         patch("zchat.cli.agent_manager.find_window", return_value=None):
+         patch("zchat.cli.tmux.find_window", return_value=None):
         with _pytest.raises(ValueError, match="window not found"):
             mgr.send("helper", "hello")
 
