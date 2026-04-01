@@ -342,21 +342,36 @@ def cmd_set(
 def cmd_auth_login(
     issuer: str = typer.Option("https://6fzzkh.logto.app/", help="OIDC issuer URL"),
     client_id: str = typer.Option("t7ddhdfqrfgwpmounxdsx", help="OIDC client ID"),
+    method: str = typer.Option("oidc", help="Auth method: oidc or local"),
+    username: str = typer.Option("", help="Username for local method"),
 ):
-    """Authenticate via OIDC device code flow."""
-    from zchat.cli.auth import _global_auth_dir
+    """Authenticate via OIDC device code flow or set local username."""
+    from zchat.cli.auth import _global_auth_dir, _sanitize_irc_nick
     auth_dir = _global_auth_dir()
     existing = load_cached_token(auth_dir)
     if existing:
         typer.echo(f"Already logged in as: {existing.get('username', '?')} ({existing.get('email', '')})")
         typer.echo("Run 'zchat auth logout' first to re-login.")
         raise typer.Exit(0)
+
+    if method == "local":
+        if not username:
+            typer.echo("Error: --username is required for --method local")
+            raise typer.Exit(1)
+        nick = _sanitize_irc_nick(username)
+        if not nick:
+            typer.echo(f"Error: '{username}' is not a valid IRC nick")
+            raise typer.Exit(1)
+        save_token(auth_dir, {"username": nick})
+        typer.echo(f"Username set: {nick}")
+        return
+
+    # OIDC device code flow (default)
     try:
         result = device_code_flow(issuer=issuer, client_id=client_id)
     except Exception as e:
         typer.echo(f"Login failed: {e}")
         raise typer.Exit(1)
-    from zchat.cli.auth import _sanitize_irc_nick
     email = result.get("email", result["username"])
     nick = _sanitize_irc_nick(email.split("@")[0] if "@" in email else email)
     result["username"] = nick
