@@ -19,13 +19,27 @@ Extracted from `server.py` hardcoded string into a standalone markdown file. Con
 
 1. **Message format** — How notifications arrive (`<channel>` tags, `chat_id` conventions)
 2. **Owner detection** — Agent name prefix determines the owner (e.g., `alice-agent0` → owner is `alice`)
-3. **Message handling strategy:**
-   - **Default behavior: inline quick response** — 收到消息时，像处理"顺便说一下"的中断一样，用 reply tool 快速回应，不中断当前任务。类似 Claude Code 处理用户中途插入消息的方式。
-   - **Owner DM（agent 名字前缀用户）** → 高优先级，立即 inline 回复
-   - **Other user DM** → 正常优先级，inline 回复
-   - **Channel @mention** → 在频道上下文中 inline 回复
-   - **System messages（`__zchat_sys:`）** → 立即处理
-   - **是否需要深入处理** → 由 `soul.md` 角色定义决定。instructions.md 不硬编码深入处理的判断标准，只提供 quick response 的默认行为。soul.md 可以覆盖此默认行为（例如定义"收到代码审查请求时，暂停当前任务全力处理"）。
+3. **Message handling strategy — subagent dispatch model:**
+
+   **Why subagent, not inline response:** 主 agent 可能正在执行长时间的 tool use（跑测试、大量文件操作等），期间无法被中断。如果用 inline response，用户要等 tool use 完成后才能收到回复，可能等待数分钟。Subagent 可以立即并行响应。
+
+   **Default behavior:** 收到 IRC 消息时，使用 Claude Code 的 Agent tool spawn 一个 subagent 处理回复。主 agent 不中断当前工作。
+
+   Subagent 的上下文：
+   - 消息内容本身（来自谁、说了什么）
+   - `soul.md`（角色定义，由 subagent 自行 Read）
+   - 可用工具：reply tool（发送 IRC 回复）
+   - 不包含主 agent 的完整对话历史（这是 subagent 的固有限制）
+
+   **Message priority:**
+   - **Owner DM（agent 名字前缀用户）** → 高优先级，立即 dispatch subagent
+   - **Other user DM** → 正常优先级，dispatch subagent
+   - **Channel @mention** → dispatch subagent，回复到对应频道
+   - **System messages（`__zchat_sys:`）** → 主 agent 直接处理（不用 subagent，系统消息需要主 agent 状态）
+
+   **是否需要深入处理** → 由 `soul.md` 角色定义决定。instructions.md 只定义 "spawn subagent 快速回复" 的默认行为。soul.md 可以覆盖（例如"收到代码审查请求时，暂停当前任务全力处理"）。
+
+   **Idle 状态优化:** 如果主 agent 空闲（无进行中的任务），可以直接回复而不 spawn subagent，避免不必要的 token 开销。
 4. **Slash command reference** (brief table)
 5. **SOUL file pointer** — instructs Claude to `Read ./soul.md` at session start for role/style guidance, and re-read when encountering unfamiliar situations
 
