@@ -85,7 +85,7 @@ def project(cli, e2e_port, tmux_session):
         "--port", str(e2e_port),
         "--channels", "#general",
         "--agent-type", "claude",
-        "--proxy", "",
+        "--proxy", "127.0.0.1:7897",
     )
     # Set the tmux session name in config to match our test session
     cli("set", "tmux.session", tmux_session)
