@@ -66,6 +66,7 @@ def _get_irc_manager(ctx: typer.Context) -> IrcManager:
 
 
 def _get_agent_manager(ctx: typer.Context) -> AgentManager:
+    from zchat.cli.auth import get_username
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
     return AgentManager(
@@ -73,7 +74,7 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
         irc_port=cfg["irc"]["port"],
         irc_tls=cfg["irc"].get("tls", False),
         irc_password=cfg["irc"].get("password", ""),
-        username=cfg["agents"]["username"],
+        username=get_username(),
         default_channels=cfg["agents"]["default_channels"],
         env_file=cfg["agents"].get("env_file", ""),
         default_type=cfg["agents"].get("default_type", "claude"),
@@ -280,12 +281,13 @@ def cmd_project_remove(name: str):
         raise typer.Exit(1)
     # Safety: check for running agents
     try:
+        from zchat.cli.auth import get_username
         cfg = load_project_config(name)
         mgr = AgentManager(
             irc_server=cfg["irc"]["server"], irc_port=cfg["irc"]["port"],
             irc_tls=cfg["irc"].get("tls", False),
             irc_password=cfg["irc"].get("password", ""),
-            username=cfg["agents"]["username"],
+            username=get_username(),
             default_channels=cfg["agents"]["default_channels"],
             state_file=state_file_path(name),
         )
@@ -293,7 +295,7 @@ def cmd_project_remove(name: str):
         if running:
             typer.echo(f"Error: Running agents: {', '.join(running)}. Stop them first.")
             raise typer.Exit(1)
-    except FileNotFoundError:
+    except (FileNotFoundError, RuntimeError):
         pass
     remove_project(name)
     typer.echo(f"Project '{name}' removed.")
