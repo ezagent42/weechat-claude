@@ -163,3 +163,43 @@ def irc_probe(ergo_server):
     time.sleep(1)
     yield probe
     probe.disconnect()
+
+
+@pytest.fixture(scope="session")
+def remote_irc_probe():
+    """IRC probe connected to remote ergo (TLS+SASL). None if unavailable."""
+    import json, socket
+    from zchat.cli.auth import get_credentials, get_username
+
+    host = "zchat.inside.h2os.cloud"
+    port = 6697
+
+    # Check reachability
+    try:
+        with socket.create_connection((host, port), timeout=5):
+            pass
+    except OSError:
+        yield None
+        return
+
+    # Check OIDC credentials
+    creds = get_credentials()
+    if not creds:
+        yield None
+        return
+
+    username = get_username()
+    _, token = creds
+    probe_nick = f"{username}-probe"
+    probe = IrcProbe(host, port, nick=probe_nick, tls=True,
+                     sasl_login=probe_nick, sasl_pass=token)
+    try:
+        probe.connect()
+        time.sleep(2)
+        probe.join("#general")
+        time.sleep(1)
+        yield probe
+    except Exception:
+        yield None
+    finally:
+        probe.disconnect()
