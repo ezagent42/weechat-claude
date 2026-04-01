@@ -25,11 +25,12 @@ Extracted from `server.py` hardcoded string into a standalone markdown file. Con
 
    **Default behavior:** 收到 IRC 消息时，使用 Claude Code 的 Agent tool spawn 一个 subagent 处理回复。主 agent 不中断当前工作。
 
-   Subagent 的上下文：
-   - 消息内容本身（来自谁、说了什么）
+   Subagent 的上下文来源：
+   - **主 agent 的 dispatch prompt** — 主 agent 在 spawn subagent 时传入当前任务摘要和相关上下文
+   - **Session JSONL 尾部** — 通过 `tail` 读取 session JSONL 最后若干行（`~/.claude/projects/<project-hash>/<session-id>.jsonl`），获取最近的对话片段。**不加载整个文件**，避免 token 浪费
    - `soul.md`（角色定义，由 subagent 自行 Read）
-   - 主 agent 的对话历史 — 通过 Read session JSONL 文件获取（`~/.claude/projects/<project-hash>/<session-id>.jsonl`），了解主 agent 当前正在做什么
-   - 可用工具：reply tool（发送 IRC 回复）、Read tool（读取 soul.md 和 session JSONL）
+   - 消息内容本身（来自谁、说了什么）
+   - 可用工具：reply tool（发送 IRC 回复）、Read tool（读取 soul.md）、Bash tool（tail session JSONL）
 
    **Message priority:**
    - **Owner DM（agent 名字前缀用户）** → 高优先级，立即 dispatch subagent
