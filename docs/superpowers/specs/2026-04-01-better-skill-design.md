@@ -19,18 +19,15 @@ Extracted from `server.py` hardcoded string into a standalone markdown file. Con
 
 1. **Message format** — How notifications arrive (`<channel>` tags, `chat_id` conventions)
 2. **Owner detection** — Agent name prefix determines the owner (e.g., `alice-agent0` → owner is `alice`)
-3. **Message priority decision tree:**
-   - Owner DM → high priority
-     - Idle → reply directly
-     - Busy with task → use Claude Code's built-in Agent tool to dispatch a subagent for reply, continue current work
-     - Reply requires interrupting current task → confirm with owner first
-   - Other user DM → normal priority, reply when idle, brief ack + queue when busy
-   - Channel @mention → reply in channel context
-   - System messages (`__zchat_sys:`) → handle immediately
+3. **Message handling strategy:**
+   - **Default behavior: inline quick response** — 收到消息时，像处理"顺便说一下"的中断一样，用 reply tool 快速回应，不中断当前任务。类似 Claude Code 处理用户中途插入消息的方式。
+   - **Owner DM（agent 名字前缀用户）** → 高优先级，立即 inline 回复
+   - **Other user DM** → 正常优先级，inline 回复
+   - **Channel @mention** → 在频道上下文中 inline 回复
+   - **System messages（`__zchat_sys:`）** → 立即处理
+   - **是否需要深入处理** → 由 `soul.md` 角色定义决定。instructions.md 不硬编码深入处理的判断标准，只提供 quick response 的默认行为。soul.md 可以覆盖此默认行为（例如定义"收到代码审查请求时，暂停当前任务全力处理"）。
 4. **Slash command reference** (brief table)
-5. **SOUL file pointer** — instructs Claude to `Read ./soul.md` when needing role/style guidance
-
-Note: "dispatch subagent" refers to Claude Code's native Agent tool, not zchat agent creation. No new MCP tools needed.
+5. **SOUL file pointer** — instructs Claude to `Read ./soul.md` at session start for role/style guidance, and re-read when encountering unfamiliar situations
 
 ### Placeholder interpolation
 
@@ -56,9 +53,10 @@ only-include = ["server.py", "message.py", "instructions.md"]
 A per-template role definition file, similar to SOUL.md conventions:
 
 - Defines agent personality, communication style, domain expertise
+- **可覆盖 instructions.md 的默认消息处理行为** — 例如定义何时需要深入处理而非 quick response
 - Different templates ship different souls (e.g., `templates/claude/soul.md`, `templates/coder/soul.md`)
 - `start.sh` copies the template's `soul.md` into the agent workspace root at creation time
-- CHANNEL_INSTRUCTIONS tells Claude: "For role and communication style guidance, read `./soul.md` in your workspace if it exists."
+- CHANNEL_INSTRUCTIONS instructs Claude to read `./soul.md` at session start
 - Claude uses its native Read tool to access the file — no new MCP tools needed
 
 ### Plugin Auto-Load Fix
