@@ -2,6 +2,14 @@
 
 ## 安装 zchat
 
+一键安装（推荐）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ezagent42/zchat/main/install.sh | bash
+```
+
+或通过 Homebrew：
+
 ```bash
 brew tap ezagent42/zchat
 brew install zchat
@@ -57,9 +65,11 @@ zchat project create local
 
 ```bash
 zchat irc daemon start               # 1. 启动 ergo IRC server
-zchat irc start                      # 2. 启动 WeeChat
-zchat agent create agent0            # 3. 创建 AI agent
+zchat irc start                      # 2. 启动 WeeChat（自动检查 IRC 连通性）
+zchat agent create agent0            # 3. 创建 AI agent（自动检查 IRC 连通性）
 ```
+
+> `irc start` 和 `agent create` 会在启动前自动检查 IRC 服务器是否可达。如果连接失败会提示错误，而不是静默启动后才发现连不上。
 
 进入项目的 tmux session 查看所有窗口：
 
