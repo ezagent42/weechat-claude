@@ -29,26 +29,17 @@ uv build 2>&1 | grep "Successfully built"
 # → Successfully built dist/zchat-0.3.1.dev21.tar.gz
 ```
 
-### 2. Homebrew formula — 手动更新
+### 2. Homebrew formula — CI 自动更新
 
-CI 发布 PyPI 成功后，更新 `homebrew-zchat/Formula/zchat.rb`：
+PyPI 发布成功后，`publish.yml` 中的 `update-homebrew` job 会自动：
+1. 等待 PyPI 索引新版本
+2. 获取 sdist URL 和 sha256
+3. 更新 `homebrew-zchat/Formula/zchat.rb`
+4. Commit 并 push
 
-```bash
-# 获取 PyPI sdist URL 和 hash（替换 VERSION）
-VERSION=0.3.1.dev21
-curl -s "https://pypi.org/pypi/zchat/$VERSION/json" | \
-  python3 -c "import sys,json; d=json.load(sys.stdin); \
-    [print(f'url: {u[\"url\"]}\nsha256: {u[\"digests\"][\"sha256\"]}') \
-    for u in d['urls'] if u['url'].endswith('.tar.gz')]"
+**无需手动操作。** 如需手动触发，可 re-run workflow。
 
-# 编辑 formula — 替换 url 和 sha256 行
-cd homebrew-zchat
-# 修改 Formula/zchat.rb
-
-git add Formula/zchat.rb
-git commit -m "bump zchat to $VERSION"
-git push
-```
+前置条件：`ezagent42/zchat` repo 中需要 `HOMEBREW_PAT` secret（Fine-grained PAT，对 `homebrew-zchat` 有 Contents read/write 权限）。
 
 ### 3. 用户更新
 

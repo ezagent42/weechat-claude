@@ -8,6 +8,14 @@
 
 ## 安装
 
+一键安装（推荐）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ezagent42/zchat/main/install.sh | bash
+```
+
+或通过 Homebrew：
+
 ```bash
 brew tap ezagent42/zchat
 brew install zchat
@@ -31,11 +39,7 @@ zchat setup weechat                  # WeeChat zchat 插件
 
 ```bash
 # 安装
-brew tap ezagent42/zchat
-brew install zchat
-brew install ezagent42/zchat/ergo    # 本地 IRC server
-brew install weechat                 # IRC 客户端
-zchat setup weechat                  # WeeChat zchat 插件
+curl -fsSL https://raw.githubusercontent.com/ezagent42/zchat/main/install.sh | bash
 zchat doctor                         # 检查环境
 
 # 初始化
@@ -64,8 +68,10 @@ zchat shutdown                       # 停止所有 agent + 退出 session
 ## 更新
 
 ```bash
-zchat self-update                    # 更新到 GitHub 最新版本
+zchat self-update                    # 更新到最新版本（自动检测安装方式）
 ```
+
+`self-update` 会根据安装方式自动选择更新策略（Homebrew / uv tool / 源码）。
 
 ## 文档
 

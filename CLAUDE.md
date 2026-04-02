@@ -153,7 +153,7 @@ session = "zchat-xxxxxxxx-local"  # tmuxp session 名称（自动生成）
 
 PR 合并后需更新 PyPI 和 Homebrew，详见 [docs/releasing.md](docs/releasing.md)。
 
-**快速参考：** 打 tag → CI 发布 PyPI → 更新 Homebrew formula → `brew upgrade zchat`。
+**快速参考：** 打 tag → CI 发布 PyPI → CI 自动更新 Homebrew formula → `brew upgrade zchat`。
 除非明确说明，只推 dev 版本（`X.Y.Z.devN`），不 bump 主版本号。
 
 ### Git Submodules
