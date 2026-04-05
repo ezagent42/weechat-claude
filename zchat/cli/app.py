@@ -55,26 +55,28 @@ def _get_config(ctx: typer.Context) -> dict:
     return cfg
 
 
-def _get_tmux_session(ctx: typer.Context) -> str:
-    """Get tmux session name from project config."""
+def _get_zellij_session(ctx: typer.Context) -> str:
+    """Get Zellij session name from project config."""
     cfg = _get_config(ctx)
+    # New format
+    session = cfg.get("zellij", {}).get("session")
+    if session:
+        return session
+    # Legacy fallback
     session = cfg.get("tmux", {}).get("session")
-    if not session:
-        # Fallback for projects created before tmux session tracking
-        project_name = ctx.obj["project"]
-        session = f"zchat-{project_name}"
-    return session
+    if session:
+        return session
+    project_name = ctx.obj["project"]
+    return f"zchat-{project_name}"
 
 
-def _tmux_switch(session_name: str, window_name: str):
-    """Switch to a tmux window. Attach if outside tmux, select-window if inside."""
-    target = f"{session_name}:{window_name}"
-    if os.environ.get("TMUX"):
-        result = subprocess.run(["tmux", "select-window", "-t", target], capture_output=True)
+def _zellij_switch(session_name: str, tab_name: str):
+    """Switch to a Zellij tab. Uses go-to-tab-name inside Zellij, or prints hint outside."""
+    from zchat.cli import zellij
+    if os.environ.get("ZELLIJ"):
+        zellij.go_to_tab(session_name, tab_name)
     else:
-        result = subprocess.run(["tmux", "attach", "-t", target])
-    if result.returncode != 0:
-        typer.echo(f"Error: tmux window '{window_name}' not found")
+        typer.echo(f"Not inside Zellij. Run: zellij attach {session_name}")
         raise typer.Exit(1)
 
 
@@ -84,7 +86,7 @@ def _get_irc_manager(ctx: typer.Context) -> IrcManager:
     return IrcManager(
         config=cfg,
         state_file=state_file_path(project_name),
-        tmux_session=_get_tmux_session(ctx),
+        tmux_session=_get_zellij_session(ctx),
     )
 
 
@@ -101,7 +103,7 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
         default_channels=cfg["agents"]["default_channels"],
         env_file=cfg["agents"].get("env_file", ""),
         default_type=cfg["agents"].get("default_type", "claude"),
-        tmux_session=_get_tmux_session(ctx),
+        zellij_session=_get_zellij_session(ctx),
         state_file=state_file_path(project_name),
         project_dir=project_dir(project_name),
     )
@@ -298,29 +300,22 @@ def cmd_project_list():
 
 @project_app.command("use")
 def cmd_project_use(name: str):
-    """Set default project and attach to its tmux session."""
+    """Set default project and switch to its Zellij session."""
     if not os.path.isdir(project_dir(name)):
         typer.echo(f"Project '{name}' does not exist.")
         raise typer.Exit(1)
     set_default_project(name)
     cfg = load_project_config(name)
-    session_name = cfg.get("tmux", {}).get("session", f"zchat-{name}")
+    session_name = cfg.get("zellij", {}).get("session") or cfg.get("tmux", {}).get("session") or f"zchat-{name}"
     typer.echo(f"Default project set to '{name}'.")
-    # Attach to the project's tmux session if it exists
-    import subprocess
-    result = subprocess.run(
-        ["tmux", "has-session", "-t", session_name],
-        capture_output=True,
-    )
-    if result.returncode != 0:
-        typer.echo(
-            f"Session not running. Use 'zchat irc start' to start it."
-        )
+    from zchat.cli import zellij
+    if not zellij.session_exists(session_name):
+        typer.echo(f"Session not running. Use 'zchat irc start' to start it.")
         return
-    if os.environ.get("TMUX"):
-        subprocess.run(["tmux", "switch-client", "-t", session_name])
+    if os.environ.get("ZELLIJ"):
+        zellij.switch_session(session_name)
     else:
-        subprocess.run(["tmux", "attach", "-t", session_name])
+        os.execvp("zellij", ["zellij", "attach", session_name])
 
 @project_app.command("remove")
 def cmd_project_remove(name: str):
@@ -717,7 +712,7 @@ def cmd_agent_send(
     name: str = typer.Argument(..., help="Agent name"),
     text: str = typer.Argument(..., help="Text to send to agent's tmux window"),
 ):
-    """Send text to agent's tmux window (tmux send-keys)."""
+    """Send text to agent's pane."""
 
     mgr = _get_agent_manager(ctx)
     scoped = mgr.scoped(name)
@@ -738,25 +733,25 @@ def cmd_agent_focus(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Agent name"),
 ):
-    """Switch to an agent's tmux window."""
+    """Switch to an agent's tab."""
     mgr = _get_agent_manager(ctx)
     agent = mgr.get_status(name)
     scoped = mgr.scoped(name)
     if agent["status"] == "offline":
         typer.echo(f"{scoped} is offline")
         raise typer.Exit(1)
-    _tmux_switch(mgr.session_name, agent["window_name"])
+    _zellij_switch(mgr.session_name, agent.get("tab_name") or agent.get("window_name"))
 
 @agent_app.command("hide")
 def cmd_agent_hide(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Agent name or 'all'"),
 ):
-    """Switch back to WeeChat window (hide agent view)."""
+    """Switch back to WeeChat tab."""
     mgr = _get_agent_manager(ctx)
     if name != "all":
         mgr.get_status(name)
-    _tmux_switch(mgr.session_name, "weechat")
+    _zellij_switch(mgr.session_name, "weechat")
 
 
 # ============================================================
@@ -765,7 +760,7 @@ def cmd_agent_hide(
 
 @app.command("shutdown")
 def cmd_shutdown(ctx: typer.Context):
-    """Stop all agents + WeeChat + ergo + tmux session."""
+    """Stop all agents + WeeChat + ergo + Zellij session."""
     try:
         mgr = _get_agent_manager(ctx)
         agents = mgr.list_agents()
@@ -781,13 +776,12 @@ def cmd_shutdown(ctx: typer.Context):
         irc.daemon_stop()
     except (SystemExit, Exception):
         pass
-    # Kill tmux session
+    # Kill Zellij session
     try:
-        session_name = _get_tmux_session(ctx)
-        from zchat.cli.tmux import get_session
-        session = get_session(session_name)
-        session.kill()
-    except (KeyError, SystemExit, Exception):
+        session_name = _get_zellij_session(ctx)
+        from zchat.cli import zellij
+        zellij.kill_session(session_name)
+    except (SystemExit, Exception):
         pass
     typer.echo("Shutdown complete.")
 
