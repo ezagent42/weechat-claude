@@ -30,7 +30,7 @@ info "Detected platform: $PLATFORM"
 
 # ---- 2. System dependencies via Homebrew ----
 NEED_BREW=false
-for cmd in tmux weechat; do
+for cmd in zellij weechat; do
   if ! command -v "$cmd" &>/dev/null; then
     NEED_BREW=true
     break
@@ -55,7 +55,7 @@ if [ "$NEED_BREW" = true ]; then
   info "Installing system dependencies via Homebrew..."
   brew tap ezagent42/zchat 2>/dev/null || true
 
-  for pkg in tmux weechat; do
+  for pkg in zellij weechat; do
     if ! command -v "$pkg" &>/dev/null; then
       info "  Installing $pkg..."
       brew install "$pkg"
@@ -127,11 +127,7 @@ case "$CHANNEL" in
     ;;
 esac
 
-# ---- 6. Install tmuxp ----
-if ! command -v tmuxp &>/dev/null; then
-  info "Installing tmuxp..."
-  uv tool install tmuxp
-fi
+# ---- 6. (tmuxp removed — Zellij replaced tmux) ----
 
 # ---- 7. Check Claude CLI ----
 if ! command -v claude &>/dev/null; then
