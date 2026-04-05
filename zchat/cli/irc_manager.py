@@ -7,9 +7,7 @@ import ssl
 import subprocess
 import time
 
-import libtmux
-
-from zchat.cli.tmux import get_or_create_session, find_pane, pane_alive, find_window, window_alive
+from zchat.cli import zellij
 
 
 def check_irc_connectivity(server: str, port: int, tls: bool = False, timeout: float = 5) -> None:
@@ -25,22 +23,15 @@ def check_irc_connectivity(server: str, port: int, tls: bool = False, timeout: f
 
 
 class IrcManager:
-    """Manage ergo IRC daemon and WeeChat tmux pane."""
+    """Manage ergo IRC daemon and WeeChat Zellij tab."""
 
-    def __init__(self, config: dict, state_file: str, tmux_session: str = "zchat"):
+    def __init__(self, config: dict, state_file: str, zellij_session: str = "zchat"):
         self.config = config
         self._state_file = state_file
-        self._tmux_session_name = tmux_session
-        self._tmux_session: libtmux.Session | None = None
+        self._session_name = zellij_session
         self._state: dict = {}
         self._project_dir = os.path.dirname(state_file) if state_file else ""
         self._load_state()
-
-    @property
-    def tmux_session(self) -> libtmux.Session:
-        if self._tmux_session is None:
-            self._tmux_session = get_or_create_session(self._tmux_session_name)
-        return self._tmux_session
 
     @property
     def irc_config(self) -> dict:
@@ -189,10 +180,10 @@ class IrcManager:
         print("ergo stopped.")
 
     def start_weechat(self, nick_override: str | None = None):
-        """Start WeeChat in its own tmux window, auto-connect to IRC."""
-        existing = self._state.get("irc", {}).get("weechat_window")
-        if existing and self._window_alive(existing):
-            print(f"WeeChat already running (window {existing}).")
+        """Start WeeChat in its own Zellij tab, auto-connect to IRC."""
+        existing = self._state.get("irc", {}).get("weechat_tab")
+        if existing and zellij.tab_exists(self._session_name, existing):
+            print(f"WeeChat already running (tab {existing}).")
             return
 
         # Pre-check IRC server connectivity
@@ -201,23 +192,13 @@ class IrcManager:
         tls = self.irc_config.get("tls", False)
         check_irc_connectivity(server, port, tls=tls)
 
-        # Load tmuxp session if YAML exists and session doesn't
-        project_dir = os.path.dirname(self._state_file)
-        tmuxp_path = os.path.join(project_dir, "tmuxp.yaml")
-        if os.path.isfile(tmuxp_path):
-            # Update YAML with WeeChat window before loading
-            self._update_tmuxp_weechat(tmuxp_path)
-            import subprocess as sp
-            sp.run(["tmuxp", "load", "-d", tmuxp_path], capture_output=True)
-            # Refresh session reference after tmuxp creates it
-            self._tmux_session = None
-
         from zchat.cli.auth import get_username
         nick = nick_override or get_username()
         channels = self.config.get("agents", {}).get("default_channels", ["#general"])
         tls_flag = "" if tls else " -notls"
 
         # Per-project WeeChat config dir to avoid cross-project conflicts
+        project_dir = os.path.dirname(self._state_file)
         weechat_home = os.path.join(project_dir, ".weechat")
         os.makedirs(weechat_home, exist_ok=True)
 
@@ -256,43 +237,26 @@ class IrcManager:
             f"; /connect {srv_name}{load_plugin}'"
         )
 
-        # Check if weechat window already exists (from tmuxp load)
-        weechat_window = find_window(self.tmux_session, "weechat")
-        if weechat_window:
-            pane = weechat_window.active_pane
-            if pane:
-                pane.send_keys(cmd, enter=True)
-        else:
-            weechat_window = self.tmux_session.new_window(
-                window_name="weechat", window_shell=cmd, attach=False,
-            )
+        zellij.new_tab(self._session_name, "weechat", command=cmd)
+        pane_id = zellij.get_pane_id(self._session_name, "weechat")
 
-        self._state.setdefault("irc", {})["weechat_window"] = "weechat"
+        self._state.setdefault("irc", {})["weechat_tab"] = "weechat"
+        if pane_id:
+            self._state["irc"]["weechat_pane_id"] = pane_id
         self._save_state()
-        print(f"WeeChat started (window weechat, nick {nick}).")
-
-    def _update_tmuxp_weechat(self, tmuxp_path: str):
-        """Update tmuxp.yaml to include WeeChat window."""
-        import yaml
-        with open(tmuxp_path) as f:
-            cfg = yaml.safe_load(f)
-        cfg["windows"] = [
-            {"window_name": "weechat", "panes": ["blank"], "focus": True},
-        ]
-        with open(tmuxp_path, "w") as f:
-            yaml.dump(cfg, f, default_flow_style=False)
+        print(f"WeeChat started (tab weechat, nick {nick}).")
 
     def stop_weechat(self):
         """Stop WeeChat by sending /quit."""
-        wname = self._state.get("irc", {}).get("weechat_window")
+        wname = self._state.get("irc", {}).get("weechat_tab")
         if not wname:
             # Legacy: try pane_id
             wname = self._state.get("irc", {}).get("weechat_pane_id")
-        if wname and self._window_alive(wname):
-            window = find_window(self.tmux_session, wname)
-            if window and window.active_pane:
-                window.active_pane.send_keys("/quit", enter=True)
-            self._state.get("irc", {}).pop("weechat_window", None)
+        if wname and zellij.tab_exists(self._session_name, wname):
+            pane_id = zellij.get_pane_id(self._session_name, wname)
+            if pane_id:
+                zellij.send_command(self._session_name, pane_id, "/quit")
+            self._state.get("irc", {}).pop("weechat_tab", None)
             self._state.get("irc", {}).pop("weechat_pane_id", None)
             self._save_state()
             print("WeeChat stopped.")
@@ -303,8 +267,8 @@ class IrcManager:
         """Return IRC status info."""
         from zchat.cli.auth import get_username
         ergo_running = self._is_ergo_running()
-        wname = self._state.get("irc", {}).get("weechat_window")
-        weechat_running = wname and self._window_alive(wname)
+        wname = self._state.get("irc", {}).get("weechat_tab")
+        weechat_running = wname and zellij.tab_exists(self._session_name, wname)
         return {
             "daemon": {
                 "running": ergo_running,
@@ -341,12 +305,6 @@ class IrcManager:
     def _is_ergo_running(self) -> bool:
         port = self.irc_config.get("port", 6667)
         return self._port_in_use(port)
-
-    def _pane_alive(self, pane_id: str) -> bool:
-        return pane_alive(self.tmux_session, pane_id)
-
-    def _window_alive(self, window_name: str) -> bool:
-        return window_alive(self.tmux_session, window_name)
 
     def _load_state(self):
         if os.path.isfile(self._state_file):

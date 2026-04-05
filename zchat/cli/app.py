@@ -86,7 +86,7 @@ def _get_irc_manager(ctx: typer.Context) -> IrcManager:
     return IrcManager(
         config=cfg,
         state_file=state_file_path(project_name),
-        tmux_session=_get_zellij_session(ctx),
+        zellij_session=_get_zellij_session(ctx),
     )
 
 
