@@ -1,4 +1,4 @@
-"""Agent lifecycle management: create workspace, spawn tmux, track state."""
+"""Agent lifecycle management: create workspace, spawn zellij tab, track state."""
 
 import glob as _glob
 import json
@@ -10,11 +10,9 @@ import tempfile
 import threading
 import time
 
-import libtmux
-
-from zchat.cli.tmux import get_or_create_session, pane_alive
+from zchat.cli import zellij
 from zchat.cli.irc_manager import check_irc_connectivity
-from zchat.cli.template_loader import load_template, render_env, get_start_script, _parse_env_file
+from zchat.cli.runner import resolve_runner, render_env, _parse_env_file, _resolve_template_dir, _load_template_toml
 from zchat_protocol.naming import scoped_name, AGENT_SEPARATOR
 
 
@@ -40,7 +38,7 @@ class AgentManager:
                  username: str, default_channels: list[str],
                  env_file: str = "",
                  default_type: str = "claude",
-                 tmux_session: str = "zchat",
+                 zellij_session: str = "zchat",
                  state_file: str = DEFAULT_STATE_FILE,
                  project_dir: str = ""):
         self.irc_server = irc_server
@@ -51,8 +49,7 @@ class AgentManager:
         self.default_channels = default_channels
         self.env_file = env_file
         self.default_type = default_type
-        self._tmux_session_name = tmux_session
-        self._tmux_session: libtmux.Session | None = None
+        self._session_name = zellij_session
         self._state_file = state_file
         self.project_dir = project_dir
         self._agents: dict[str, dict] = {}
@@ -60,13 +57,7 @@ class AgentManager:
 
     @property
     def session_name(self) -> str:
-        return self._tmux_session_name
-
-    @property
-    def tmux_session(self) -> libtmux.Session:
-        if self._tmux_session is None:
-            self._tmux_session = get_or_create_session(self._tmux_session_name)
-        return self._tmux_session
+        return self._session_name
 
     def scoped(self, name: str) -> str:
         return scoped_name(name, self.username)
@@ -86,12 +77,12 @@ class AgentManager:
         channels = channels or list(self.default_channels)
         agent_workspace = workspace or self._create_workspace(name)
 
-        window_name = self._spawn_tmux(name, agent_workspace, agent_type, channels)
+        tab_name = self._spawn_tab(name, agent_workspace, agent_type, channels)
 
         self._agents[name] = {
             "type": agent_type,
             "workspace": agent_workspace,
-            "window_name": window_name,
+            "tab_name": tab_name,
             "status": "starting",
             "created_at": time.time(),
             "channels": channels,
@@ -185,8 +176,8 @@ class AgentManager:
             context["channel_pkg_dir"] = ""
         return context
 
-    def _spawn_tmux(self, name: str, workspace: str, agent_type: str,
-                    channels: list[str]) -> str:
+    def _spawn_tab(self, name: str, workspace: str, agent_type: str,
+                   channels: list[str]) -> str:
         context = self._build_env_context(name, workspace, channels)
         env = render_env(agent_type, context)
 
@@ -197,7 +188,14 @@ class AgentManager:
             merged.update(env)
             env = merged
 
-        start_script = get_start_script(agent_type)
+        # Resolve start script from template directory
+        tpl_dir = _resolve_template_dir(agent_type)
+        if tpl_dir:
+            start_script = os.path.join(tpl_dir, "start.sh")
+            if not os.path.isfile(start_script):
+                raise FileNotFoundError(f"start.sh not found in template '{agent_type}'")
+        else:
+            raise FileNotFoundError(f"Template '{agent_type}' not found")
 
         # Write env to workspace
         env_file_path = os.path.join(workspace, ".zchat-env")
@@ -207,45 +205,45 @@ class AgentManager:
 
         cmd = f"cd '{workspace}' && source .zchat-env && bash '{start_script}'"
 
-        # Create dedicated window (not pane) for this agent
-        window = self.tmux_session.new_window(
-            window_name=name, window_shell=cmd, attach=False,
-        )
-        # Start background confirmation polling
-        self._auto_confirm_startup(window.window_name)
-        return window.window_name
+        # Create dedicated tab for this agent
+        zellij.new_tab(self._session_name, name, command=cmd)
+        # Start background confirmation watcher
+        self._auto_confirm_startup(name)
+        return name
 
     def _force_stop(self, name: str):
-        from zchat.cli.tmux import find_window, window_alive
         agent = self._agents.get(name)
         if not agent:
             return
-        wname = agent.get("window_name")
+        wname = agent.get("tab_name") or agent.get("window_name")
         if not wname:
             return
-        window = find_window(self.tmux_session, wname)
-        if not window:
+        if not zellij.tab_exists(self._session_name, wname):
             return
 
         agent_type = agent.get("type", self.default_type)
         try:
-            tpl = load_template(agent_type)
-            pre_stop = tpl.get("hooks", {}).get("pre_stop", "")
+            tpl_dir = _resolve_template_dir(agent_type)
+            if tpl_dir:
+                tpl = _load_template_toml(tpl_dir)
+                pre_stop = tpl.get("hooks", {}).get("pre_stop", "")
+            else:
+                pre_stop = ""
         except Exception:
             pre_stop = ""
 
         if pre_stop:
-            pane = window.active_pane
-            if pane:
-                pane.send_keys(pre_stop, enter=True)
+            pane_id = zellij.get_pane_id(self._session_name, wname)
+            if pane_id:
+                zellij.send_command(self._session_name, pane_id, pre_stop)
             # Poll for up to 10 seconds
             for _ in range(20):
                 time.sleep(0.5)
-                if not window_alive(self.tmux_session, wname):
+                if not zellij.tab_exists(self._session_name, wname):
                     return
-        # Kill window as fallback
+        # Close tab as fallback
         try:
-            window.kill()
+            zellij.close_tab(self._session_name, wname)
         except Exception:
             pass
 
@@ -275,55 +273,58 @@ class AgentManager:
             time.sleep(0.5)
         return False
 
-    def _auto_confirm_startup(self, window_name: str, timeout: int = 60):
-        """Background thread: poll capture-pane for confirmation prompts, send Enter."""
-        from zchat.cli.tmux import find_window
+    def _auto_confirm_startup(self, tab_name: str, timeout: int = 60):
+        """Background thread: watch pane for confirmation prompts, send Enter."""
+        def _watch():
+            pane_id = None
+            # Wait briefly for tab to be ready
+            for _ in range(10):
+                pane_id = zellij.get_pane_id(self._session_name, tab_name)
+                if pane_id:
+                    break
+                time.sleep(0.5)
+            if not pane_id:
+                return
 
-        def _poll():
-            deadline = time.time() + timeout
-            confirm_patterns = ["I trust this folder", "local development", "Enter to confirm"]
-            confirmed: set[str] = set()
-            while time.time() < deadline:
-                window = find_window(self.tmux_session, window_name)
-                if not window or not window.active_pane:
-                    time.sleep(0.5)
-                    continue
-                try:
-                    lines = window.active_pane.capture_pane()
-                    content = "\n".join(lines)
-                    sent = False
-                    for pattern in confirm_patterns:
-                        if pattern in content and pattern not in confirmed:
-                            window.active_pane.send_keys("", enter=True)
-                            confirmed.add(pattern)
-                            sent = True
-                            time.sleep(1)
-                            break
-                    if not sent:
-                        time.sleep(0.5)
-                except Exception:
-                    time.sleep(0.5)
+            proc = zellij.subscribe_pane(self._session_name, pane_id)
+            try:
+                deadline = time.time() + timeout
+                confirm_patterns = ["I trust this folder", "local development", "Enter to confirm"]
+                confirmed: set[str] = set()
+                for line in proc.stdout:
+                    if time.time() > deadline:
+                        break
+                    try:
+                        event = json.loads(line)
+                        if event.get("event") != "pane_update":
+                            continue
+                        for vp_line in event.get("viewport", []):
+                            for pattern in confirm_patterns:
+                                if pattern.lower() in vp_line.lower() and pattern not in confirmed:
+                                    zellij.send_keys(self._session_name, pane_id, "Enter")
+                                    confirmed.add(pattern)
+                                    time.sleep(1)
+                                    break
+                    except json.JSONDecodeError:
+                        continue
+            finally:
+                proc.terminate()
 
-        thread = threading.Thread(target=_poll, daemon=True)
+        thread = threading.Thread(target=_watch, daemon=True)
         thread.start()
 
     def _check_alive(self, name: str) -> str:
-        from zchat.cli.tmux import window_alive
         agent = self._agents.get(name)
         if not agent:
             return "offline"
-        # Support both new (window_name) and legacy (pane_id) state
-        wname = agent.get("window_name")
-        if wname:
-            return "running" if window_alive(self.tmux_session, wname) else "offline"
-        pid = agent.get("pane_id")
-        if pid:
-            return "running" if pane_alive(self.tmux_session, pid) else "offline"
+        # Support both new (tab_name) and legacy (window_name) state
+        tab_name = agent.get("tab_name") or agent.get("window_name")
+        if tab_name:
+            return "running" if zellij.tab_exists(self._session_name, tab_name) else "offline"
         return "offline"
 
     def send(self, name: str, text: str):
-        """Send text to agent's tmux window."""
-        from zchat.cli.tmux import find_window
+        """Send text to agent's zellij tab."""
         name = self.scoped(name)
         agent = self._agents.get(name)
         if not agent:
@@ -334,10 +335,11 @@ class AgentManager:
             ready_path = os.path.join(self.project_dir, "agents", f"{name}.ready")
             if not os.path.isfile(ready_path):
                 raise ValueError(f"{name} is not ready (still starting up)")
-        window = find_window(self.tmux_session, agent["window_name"])
-        if not window or not window.active_pane:
-            raise ValueError(f"tmux window not found for {name}")
-        window.active_pane.send_keys(text, enter=True)
+        tab_name = agent.get("tab_name") or agent.get("window_name")
+        pane_id = zellij.get_pane_id(self._session_name, tab_name)
+        if not pane_id:
+            raise ValueError(f"tab not found for {name}")
+        zellij.send_command(self._session_name, pane_id, text)
 
     def _load_state(self):
         if os.path.isfile(self._state_file):
