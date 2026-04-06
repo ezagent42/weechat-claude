@@ -1,0 +1,12 @@
+// zchat Zellij configuration
+// Ctrl-K opens the command palette plugin
+keybinds {
+    shared_except "locked" {
+        bind "Ctrl k" {
+            LaunchOrFocusPlugin "file:~/.zchat/plugins/zchat-palette.wasm" {
+                floating true
+                move_to_focused_tab true
+            }
+        }
+    }
+}

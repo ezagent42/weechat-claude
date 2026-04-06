@@ -58,6 +58,13 @@ def test_generate_layout_has_default_tab_template():
     assert "zellij:status-bar" in kdl
 
 
+def test_generate_layout_has_zchat_status_plugin():
+    config = {}
+    state = {"agents": {}}
+    kdl = generate_layout(config, state)
+    assert "zchat-status.wasm" in kdl
+
+
 def test_write_layout_creates_file(tmp_path):
     config = {}
     state = {"agents": {}}

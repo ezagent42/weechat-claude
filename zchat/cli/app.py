@@ -270,8 +270,14 @@ def _enter_session(ctx: typer.Context):
     layout_path = write_layout(pdir, cfg, state,
                                weechat_cmd=weechat_cmd,
                                project_name=project_name)
-    os.execvp("zellij", ["zellij", "--new-session-with-layout", str(layout_path),
-                          "--session", session_name])
+    config_kdl = os.path.join(os.path.dirname(__file__), "data", "config.kdl")
+    cmd = ["zellij", "--new-session-with-layout", str(layout_path),
+           "--session", session_name]
+    if os.path.isfile(config_kdl):
+        cmd = ["zellij", "--config", config_kdl,
+               "--new-session-with-layout", str(layout_path),
+               "--session", session_name]
+    os.execvp("zellij", cmd)
 
 
 # ============================================================
