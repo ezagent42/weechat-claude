@@ -223,10 +223,29 @@ def main(
         _enter_session(ctx)
 
 
+def _ensure_plugins():
+    """Copy bundled .wasm plugins to ~/.zchat/plugins/ if missing or outdated."""
+    plugins_dir = os.path.join(ZCHAT_DIR, "plugins")
+    os.makedirs(plugins_dir, exist_ok=True)
+    bundled_dir = os.path.join(os.path.dirname(__file__), "data", "plugins")
+    if not os.path.isdir(bundled_dir):
+        return
+    for wasm in os.listdir(bundled_dir):
+        if wasm.endswith(".wasm"):
+            src = os.path.join(bundled_dir, wasm)
+            dest = os.path.join(plugins_dir, wasm)
+            src_mtime = os.path.getmtime(src)
+            if not os.path.isfile(dest) or os.path.getmtime(dest) < src_mtime:
+                import shutil
+                shutil.copy2(src, dest)
+
+
 def _enter_session(ctx: typer.Context):
     """Start or attach to the project's Zellij session."""
     from zchat.cli import zellij
     from zchat.cli.layout import write_layout
+
+    _ensure_plugins()
 
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
