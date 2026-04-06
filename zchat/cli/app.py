@@ -252,8 +252,8 @@ def _zchat_bin() -> str:
     return f"{sys.executable} -m zchat.cli"
 
 
-def _write_commands_json() -> str:
-    """Write list-commands output to ZCHAT_DIR/commands.json. Returns path."""
+def _get_commands_json() -> str:
+    """Return list-commands output as a JSON string."""
     import json as _json
     import click
 
@@ -284,18 +284,17 @@ def _write_commands_json() -> str:
                 commands.append({"name": full, "args": args})
 
     walk(click_group)
-
-    path = os.path.join(ZCHAT_DIR, "commands.json")
-    with open(path, "w") as f:
-        _json.dump(commands, f)
-    return path
+    return _json.dumps(commands)
 
 
 def _write_config_kdl(project_dir_path) -> str:
     """Generate config.kdl with correct plugin path and write to project dir."""
+    import json as _json
     plugins_dir = os.path.join(ZCHAT_DIR, "plugins")
     zchat_bin = _zchat_bin()
-    commands_file = _write_commands_json()
+    commands_json = _get_commands_json()
+    # Escape for KDL string (backslashes and quotes)
+    commands_escaped = commands_json.replace("\\", "\\\\").replace('"', '\\"')
     config_kdl = os.path.join(project_dir_path, "config.kdl")
     content = f"""\
 keybinds {{
@@ -305,7 +304,7 @@ keybinds {{
                 floating true
                 move_to_focused_tab true
                 zchat_bin "{zchat_bin}"
-                commands_file "{commands_file}"
+                commands_json "{commands_escaped}"
             }}
         }}
     }}

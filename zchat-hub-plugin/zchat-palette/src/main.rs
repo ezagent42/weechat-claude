@@ -73,7 +73,6 @@ struct ZchatPalette {
 
     // Configuration from KDL
     zchat_bin: String,
-    commands_file: String,
 
     // Discovered commands
     commands: Vec<CommandInfo>,
@@ -93,15 +92,10 @@ struct ZchatPalette {
 register_plugin!(ZchatPalette);
 
 impl ZchatPalette {
-    fn load_commands_from_file(&mut self) {
-        if self.commands_file.is_empty() {
-            return;
-        }
-        if let Ok(data) = std::fs::read_to_string(&self.commands_file) {
-            if let Ok(cmds) = serde_json::from_str::<Vec<CommandInfo>>(&data) {
-                self.command_names = cmds.iter().map(|c| c.name.clone()).collect();
-                self.commands = cmds;
-            }
+    fn load_commands_from_config(&mut self, json_str: &str) {
+        if let Ok(cmds) = serde_json::from_str::<Vec<CommandInfo>>(json_str) {
+            self.command_names = cmds.iter().map(|c| c.name.clone()).collect();
+            self.commands = cmds;
         }
     }
 
@@ -377,13 +371,11 @@ impl ZellijPlugin for ZchatPalette {
             .get("zchat_bin")
             .cloned()
             .unwrap_or_else(|| "zchat".to_string());
-        self.commands_file = configuration
-            .get("commands_file")
-            .cloned()
-            .unwrap_or_default();
 
-        // Load commands from pre-generated file (fast, no subprocess)
-        self.load_commands_from_file();
+        // Load commands from inline JSON (passed via KDL config)
+        if let Some(json_str) = configuration.get("commands_json") {
+            self.load_commands_from_config(json_str);
+        }
     }
 
     fn update(&mut self, event: Event) -> bool {
