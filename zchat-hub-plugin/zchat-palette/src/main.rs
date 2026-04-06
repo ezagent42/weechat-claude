@@ -22,12 +22,14 @@ enum PaletteState {
     /// Selecting from a list of candidates (agents, projects)
     ArgSelect {
         arg_name: String,
+        required: bool,
         candidates: Vec<String>,
         selected: usize,
     },
     /// Free text input for args without a source
     ArgInput {
         arg_name: String,
+        required: bool,
         input: String,
     },
     /// Waiting for RunCommandResult
@@ -65,7 +67,7 @@ struct ZchatPalette {
 
     // Current command being built
     current_command: String,
-    collected_args: Vec<String>,
+    collected_args: Vec<(String, String, bool)>, // (name, value, required)
     remaining_args: VecDeque<ArgInfo>,
 
     // Context from Zellij events
@@ -106,6 +108,7 @@ impl ZchatPalette {
                 Some("running_agents") => {
                     self.state = PaletteState::ArgSelect {
                         arg_name: arg.name,
+                        required: arg.required,
                         candidates: self.agent_tabs.clone(),
                         selected: 0,
                     };
@@ -113,6 +116,7 @@ impl ZchatPalette {
                 Some("projects") => {
                     self.state = PaletteState::ArgSelect {
                         arg_name: arg.name,
+                        required: arg.required,
                         candidates: self.session_names.clone(),
                         selected: 0,
                     };
@@ -120,6 +124,7 @@ impl ZchatPalette {
                 _ => {
                     self.state = PaletteState::ArgInput {
                         arg_name: arg.name,
+                        required: arg.required,
                         input: String::new(),
                     };
                 }
@@ -135,12 +140,19 @@ impl ZchatPalette {
             let cmd = &self.commands[idx];
             self.current_command = cmd.name.clone();
             self.collected_args.clear();
-            self.remaining_args = cmd
-                .args
-                .iter()
-                .filter(|a| a.required)
-                .cloned()
-                .collect();
+            // Collect ALL args: required first, then optional
+            let mut args: Vec<ArgInfo> = Vec::new();
+            for a in &cmd.args {
+                if a.required {
+                    args.push(a.clone());
+                }
+            }
+            for a in &cmd.args {
+                if !a.required {
+                    args.push(a.clone());
+                }
+            }
+            self.remaining_args = args.into_iter().collect();
             self.advance_args();
         }
     }
@@ -220,18 +232,24 @@ impl ZchatPalette {
                 }
             }
             PaletteState::ArgSelect {
+                arg_name,
+                required,
                 candidates,
                 selected,
-                ..
             } => {
                 match key.bare_key {
                     BareKey::Esc => {
-                        self.state = PaletteState::default();
+                        if !*required {
+                            // Skip this optional arg
+                            self.advance_args();
+                        } else {
+                            self.state = PaletteState::default();
+                        }
                         return true;
                     }
                     BareKey::Enter => {
                         if let Some(val) = candidates.get(*selected) {
-                            self.collected_args.push(val.clone());
+                            self.collected_args.push((arg_name.clone(), val.clone(), *required));
                             self.advance_args();
                         }
                         return true;
@@ -249,16 +267,28 @@ impl ZchatPalette {
                     _ => {}
                 }
             }
-            PaletteState::ArgInput { input, .. } => {
+            PaletteState::ArgInput { arg_name, required, input } => {
                 match key.bare_key {
                     BareKey::Esc => {
-                        self.state = PaletteState::default();
+                        if !*required {
+                            self.advance_args();
+                        } else {
+                            self.state = PaletteState::default();
+                        }
                         return true;
                     }
                     BareKey::Enter => {
-                        let val = input.clone();
-                        self.collected_args.push(val);
-                        self.advance_args();
+                        if input.is_empty() && !*required {
+                            // Skip optional arg
+                            self.advance_args();
+                        } else if !input.is_empty() {
+                            let n = arg_name.clone();
+                            let v = input.clone();
+                            let r = *required;
+                            self.collected_args.push((n, v, r));
+                            self.advance_args();
+                        }
+                        // Empty + required: do nothing (must provide value)
                         return true;
                     }
                     BareKey::Backspace => {
@@ -321,8 +351,9 @@ impl ZchatPalette {
         }
     }
 
-    fn render_arg_input(&self, _cols: usize, arg_name: &str, input: &str) {
-        println!(" {} | enter {}:", self.current_command, arg_name);
+    fn render_arg_input(&self, _cols: usize, arg_name: &str, required: bool, input: &str) {
+        let hint = if required { "" } else { " (optional, Enter to skip)" };
+        println!(" {} | {}{}:", self.current_command, arg_name, hint);
         println!(" > {}_", input);
     }
 }
@@ -404,16 +435,18 @@ impl ZellijPlugin for ZchatPalette {
                 arg_name,
                 candidates,
                 selected,
+                ..
             } => {
                 let n = arg_name.clone();
                 let c = candidates.clone();
                 let s = *selected;
                 self.render_arg_select(rows, cols, &n, &c, s);
             }
-            PaletteState::ArgInput { arg_name, input } => {
+            PaletteState::ArgInput { arg_name, required, input } => {
                 let n = arg_name.clone();
+                let r = *required;
                 let i = input.clone();
-                self.render_arg_input(cols, &n, &i);
+                self.render_arg_input(cols, &n, r, &i);
             }
             PaletteState::Executing => {
                 println!(" Running: {} ...", self.current_command);

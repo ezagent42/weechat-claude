@@ -24,11 +24,13 @@ pub fn command_names(commands: &[CommandInfo]) -> Vec<String> {
 }
 
 /// Build the zchat CLI invocation for a command.
+/// collected_args is (name, value, required). Required args are positional,
+/// optional args are passed as --name value.
 pub fn build_cli_args(
     zchat_bin: &str,
     project_name: &str,
     command_name: &str,
-    collected_args: &[String],
+    collected_args: &[(String, String, bool)],
 ) -> Vec<String> {
     let mut cmd: Vec<String> = zchat_bin.split_whitespace().map(String::from).collect();
     if !project_name.is_empty() {
@@ -36,7 +38,19 @@ pub fn build_cli_args(
         cmd.push(project_name.to_string());
     }
     cmd.extend(command_name.split_whitespace().map(String::from));
-    cmd.extend(collected_args.iter().cloned());
+    // Positional (required) args first, then --flag optional args
+    for (_, value, required) in collected_args {
+        if *required {
+            cmd.push(value.clone());
+        }
+    }
+    for (name, value, required) in collected_args {
+        if !*required {
+            let flag = format!("--{}", name.replace('_', "-"));
+            cmd.push(flag);
+            cmd.push(value.clone());
+        }
+    }
     cmd
 }
 
@@ -95,7 +109,10 @@ mod tests {
 
     #[test]
     fn build_cli_args_with_project() {
-        let args = build_cli_args("/usr/bin/zchat", "local", "agent create", &["myagent".into()]);
+        let args = build_cli_args(
+            "/usr/bin/zchat", "local", "agent create",
+            &[("name".into(), "myagent".into(), true)],
+        );
         assert_eq!(args, vec!["/usr/bin/zchat", "--project", "local", "agent", "create", "myagent"]);
     }
 
@@ -107,8 +124,40 @@ mod tests {
 
     #[test]
     fn build_cli_args_multiword_bin() {
-        let args = build_cli_args("/usr/bin/python -m zchat.cli", "dev", "agent stop", &["a0".into()]);
+        let args = build_cli_args(
+            "/usr/bin/python -m zchat.cli", "dev", "agent stop",
+            &[("name".into(), "a0".into(), true)],
+        );
         assert_eq!(args, vec!["/usr/bin/python", "-m", "zchat.cli", "--project", "dev", "agent", "stop", "a0"]);
+    }
+
+    #[test]
+    fn build_cli_args_optional_flags() {
+        let args = build_cli_args(
+            "zchat", "local", "project create",
+            &[
+                ("name".into(), "myproj".into(), true),
+                ("server".into(), "cloud".into(), false),
+                ("channels".into(), "#dev".into(), false),
+            ],
+        );
+        assert_eq!(args, vec![
+            "zchat", "--project", "local", "project", "create",
+            "myproj",                          // positional
+            "--server", "cloud",               // optional flag
+            "--channels", "#dev",              // optional flag
+        ]);
+    }
+
+    #[test]
+    fn build_cli_args_skips_empty_optional() {
+        // Empty optional args should not be in collected_args at all
+        // (palette skips them), so this just verifies no optional = no flags
+        let args = build_cli_args(
+            "zchat", "", "agent create",
+            &[("name".into(), "a0".into(), true)],
+        );
+        assert_eq!(args, vec!["zchat", "agent", "create", "a0"]);
     }
 
     #[test]
