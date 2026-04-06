@@ -70,4 +70,9 @@ def test_list_commands_includes_choices(tmp_path, monkeypatch):
     proj_create = next(c for c in commands if c["name"] == "project create")
     server_arg = next(a for a in proj_create["args"] if a["name"] == "server")
     assert "choices" in server_arg
-    assert set(server_arg["choices"]) == {"cloud", "local"}
+    values = {c["value"] for c in server_arg["choices"]}
+    assert "cloud" in values
+    assert "local" in values
+    # Each choice has a label for display
+    labels = [c["label"] for c in server_arg["choices"]]
+    assert any("h2os" in l for l in labels)  # cloud preset label

@@ -19,11 +19,12 @@ enum PaletteState {
         query: String,
         selected: usize,
     },
-    /// Selecting from a list of candidates (agents, projects)
+    /// Selecting from a list of candidates (agents, projects, servers)
     ArgSelect {
         arg_name: String,
         required: bool,
-        candidates: Vec<String>,
+        candidates: Vec<String>, // display labels
+        values: Vec<String>,     // actual values passed to CLI
         selected: usize,
     },
     /// Free text input for args without a source
@@ -106,10 +107,13 @@ impl ZchatPalette {
         if let Some(arg) = self.remaining_args.pop_front() {
             // 1. Pre-resolved choices from CLI (static: servers, templates, etc.)
             if !arg.choices.is_empty() {
+                let labels: Vec<String> = arg.choices.iter().map(|c| c.label.clone()).collect();
+                let vals: Vec<String> = arg.choices.iter().map(|c| c.value.clone()).collect();
                 self.state = PaletteState::ArgSelect {
                     arg_name: arg.name,
                     required: arg.required,
-                    candidates: arg.choices,
+                    candidates: labels,
+                    values: vals,
                     selected: 0,
                 };
                 return;
@@ -117,18 +121,22 @@ impl ZchatPalette {
             // 2. Runtime sources from Zellij events
             match arg.source.as_deref() {
                 Some("running_agents") => {
+                    let tabs = self.agent_tabs.clone();
                     self.state = PaletteState::ArgSelect {
                         arg_name: arg.name,
                         required: arg.required,
-                        candidates: self.agent_tabs.clone(),
+                        candidates: tabs.clone(),
+                        values: tabs,
                         selected: 0,
                     };
                 }
                 Some("projects") => {
+                    let sessions = self.session_names.clone();
                     self.state = PaletteState::ArgSelect {
                         arg_name: arg.name,
                         required: arg.required,
-                        candidates: self.session_names.clone(),
+                        candidates: sessions.clone(),
+                        values: sessions,
                         selected: 0,
                     };
                 }
@@ -246,6 +254,7 @@ impl ZchatPalette {
             PaletteState::ArgSelect {
                 arg_name,
                 required,
+                values,
                 candidates,
                 selected,
             } => {
@@ -260,7 +269,7 @@ impl ZchatPalette {
                         return true;
                     }
                     BareKey::Enter => {
-                        if let Some(val) = candidates.get(*selected) {
+                        if let Some(val) = values.get(*selected) {
                             self.collected_args.push((arg_name.clone(), val.clone(), *required));
                             self.advance_args();
                         }

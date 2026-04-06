@@ -13,8 +13,15 @@ pub struct ArgInfo {
     #[serde(default)]
     pub source: Option<String>,
     /// Pre-resolved choices from CLI (for static sources like servers).
+    /// Each choice has a value (passed to CLI) and a label (shown to user).
     #[serde(default)]
-    pub choices: Vec<String>,
+    pub choices: Vec<Choice>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Choice {
+    pub value: String,
+    pub label: String,
 }
 
 /// Parse commands JSON from the inline config string.
@@ -168,12 +175,18 @@ mod tests {
     fn parse_commands_with_choices() {
         let json = r#"[{"name": "project create", "args": [
             {"name": "name", "required": true},
-            {"name": "server", "required": false, "source": "servers", "choices": ["cloud", "local"]}
+            {"name": "server", "required": false, "source": "servers", "choices": [
+                {"value": "cloud", "label": "zchat.inside.h2os.cloud (recommended)"},
+                {"value": "local", "label": "Local (127.0.0.1:6667)"}
+            ]}
         ]}]"#;
         let cmds = parse_commands(json).unwrap();
         let server_arg = &cmds[0].args[1];
         assert_eq!(server_arg.source.as_deref(), Some("servers"));
-        assert_eq!(server_arg.choices, vec!["cloud", "local"]);
+        assert_eq!(server_arg.choices.len(), 2);
+        assert_eq!(server_arg.choices[0].value, "cloud");
+        assert_eq!(server_arg.choices[0].label, "zchat.inside.h2os.cloud (recommended)");
+        assert_eq!(server_arg.choices[1].value, "local");
     }
 
     #[test]

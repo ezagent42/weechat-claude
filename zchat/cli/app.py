@@ -261,9 +261,10 @@ def _zchat_bin() -> str:
     return f"{sys.executable} -m zchat.cli"
 
 
-def _resolve_static_choices(source_name: str) -> list[str] | None:
+def _resolve_static_choices(source_name: str) -> list[dict] | None:
     """Resolve static choices for a source name.
 
+    Returns list of {"value": ..., "label": ...} dicts.
     Merges built-in presets (from defaults.toml) with user config.
     """
     if source_name == "servers":
@@ -271,15 +272,17 @@ def _resolve_static_choices(source_name: str) -> list[str] | None:
         seen = set()
         choices = []
         # Built-in presets first
-        for name in server_presets():
-            choices.append(name)
+        for name, preset in server_presets().items():
+            choices.append({"value": name, "label": preset.get("label", name)})
             seen.add(name)
         # User-configured servers
         try:
             global_cfg = load_global_config()
-            for name in global_cfg.get("servers", {}):
+            for name, srv in global_cfg.get("servers", {}).items():
                 if name not in seen:
-                    choices.append(name)
+                    host = srv.get("host", "?")
+                    port = srv.get("port", "?")
+                    choices.append({"value": name, "label": f"{name} ({host}:{port})"})
         except Exception:
             pass
         return choices if choices else None
