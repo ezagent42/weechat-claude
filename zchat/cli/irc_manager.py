@@ -200,6 +200,8 @@ class IrcManager:
         if pane_id:
             self._state["irc"]["weechat_pane_id"] = pane_id
         self._save_state()
+        from zchat.cli.auth import get_username
+        nick = nick_override or get_username()
         print(f"WeeChat started (tab weechat, nick {nick}).")
 
     def build_weechat_cmd(self, nick_override: str | None = None) -> str:
