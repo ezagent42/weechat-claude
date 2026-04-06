@@ -180,14 +180,17 @@ def _spawn_update_check(state: dict, auto_upgrade: bool = True) -> None:
     )
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
     project: Optional[str] = typer.Option(None, help="Project name (overrides auto-detection)"),
     version: bool = typer.Option(False, "--version", "-V", callback=_version_callback,
                                  is_eager=True, help="Show version and exit"),
 ):
-    """Claude Code agent lifecycle management."""
+    """Claude Code agent lifecycle management.
+
+    Run without subcommand to start/attach the Zellij session.
+    """
     ctx.ensure_object(dict)
 
     resolved = resolve_project(explicit=project)
@@ -211,6 +214,64 @@ def main(
             typer.echo("💡 New version available. Run `zchat upgrade` to update.", err=True)
     except Exception:
         pass  # Never block CLI startup
+
+    # No subcommand → start/attach Zellij session
+    if ctx.invoked_subcommand is None:
+        if not resolved:
+            typer.echo("No project selected. Run 'zchat project create <name>' first.")
+            raise typer.Exit(1)
+        _enter_session(ctx)
+
+
+def _enter_session(ctx: typer.Context):
+    """Start or attach to the project's Zellij session."""
+    from zchat.cli import zellij
+    from zchat.cli.layout import write_layout
+
+    cfg = _get_config(ctx)
+    project_name = ctx.obj["project"]
+    session_name = _get_zellij_session(ctx)
+    pdir = project_dir(project_name)
+
+    # Already inside Zellij → switch session
+    if os.environ.get("ZELLIJ"):
+        if zellij.session_exists(session_name):
+            zellij.switch_session(session_name)
+        else:
+            typer.echo(f"Session '{session_name}' not running. Start IRC first.")
+        return
+
+    # Session exists → attach
+    if zellij.session_exists(session_name):
+        os.execvp("zellij", ["zellij", "attach", session_name])
+        return
+
+    # Create new session from layout
+    # Build WeeChat command for the layout
+    irc = _get_irc_config(cfg)
+    irc_manager = _get_irc_manager(ctx)
+
+    # Start ergo if local
+    server = irc["host"]
+    if server in ("127.0.0.1", "localhost", "::1"):
+        irc_manager.daemon_start()
+
+    weechat_cmd = irc_manager.build_weechat_cmd()
+    state_path = state_file_path(project_name)
+    state = {}
+    if os.path.isfile(state_path):
+        import json
+        with open(state_path) as f:
+            try:
+                state = json.load(f)
+            except Exception:
+                pass
+
+    layout_path = write_layout(pdir, cfg, state,
+                               weechat_cmd=weechat_cmd,
+                               project_name=project_name)
+    os.execvp("zellij", ["zellij", "--new-session-with-layout", str(layout_path),
+                          "--session", session_name])
 
 
 # ============================================================

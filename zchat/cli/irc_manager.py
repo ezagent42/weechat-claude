@@ -192,21 +192,34 @@ class IrcManager:
         tls = self.irc_config.get("tls", False)
         check_irc_connectivity(server, port, tls=tls)
 
+        cmd = self.build_weechat_cmd(nick_override=nick_override)
+        zellij.new_tab(self._session_name, "weechat", command=cmd)
+        pane_id = zellij.get_pane_id(self._session_name, "weechat")
+
+        self._state.setdefault("irc", {})["weechat_tab"] = "weechat"
+        if pane_id:
+            self._state["irc"]["weechat_pane_id"] = pane_id
+        self._save_state()
+        print(f"WeeChat started (tab weechat, nick {nick}).")
+
+    def build_weechat_cmd(self, nick_override: str | None = None) -> str:
+        """Build the WeeChat startup command string (without launching it)."""
+        server = self.irc_config.get("server", self.irc_config.get("host", "127.0.0.1"))
+        port = self.irc_config.get("port", 6667)
+        tls = self.irc_config.get("tls", False)
+
         from zchat.cli.auth import get_username
         nick = nick_override or get_username()
-        channels = self.config.get("agents", {}).get("default_channels", ["#general"])
+        channels = self.config.get("default_channels") or self.config.get("agents", {}).get("default_channels", ["#general"])
         tls_flag = "" if tls else " -notls"
 
-        # Per-project WeeChat config dir to avoid cross-project conflicts
         project_dir = os.path.dirname(self._state_file)
         weechat_home = os.path.join(project_dir, ".weechat")
         os.makedirs(weechat_home, exist_ok=True)
 
-        # WeeChat IRC server name: {project}-ergo
         project_name = os.path.basename(project_dir)
         srv_name = f"{project_name}-ergo"
 
-        # SASL config — nick is the SASL login, token is the credential
         sasl_cmds = ""
         from zchat.cli.auth import get_credentials
         creds = get_credentials()
@@ -218,15 +231,14 @@ class IrcManager:
                 f"; /set irc.server.{srv_name}.sasl_password {token}"
             )
 
-        # Source env file if configured
-        env_file = self.config.get("agents", {}).get("env_file", "")
+        env_file = self.config.get("env_file") or self.config.get("agents", {}).get("env_file", "")
         source_env = f"[ -f '{env_file}' ] && set -a && source '{env_file}' && set +a; " if env_file else ""
 
         autojoin = ",".join(channels)
         plugin_path = self._find_weechat_plugin()
         load_plugin = f"; /script load {plugin_path}" if plugin_path else ""
 
-        cmd = (
+        return (
             f"{source_env}weechat -d {weechat_home} -r '"
             f"/server add {srv_name} {server}/{port}{tls_flag} -nicks={nick}"
             f"; /set irc.server.{srv_name}.autojoin \"{autojoin}\""
@@ -236,15 +248,6 @@ class IrcManager:
             f"{sasl_cmds}"
             f"; /connect {srv_name}{load_plugin}'"
         )
-
-        zellij.new_tab(self._session_name, "weechat", command=cmd)
-        pane_id = zellij.get_pane_id(self._session_name, "weechat")
-
-        self._state.setdefault("irc", {})["weechat_tab"] = "weechat"
-        if pane_id:
-            self._state["irc"]["weechat_pane_id"] = pane_id
-        self._save_state()
-        print(f"WeeChat started (tab weechat, nick {nick}).")
 
     def stop_weechat(self):
         """Stop WeeChat by sending /quit."""
