@@ -358,7 +358,7 @@ def cmd_project_list():
         return
     for p in projects:
         marker = " (default)" if p == default else ""
-        typer.echo(f"  {p}{marker}")
+        typer.echo(f"  {p}{marker}  {project_dir(p)}")
 
 @project_app.command("use")
 def cmd_project_use(name: str):
