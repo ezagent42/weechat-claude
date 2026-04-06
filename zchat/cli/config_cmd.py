@@ -56,10 +56,14 @@ def resolve_server(server_ref: str, global_config: dict | None = None) -> dict:
             "tls": srv.get("tls", False),
             "password": srv.get("password", ""),
         }
-    # Treat as raw hostname
-    tls = server_ref in ("zchat.inside.h2os.cloud",)
-    port = 6697 if tls else 6667
-    return {"host": server_ref, "port": port, "tls": tls, "password": ""}
+    # Check if it matches a known preset by hostname
+    from zchat.cli.defaults import server_presets
+    for _name, preset in server_presets().items():
+        if preset["host"] == server_ref:
+            return {"host": server_ref, "port": preset["port"],
+                    "tls": preset.get("tls", False), "password": ""}
+    # Unknown hostname — use plain defaults
+    return {"host": server_ref, "port": 6667, "tls": False, "password": ""}
 
 
 def ensure_server_in_global(name: str, host: str, port: int, tls: bool,

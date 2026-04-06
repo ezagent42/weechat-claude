@@ -58,27 +58,36 @@ def _get_config(ctx: typer.Context) -> dict:
 
 def _prompt_new_server(global_cfg: dict) -> str:
     """Interactive prompt to add a new IRC server to global config."""
+    from zchat.cli.defaults import server_presets
+    presets = server_presets()
+    preset_names = list(presets.keys())
+
     typer.echo("Add new IRC server:")
-    typer.echo("  1) zchat.inside.h2os.cloud (recommended)")
-    typer.echo("  2) Local (127.0.0.1:6667)")
-    typer.echo("  3) Custom")
+    for i, name in enumerate(preset_names, 1):
+        typer.echo(f"  {i}) {presets[name].get('label', name)}")
+    typer.echo(f"  {len(preset_names) + 1}) Custom")
     choice = typer.prompt("Choose", default="1")
-    if choice == "1":
-        ensure_server_in_global("cloud", "zchat.inside.h2os.cloud", 6697, True, "", global_cfg)
-        return "cloud"
-    elif choice == "2":
-        ensure_server_in_global("local", "127.0.0.1", 6667, False, "", global_cfg)
-        return "local"
-    else:
-        host = typer.prompt("Hostname", default="127.0.0.1")
-        port = typer.prompt("Port", default=6667, type=int)
-        use_tls = typer.confirm("TLS", default=False)
-        pw = typer.prompt("Password", default="", show_default=False)
-        server_name = host.replace(".", "-").split(":")[0]
-        if server_name in ("127-0-0-1", "localhost"):
-            server_name = "local"
-        ensure_server_in_global(server_name, host, port, use_tls, pw, global_cfg)
-        return server_name
+
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(preset_names):
+            name = preset_names[idx]
+            p = presets[name]
+            ensure_server_in_global(name, p["host"], p["port"], p.get("tls", False), "", global_cfg)
+            return name
+    except (ValueError, IndexError):
+        pass
+
+    # Custom
+    host = typer.prompt("Hostname", default="127.0.0.1")
+    port = typer.prompt("Port", default=6667, type=int)
+    use_tls = typer.confirm("TLS", default=False)
+    pw = typer.prompt("Password", default="", show_default=False)
+    server_name = host.replace(".", "-").split(":")[0]
+    if server_name in ("127-0-0-1", "localhost"):
+        server_name = "local"
+    ensure_server_in_global(server_name, host, port, use_tls, pw, global_cfg)
+    return server_name
 
 
 def _get_irc_config(cfg: dict) -> dict:
@@ -149,9 +158,9 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
         irc_tls=irc.get("tls", False),
         irc_password=irc.get("password", ""),
         username=get_username(),
-        default_channels=cfg.get("default_channels") or cfg.get("agents", {}).get("default_channels", ["#general"]),
-        env_file=cfg.get("env_file") or cfg.get("agents", {}).get("env_file", ""),
-        default_type=cfg.get("default_runner") or cfg.get("agents", {}).get("default_type", "claude"),
+        default_channels=cfg.get("default_channels", []),
+        env_file=cfg.get("env_file", ""),
+        default_type=cfg.get("default_runner", ""),
         zellij_session=_get_zellij_session(ctx),
         state_file=state_file_path(project_name),
         project_dir=project_dir(project_name),
@@ -253,13 +262,27 @@ def _zchat_bin() -> str:
 
 
 def _resolve_static_choices(source_name: str) -> list[str] | None:
-    """Resolve static choices for a source name from global config."""
-    try:
-        global_cfg = load_global_config()
-    except Exception:
-        return None
+    """Resolve static choices for a source name.
+
+    Merges built-in presets (from defaults.toml) with user config.
+    """
     if source_name == "servers":
-        return list(global_cfg.get("servers", {}).keys())
+        from zchat.cli.defaults import server_presets
+        seen = set()
+        choices = []
+        # Built-in presets first
+        for name in server_presets():
+            choices.append(name)
+            seen.add(name)
+        # User-configured servers
+        try:
+            global_cfg = load_global_config()
+            for name in global_cfg.get("servers", {}):
+                if name not in seen:
+                    choices.append(name)
+        except Exception:
+            pass
+        return choices if choices else None
     return None
 
 
@@ -530,19 +553,29 @@ def cmd_project_create(
 
     # Ensure server exists in global config (auto-create if it's a hostname)
     if _server_ref not in global_cfg.get("servers", {}):
-        # Treat as hostname — resolve defaults and save
-        _port = port if port is not None else (6697 if _server_ref == "zchat.inside.h2os.cloud" else 6667)
-        _tls = tls if tls is not None else (_server_ref == "zchat.inside.h2os.cloud")
-        _password = password if password is not None else ""
-        # Use a derived name for the server entry
-        server_name = _server_ref.replace(".", "-").split(":")[0]
-        if server_name in ("127-0-0-1", "localhost"):
-            server_name = "local"
-        ensure_server_in_global(server_name, _server_ref, _port, _tls, _password, global_cfg)
-        _server_ref = server_name
+        from zchat.cli.defaults import server_presets
+        presets = server_presets()
+        # Check if it matches a preset by hostname
+        preset_match = next((n for n, p in presets.items() if p["host"] == _server_ref), None)
+        if preset_match:
+            p = presets[preset_match]
+            _port = port if port is not None else p["port"]
+            _tls = tls if tls is not None else p.get("tls", False)
+            ensure_server_in_global(preset_match, p["host"], _port, _tls, password or "", global_cfg)
+            _server_ref = preset_match
+        else:
+            _port = port if port is not None else 6667
+            _tls = tls if tls is not None else False
+            _password = password if password is not None else ""
+            server_name = _server_ref.replace(".", "-").split(":")[0]
+            if server_name in ("127-0-0-1", "localhost"):
+                server_name = "local"
+            ensure_server_in_global(server_name, _server_ref, _port, _tls, _password, global_cfg)
+            _server_ref = server_name
 
     # --- Channels ---
-    _channels: str = channels if channels is not None else typer.prompt("Default channels", default="#general")
+    from zchat.cli.defaults import default_channels as _default_channels
+    _channels: str = channels if channels is not None else typer.prompt("Default channels", default=",".join(_default_channels()))
 
     # --- Agent type ---
     from zchat.cli.template_loader import list_templates
@@ -646,7 +679,7 @@ def cmd_project_remove(name: str):
             irc_tls=irc.get("tls", False),
             irc_password=irc.get("password", ""),
             username=get_username(),
-            default_channels=cfg.get("default_channels") or cfg.get("agents", {}).get("default_channels", ["#general"]),
+            default_channels=cfg.get("default_channels", []),
             state_file=state_file_path(name),
         )
         running = [n for n, i in mgr.list_agents().items() if i["status"] == "running"]

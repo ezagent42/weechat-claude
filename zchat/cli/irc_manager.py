@@ -210,7 +210,7 @@ class IrcManager:
 
         from zchat.cli.auth import get_username
         nick = nick_override or get_username()
-        channels = self.config.get("default_channels") or self.config.get("agents", {}).get("default_channels", ["#general"])
+        channels = self.config.get("default_channels") or self.config.get("agents", {}).get("default_channels", [])
         tls_flag = "" if tls else " -notls"
 
         project_dir = os.path.dirname(self._state_file)

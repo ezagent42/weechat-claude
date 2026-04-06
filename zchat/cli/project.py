@@ -18,21 +18,26 @@ def _generate_session_name(project_name: str) -> str:
 
 
 def create_project_config(name: str, server: str = "local",
-                          nick: str = "", channels: str = "#general",
+                          nick: str = "", channels: str | None = None,
                           env_file: str = "",
-                          default_runner: str = "claude-channel",
+                          default_runner: str | None = None,
                           mcp_server_cmd: list[str] | None = None,
                           # Legacy params kept for backward compat
                           port: int = 6667, tls: bool = False,
                           password: str = "",
                           default_type: str = "claude"):
     """Create project directory and write config.toml."""
+    from zchat.cli.defaults import default_channels, default_runner as _default_runner, default_mcp_server_cmd
     pdir = project_dir(name)
     os.makedirs(pdir, exist_ok=True)
+    if channels is None:
+        channels = ",".join(default_channels())
     channels_list = [ch.strip() for ch in channels.split(",") if ch.strip()]
     session = _generate_session_name(name)
+    if default_runner is None:
+        default_runner = _default_runner()
     if mcp_server_cmd is None:
-        mcp_server_cmd = ["zchat-channel"]
+        mcp_server_cmd = default_mcp_server_cmd()
 
     config = {
         "server": server,
@@ -101,12 +106,13 @@ def load_project_config(name: str) -> dict:
             f"  zchat project remove {name} && zchat project create {name}"
         )
 
+    from zchat.cli.defaults import default_channels, default_runner, default_mcp_server_cmd
     cfg.setdefault("server", "local")
-    cfg.setdefault("default_runner", "claude-channel")
-    cfg.setdefault("default_channels", ["#general"])
+    cfg.setdefault("default_runner", default_runner())
+    cfg.setdefault("default_channels", default_channels())
     cfg.setdefault("username", "")
     cfg.setdefault("env_file", "")
-    cfg.setdefault("mcp_server_cmd", ["zchat-channel"])
+    cfg.setdefault("mcp_server_cmd", default_mcp_server_cmd())
     cfg.setdefault("zellij", {})
     cfg["zellij"].setdefault("session", _generate_session_name(name))
     return cfg
