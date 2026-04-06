@@ -1,5 +1,8 @@
 #!/bin/bash
 # Dev wrapper — runs zchat from this worktree instead of system install.
+# Uses a local .zchat/ dir so dev state doesn't pollute ~/.zchat.
 # Usage: ./bin/zchat-dev doctor
 #        ./bin/zchat-dev project create local
-exec uv run --project "$(cd "$(dirname "$0")/.." && pwd)" zchat "$@"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export ZCHAT_HOME="${ZCHAT_HOME:-$REPO_ROOT/.zchat}"
+exec uv run --project "$REPO_ROOT" zchat "$@"
