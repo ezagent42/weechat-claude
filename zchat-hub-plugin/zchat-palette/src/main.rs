@@ -194,10 +194,11 @@ impl ZchatPalette {
         self.session_names.clear();
         for session in sessions {
             if session.is_current_session {
+                // "zchat-local" → "local", but "zchat" (main session) → ""
                 self.project_name = session
                     .name
                     .strip_prefix("zchat-")
-                    .unwrap_or(&session.name)
+                    .unwrap_or("")
                     .to_string();
             }
             if session.name.starts_with("zchat-") {
