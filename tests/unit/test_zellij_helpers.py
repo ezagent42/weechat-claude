@@ -58,7 +58,7 @@ def test_ensure_session_creates_background(mock_exists, mock_global):
 @patch("zchat.cli.zellij._run_global")
 @patch("zchat.cli.zellij.session_exists", return_value=False)
 def test_ensure_session_with_layout(mock_exists, mock_global):
-    result = zellij.ensure_session("ci-runner", layout_path="/tmp/layout.kdl")
+    result = zellij.ensure_session("ci-runner", layout="/tmp/layout.kdl")
     assert result == "ci-runner"
     mock_global.assert_called_once_with(
         ["--new-session-with-layout", "/tmp/layout.kdl", "--session", "ci-runner"],

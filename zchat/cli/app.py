@@ -215,12 +215,9 @@ def main(
     except Exception:
         pass  # Never block CLI startup
 
-    # No subcommand → start/attach Zellij session
+    # No subcommand → enter zchat main session
     if ctx.invoked_subcommand is None:
-        if not resolved:
-            _enter_lobby()
-        else:
-            _enter_session(ctx)
+        _enter_main_session()
 
 
 def _ensure_plugins():
@@ -261,18 +258,26 @@ keybinds {{
     return config_kdl
 
 
-def _enter_lobby():
-    """Launch Zellij without a project — a single ctl tab for setup."""
+def _enter_main_session():
+    """Always enter the zchat main Zellij session.
+
+    This is the hub. From here users manage projects, create agents,
+    and switch to project sessions via ``zchat project use <name>``.
+    """
     from zchat.cli import zellij
-    from pathlib import Path
+    from zchat.cli.layout import generate_layout
 
     _ensure_plugins()
 
     session_name = "zchat"
 
-    # Already inside Zellij → nothing to switch to
+    # Already inside the main session → nothing to do
+    if os.environ.get("ZELLIJ_SESSION_NAME") == session_name:
+        return
+
+    # Inside a different Zellij session → switch
     if os.environ.get("ZELLIJ"):
-        typer.echo("No project selected. Run 'zchat project create <name>'.")
+        zellij.switch_session(session_name)
         return
 
     # Session exists → attach
@@ -280,52 +285,86 @@ def _enter_lobby():
         os.execvp("zellij", ["zellij", "attach", session_name])
         return
 
-    # Minimal layout: just a ctl tab
-    lobby_dir = os.path.join(ZCHAT_DIR, "lobby")
-    os.makedirs(lobby_dir, exist_ok=True)
-    layout_kdl = os.path.join(lobby_dir, "layout.kdl")
-    with open(layout_kdl, "w") as f:
+    # Create new main session with a ctl tab
+    main_dir = os.path.join(ZCHAT_DIR, "main")
+    os.makedirs(main_dir, exist_ok=True)
+
+    layout_kdl_path = os.path.join(main_dir, "layout.kdl")
+    with open(layout_kdl_path, "w") as f:
         f.write("layout {\n")
+        f.write("    default_tab_template {\n")
+        f.write('        pane size=1 borderless=true {\n')
+        f.write('            plugin location="zellij:tab-bar"\n')
+        f.write("        }\n")
+        f.write("        children\n")
+        plugins = os.path.join(ZCHAT_DIR, "plugins")
+        f.write(f'        pane size=1 borderless=true {{\n')
+        f.write(f'            plugin location="file:{plugins}/zchat-status.wasm"\n')
+        f.write("        }\n")
+        f.write('        pane size=2 borderless=true {\n')
+        f.write('            plugin location="zellij:status-bar"\n')
+        f.write("        }\n")
+        f.write("    }\n")
         f.write('    tab name="ctl" focus=true {\n')
         f.write("        pane\n")
         f.write("    }\n")
         f.write("}\n")
 
-    config_kdl = _write_config_kdl(lobby_dir)
+    config_kdl = _write_config_kdl(main_dir)
     os.execvp("zellij", ["zellij", "--config", str(config_kdl),
-                          "--new-session-with-layout", layout_kdl,
+                          "--new-session-with-layout", layout_kdl_path,
                           "--session", session_name])
 
 
-def _enter_session(ctx: typer.Context):
-    """Start or attach to the project's Zellij session."""
+def _launch_project_session(name: str):
+    """Ensure the project's Zellij session is running, then switch/attach to it.
+
+    If already inside Zellij → switch_session.
+    If outside → create session (if needed) and attach.
+    """
     from zchat.cli import zellij
     from zchat.cli.layout import write_layout
+    from zchat.cli.auth import get_username
 
     _ensure_plugins()
 
-    cfg = _get_config(ctx)
-    project_name = ctx.obj["project"]
-    session_name = _get_zellij_session(ctx)
-    pdir = project_dir(project_name)
+    cfg = load_project_config(name)
+    session_name = cfg.get("zellij", {}).get("session") or f"zchat-{name}"
+    pdir = project_dir(name)
 
-    # Already inside Zellij → switch session
+    # Already inside Zellij → switch session (create first if needed)
     if os.environ.get("ZELLIJ"):
-        if zellij.session_exists(session_name):
-            zellij.switch_session(session_name)
-        else:
-            typer.echo(f"Session '{session_name}' not running. Start IRC first.")
+        if not zellij.session_exists(session_name):
+            _create_project_zellij_session(name, cfg, session_name, pdir)
+        zellij.switch_session(session_name)
         return
 
-    # Session exists → attach
+    # Outside Zellij — session exists → attach
     if zellij.session_exists(session_name):
         os.execvp("zellij", ["zellij", "attach", session_name])
         return
 
-    # Create new session from layout
-    # Build WeeChat command for the layout
+    # Outside Zellij — create and attach
+    _create_project_zellij_session(name, cfg, session_name, pdir)
+    os.execvp("zellij", ["zellij", "attach", session_name])
+
+
+def _create_project_zellij_session(name: str, cfg: dict, session_name: str, pdir: str):
+    """Create a new Zellij session for a project (does NOT attach)."""
+    from zchat.cli.layout import write_layout
+
     irc = _get_irc_config(cfg)
-    irc_manager = _get_irc_manager(ctx)
+
+    # Build IrcManager to get weechat cmd and optionally start ergo
+    irc_cfg = dict(cfg)
+    if "irc" not in irc_cfg:
+        irc_cfg["irc"] = irc
+        irc_cfg["irc"].setdefault("server", irc.get("host", "127.0.0.1"))
+    irc_manager = IrcManager(
+        config=irc_cfg,
+        state_file=state_file_path(name),
+        zellij_session=session_name,
+    )
 
     # Start ergo if local
     server = irc["host"]
@@ -333,7 +372,7 @@ def _enter_session(ctx: typer.Context):
         irc_manager.daemon_start()
 
     weechat_cmd = irc_manager.build_weechat_cmd()
-    state_path = state_file_path(project_name)
+    state_path = state_file_path(name)
     state = {}
     if os.path.isfile(state_path):
         import json
@@ -345,12 +384,13 @@ def _enter_session(ctx: typer.Context):
 
     layout_path = write_layout(pdir, cfg, state,
                                weechat_cmd=weechat_cmd,
-                               project_name=project_name)
+                               project_name=name)
     config_kdl = _write_config_kdl(pdir)
-    cmd = ["zellij", "--config", str(config_kdl),
-           "--new-session-with-layout", str(layout_path),
-           "--session", session_name]
-    os.execvp("zellij", cmd)
+
+    # Create session in background (detached)
+    from zchat.cli import zellij
+    zellij.ensure_session(session_name, layout=str(layout_path),
+                          config=str(config_kdl))
 
 
 # ============================================================
@@ -502,22 +542,13 @@ def cmd_project_list():
 
 @project_app.command("use")
 def cmd_project_use(name: str):
-    """Set default project and switch to its Zellij session."""
+    """Set default project and launch/switch to its Zellij session."""
     if not os.path.isdir(project_dir(name)):
         typer.echo(f"Project '{name}' does not exist.")
         raise typer.Exit(1)
     set_default_project(name)
-    cfg = load_project_config(name)
-    session_name = cfg.get("zellij", {}).get("session") or cfg.get("tmux", {}).get("session") or f"zchat-{name}"
     typer.echo(f"Default project set to '{name}'.")
-    from zchat.cli import zellij
-    if not zellij.session_exists(session_name):
-        typer.echo(f"Session not running. Use 'zchat irc start' to start it.")
-        return
-    if os.environ.get("ZELLIJ"):
-        zellij.switch_session(session_name)
-    else:
-        os.execvp("zellij", ["zellij", "attach", session_name])
+    _launch_project_session(name)
 
 @project_app.command("remove")
 def cmd_project_remove(name: str):

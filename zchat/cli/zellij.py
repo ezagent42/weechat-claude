@@ -23,7 +23,7 @@ def _run_global(args: list[str], session: str | None = None, **kwargs) -> subpro
     return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
 
 
-def ensure_session(name: str, layout_path: str | None = None) -> str:
+def ensure_session(name: str, layout: str | None = None, config: str | None = None) -> str:
     """Create or verify session exists. Returns session name.
 
     Handles EXITED sessions by deleting and recreating them.
@@ -34,10 +34,14 @@ def ensure_session(name: str, layout_path: str | None = None) -> str:
             _run_global(["delete-session", name])
         else:
             return name
-    if layout_path:
-        _run_global(["--new-session-with-layout", layout_path, "--session", name])
+    cmd: list[str] = []
+    if config:
+        cmd += ["--config", config]
+    if layout:
+        cmd += ["--new-session-with-layout", layout, "--session", name]
     else:
-        _run_global(["attach", "--create-background", name])
+        cmd += ["attach", "--create-background", name]
+    _run_global(cmd)
     return name
 
 
