@@ -71,6 +71,10 @@ impl Default for PaletteState {
 struct ZchatPalette {
     state: PaletteState,
 
+    // Configuration from KDL
+    zchat_bin: String,
+    commands_file: String,
+
     // Discovered commands
     commands: Vec<CommandInfo>,
     command_names: Vec<String>,
@@ -89,15 +93,29 @@ struct ZchatPalette {
 register_plugin!(ZchatPalette);
 
 impl ZchatPalette {
-    fn discover_commands(&self) {
-        let mut ctx = BTreeMap::new();
-        ctx.insert("action".to_string(), "discover".to_string());
-        run_command(&["zchat", "list-commands"], ctx);
+    fn load_commands_from_file(&mut self) {
+        if self.commands_file.is_empty() {
+            return;
+        }
+        if let Ok(data) = std::fs::read_to_string(&self.commands_file) {
+            if let Ok(cmds) = serde_json::from_str::<Vec<CommandInfo>>(&data) {
+                self.command_names = cmds.iter().map(|c| c.name.clone()).collect();
+                self.commands = cmds;
+            }
+        }
+    }
+
+    fn zchat_cmd(&self) -> Vec<String> {
+        // zchat_bin may contain spaces (e.g. "/path/python -m zchat.cli")
+        self.zchat_bin
+            .split_whitespace()
+            .map(String::from)
+            .collect()
     }
 
     fn execute_command(&mut self) {
         let parts: Vec<&str> = self.current_command.split_whitespace().collect();
-        let mut cmd: Vec<String> = vec!["zchat".to_string()];
+        let mut cmd: Vec<String> = self.zchat_cmd();
         if !self.project_name.is_empty() {
             cmd.push("--project".to_string());
             cmd.push(self.project_name.clone());
@@ -341,7 +359,7 @@ impl ZchatPalette {
 }
 
 impl ZellijPlugin for ZchatPalette {
-    fn load(&mut self, _configuration: BTreeMap<String, String>) {
+    fn load(&mut self, configuration: BTreeMap<String, String>) {
         request_permission(&[
             PermissionType::ReadApplicationState,
             PermissionType::ChangeApplicationState,
@@ -353,7 +371,19 @@ impl ZellijPlugin for ZchatPalette {
             EventType::SessionUpdate,
             EventType::RunCommandResult,
         ]);
-        self.discover_commands();
+
+        // Read configuration from KDL
+        self.zchat_bin = configuration
+            .get("zchat_bin")
+            .cloned()
+            .unwrap_or_else(|| "zchat".to_string());
+        self.commands_file = configuration
+            .get("commands_file")
+            .cloned()
+            .unwrap_or_default();
+
+        // Load commands from pre-generated file (fast, no subprocess)
+        self.load_commands_from_file();
     }
 
     fn update(&mut self, event: Event) -> bool {
@@ -367,22 +397,8 @@ impl ZellijPlugin for ZchatPalette {
                 self.update_sessions(&sessions);
                 false
             }
-            Event::RunCommandResult(exit_code, stdout, stderr, context) => {
+            Event::RunCommandResult(exit_code, _stdout, stderr, context) => {
                 match context.get("action").map(|s| s.as_str()) {
-                    Some("discover") => {
-                        if exit_code == Some(0) {
-                            if let Ok(text) = String::from_utf8(stdout) {
-                                if let Ok(cmds) =
-                                    serde_json::from_str::<Vec<CommandInfo>>(&text)
-                                {
-                                    self.command_names =
-                                        cmds.iter().map(|c| c.name.clone()).collect();
-                                    self.commands = cmds;
-                                }
-                            }
-                        }
-                        true
-                    }
                     Some("execute") => {
                         let success = exit_code == Some(0);
                         let msg = if success {

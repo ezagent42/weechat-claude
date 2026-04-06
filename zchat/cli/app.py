@@ -237,9 +237,65 @@ def _ensure_plugins():
                 shutil.copy2(src, dest)
 
 
+def _zchat_bin() -> str:
+    """Return the absolute path to the current zchat executable."""
+    import sys
+    # If running via `uv run`, sys.argv[0] might be 'zchat' — resolve it
+    import shutil
+    argv0 = sys.argv[0]
+    if os.path.isabs(argv0) and os.path.isfile(argv0):
+        return argv0
+    resolved = shutil.which(argv0)
+    if resolved:
+        return resolved
+    # Fallback: use sys.executable -m zchat.cli
+    return f"{sys.executable} -m zchat.cli"
+
+
+def _write_commands_json() -> str:
+    """Write list-commands output to ZCHAT_DIR/commands.json. Returns path."""
+    import json as _json
+    import click
+
+    click_group = typer.main.get_group(app)
+    commands = []
+
+    def walk(group, prefix=""):
+        for name in sorted(group.list_commands(None) or []):
+            cmd = group.get_command(None, name)
+            if cmd is None:
+                continue
+            full = f"{prefix} {name}".strip()
+            if isinstance(cmd, click.Group):
+                if not getattr(cmd, "hidden", False):
+                    walk(cmd, full)
+            elif getattr(cmd, "hidden", False):
+                continue
+            else:
+                sources = _ARG_SOURCES.get(full, {})
+                args = []
+                for p in cmd.params:
+                    if p.name in ("ctx",) or p.name.startswith("_"):
+                        continue
+                    arg = {"name": p.name, "required": p.required}
+                    if p.name in sources:
+                        arg["source"] = sources[p.name]
+                    args.append(arg)
+                commands.append({"name": full, "args": args})
+
+    walk(click_group)
+
+    path = os.path.join(ZCHAT_DIR, "commands.json")
+    with open(path, "w") as f:
+        _json.dump(commands, f)
+    return path
+
+
 def _write_config_kdl(project_dir_path) -> str:
     """Generate config.kdl with correct plugin path and write to project dir."""
     plugins_dir = os.path.join(ZCHAT_DIR, "plugins")
+    zchat_bin = _zchat_bin()
+    commands_file = _write_commands_json()
     config_kdl = os.path.join(project_dir_path, "config.kdl")
     content = f"""\
 keybinds {{
@@ -248,6 +304,8 @@ keybinds {{
             LaunchOrFocusPlugin "file:{plugins_dir}/zchat-palette.wasm" {{
                 floating true
                 move_to_focused_tab true
+                zchat_bin "{zchat_bin}"
+                commands_file "{commands_file}"
             }}
         }}
     }}
