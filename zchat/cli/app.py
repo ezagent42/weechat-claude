@@ -25,6 +25,7 @@ from zchat.cli.update import (
 from zchat.cli.config_cmd import (
     load_global_config, save_global_config,
     get_config_value, set_config_value,
+    resolve_server, ensure_server_in_global,
 )
 
 app = typer.Typer(name="zchat", help="Claude Code agent lifecycle management")
@@ -55,6 +56,45 @@ def _get_config(ctx: typer.Context) -> dict:
     return cfg
 
 
+def _prompt_new_server(global_cfg: dict) -> str:
+    """Interactive prompt to add a new IRC server to global config."""
+    typer.echo("Add new IRC server:")
+    typer.echo("  1) zchat.inside.h2os.cloud (recommended)")
+    typer.echo("  2) Local (127.0.0.1:6667)")
+    typer.echo("  3) Custom")
+    choice = typer.prompt("Choose", default="1")
+    if choice == "1":
+        ensure_server_in_global("cloud", "zchat.inside.h2os.cloud", 6697, True, "", global_cfg)
+        return "cloud"
+    elif choice == "2":
+        ensure_server_in_global("local", "127.0.0.1", 6667, False, "", global_cfg)
+        return "local"
+    else:
+        host = typer.prompt("Hostname", default="127.0.0.1")
+        port = typer.prompt("Port", default=6667, type=int)
+        use_tls = typer.confirm("TLS", default=False)
+        pw = typer.prompt("Password", default="", show_default=False)
+        server_name = host.replace(".", "-").split(":")[0]
+        if server_name in ("127-0-0-1", "localhost"):
+            server_name = "local"
+        ensure_server_in_global(server_name, host, port, use_tls, pw, global_cfg)
+        return server_name
+
+
+def _get_irc_config(cfg: dict) -> dict:
+    """Resolve IRC connection details from project config + global config.
+
+    For new-format configs, resolves the server reference via global config.
+    For old-format configs (with [irc] section), returns directly.
+    """
+    if "irc" in cfg:
+        # Old format — return directly
+        return cfg["irc"]
+    # New format — resolve server reference
+    server_ref = cfg.get("server", "local")
+    return resolve_server(server_ref)
+
+
 def _get_zellij_session(ctx: typer.Context) -> str:
     """Get Zellij session name from project config."""
     cfg = _get_config(ctx)
@@ -83,6 +123,11 @@ def _zellij_switch(session_name: str, tab_name: str):
 def _get_irc_manager(ctx: typer.Context) -> IrcManager:
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
+    # Inject resolved IRC config so IrcManager sees it at cfg["irc"]
+    if "irc" not in cfg:
+        cfg["irc"] = _get_irc_config(cfg)
+        # Map host→server for IrcManager's irc_config property
+        cfg["irc"].setdefault("server", cfg["irc"].get("host", "127.0.0.1"))
     return IrcManager(
         config=cfg,
         state_file=state_file_path(project_name),
@@ -94,15 +139,16 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
     from zchat.cli.auth import get_username
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
+    irc = _get_irc_config(cfg)
     return AgentManager(
-        irc_server=cfg["irc"]["server"],
-        irc_port=cfg["irc"]["port"],
-        irc_tls=cfg["irc"].get("tls", False),
-        irc_password=cfg["irc"].get("password", ""),
+        irc_server=irc["host"],
+        irc_port=irc["port"],
+        irc_tls=irc.get("tls", False),
+        irc_password=irc.get("password", ""),
         username=get_username(),
-        default_channels=cfg["agents"]["default_channels"],
-        env_file=cfg["agents"].get("env_file", ""),
-        default_type=cfg["agents"].get("default_type", "claude"),
+        default_channels=cfg.get("default_channels") or cfg.get("agents", {}).get("default_channels", ["#general"]),
+        env_file=cfg.get("env_file") or cfg.get("agents", {}).get("env_file", ""),
+        default_type=cfg.get("default_runner") or cfg.get("agents", {}).get("default_type", "claude"),
         zellij_session=_get_zellij_session(ctx),
         state_file=state_file_path(project_name),
         project_dir=project_dir(project_name),
@@ -171,15 +217,18 @@ def main(
 @project_app.command("create")
 def cmd_project_create(
     name: str,
-    server: Optional[str] = typer.Option(None, help="IRC server address"),
-    port: Optional[int] = typer.Option(None, help="IRC port"),
-    tls: Optional[bool] = typer.Option(None, help="Enable TLS"),
-    password: Optional[str] = typer.Option(None, help="IRC password"),
+    server: Optional[str] = typer.Option(None, help="Server name (from global config) or hostname"),
+    port: Optional[int] = typer.Option(None, help="IRC port (only for new server)"),
+    tls: Optional[bool] = typer.Option(None, help="Enable TLS (only for new server)"),
+    password: Optional[str] = typer.Option(None, help="IRC password (only for new server)"),
     channels: Optional[str] = typer.Option(None, help="Default channels (comma-separated)"),
     agent_type: Optional[str] = typer.Option(None, "--agent-type", help="Agent template name (e.g. 'claude')"),
     proxy: Optional[str] = typer.Option(None, help="HTTP proxy (ip:port, empty string for none)"),
 ):
     """Create a new project with config setup.
+
+    --server can be a name from global config (e.g. 'local', 'cloud') or a
+    hostname. If the server doesn't exist in global config, it is created.
 
     When all required options are provided, runs non-interactively.
     Otherwise, prompts for missing values.
@@ -189,35 +238,46 @@ def cmd_project_create(
         typer.echo(f"Project '{name}' already exists.")
         raise typer.Exit(1)
 
-    # --- IRC server ---
-    _server: str
-    _port: int
-    _tls: bool
-    _password: str
+    global_cfg = load_global_config()
+    existing_servers = global_cfg.get("servers", {})
+
+    # --- IRC server selection ---
+    _server_ref: str
     if server is not None:
-        _server = server
-        if server == "zchat.inside.h2os.cloud":
-            _port = port if port is not None else 6697
-            _tls = tls if tls is not None else True
-        else:
-            _port = port if port is not None else 6667
-            _tls = tls if tls is not None else False
-        _password = password if password is not None else ""
+        _server_ref = server
     else:
-        typer.echo("IRC Server:")
-        typer.echo("  1) zchat.inside.h2os.cloud (recommended)")
-        typer.echo("  2) Custom server")
-        server_choice = typer.prompt("Choose", default="1")
-        if server_choice == "1":
-            _server = "zchat.inside.h2os.cloud"
-            _port = 6697
-            _tls = True
-            _password = ""
+        # Show existing servers + options to add new
+        choices = list(existing_servers.keys())
+        if choices:
+            typer.echo("IRC Server:")
+            for i, sname in enumerate(choices, 1):
+                srv = existing_servers[sname]
+                typer.echo(f"  {i}) {sname} ({srv.get('host', '?')}:{srv.get('port', '?')})")
+            typer.echo(f"  {len(choices) + 1}) Add new server")
+            choice = typer.prompt("Choose", default="1")
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(choices):
+                    _server_ref = choices[idx]
+                else:
+                    raise ValueError
+            except ValueError:
+                _server_ref = _prompt_new_server(global_cfg)
         else:
-            _server = typer.prompt("IRC server", default="127.0.0.1")
-            _port = typer.prompt("IRC port", default=6667, type=int)
-            _tls = typer.confirm("TLS", default=False)
-            _password = typer.prompt("Password", default="", show_default=False)
+            _server_ref = _prompt_new_server(global_cfg)
+
+    # Ensure server exists in global config (auto-create if it's a hostname)
+    if _server_ref not in global_cfg.get("servers", {}):
+        # Treat as hostname — resolve defaults and save
+        _port = port if port is not None else (6697 if _server_ref == "zchat.inside.h2os.cloud" else 6667)
+        _tls = tls if tls is not None else (_server_ref == "zchat.inside.h2os.cloud")
+        _password = password if password is not None else ""
+        # Use a derived name for the server entry
+        server_name = _server_ref.replace(".", "-").split(":")[0]
+        if server_name in ("127-0-0-1", "localhost"):
+            server_name = "local"
+        ensure_server_in_global(server_name, _server_ref, _port, _tls, _password, global_cfg)
+        _server_ref = server_name
 
     # --- Channels ---
     _channels: str = channels if channels is not None else typer.prompt("Default channels", default="#general")
@@ -278,9 +338,8 @@ def cmd_project_create(
                     f.write(f"HTTPS_PROXY={proxy_url}\n")
                 env_file = env_path
 
-    create_project_config(name, server=_server, port=_port, tls=_tls,
-                          password=_password, nick="", channels=_channels,
-                          env_file=env_file, default_type=default_type)
+    create_project_config(name, server=_server_ref, nick="", channels=_channels,
+                          env_file=env_file, default_runner=default_type)
     typer.echo(f"\nProject '{name}' created at {pdir}/")
     typer.echo(f"Config saved to {pdir}/config.toml")
     if env_file:
@@ -328,12 +387,13 @@ def cmd_project_remove(name: str):
     try:
         from zchat.cli.auth import get_username
         cfg = load_project_config(name)
+        irc = _get_irc_config(cfg)
         mgr = AgentManager(
-            irc_server=cfg["irc"]["server"], irc_port=cfg["irc"]["port"],
-            irc_tls=cfg["irc"].get("tls", False),
-            irc_password=cfg["irc"].get("password", ""),
+            irc_server=irc["host"], irc_port=irc["port"],
+            irc_tls=irc.get("tls", False),
+            irc_password=irc.get("password", ""),
             username=get_username(),
-            default_channels=cfg["agents"]["default_channels"],
+            default_channels=cfg.get("default_channels") or cfg.get("agents", {}).get("default_channels", ["#general"]),
             state_file=state_file_path(name),
         )
         running = [n for n, i in mgr.list_agents().items() if i["status"] == "running"]

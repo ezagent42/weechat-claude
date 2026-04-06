@@ -10,7 +10,7 @@ def config_toml(tmp_path, monkeypatch):
     import zchat.cli.project as proj
     monkeypatch.setattr(proj, "ZCHAT_DIR", str(tmp_path))
     import zchat.cli.config_cmd as cfg
-    monkeypatch.setattr(cfg, "_GLOBAL_CONFIG", str(tmp_path / "config.toml"))
+    monkeypatch.setattr(cfg, "ZCHAT_DIR", str(tmp_path))
     return str(tmp_path / "config.toml")
 
 
