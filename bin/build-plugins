@@ -28,21 +28,21 @@ WASM_DIR="$PLUGIN_DIR/target/wasm32-wasip1/release"
 
 if [ "${1:-}" = "--check" ]; then
     echo "Build OK:"
-    ls -lh "$WASM_DIR"/zchat_*.wasm
+    ls -lh "$WASM_DIR"/zchat-*.wasm
     exit 0
 fi
 
 # Install to ZCHAT_HOME/plugins/
 mkdir -p "$ZCHAT_HOME/plugins"
-cp "$WASM_DIR/zchat_status.wasm" "$ZCHAT_HOME/plugins/zchat-status.wasm"
-cp "$WASM_DIR/zchat_palette.wasm" "$ZCHAT_HOME/plugins/zchat-palette.wasm"
+cp "$WASM_DIR/zchat-status.wasm" "$ZCHAT_HOME/plugins/"
+cp "$WASM_DIR/zchat-palette.wasm" "$ZCHAT_HOME/plugins/"
 echo "Installed to $ZCHAT_HOME/plugins/"
 
 # Also copy to bundled data dir (for PyPI releases)
 BUNDLED="$REPO_ROOT/zchat/cli/data/plugins"
 mkdir -p "$BUNDLED"
-cp "$WASM_DIR/zchat_status.wasm" "$BUNDLED/zchat-status.wasm"
-cp "$WASM_DIR/zchat_palette.wasm" "$BUNDLED/zchat-palette.wasm"
+cp "$WASM_DIR/zchat-status.wasm" "$BUNDLED/"
+cp "$WASM_DIR/zchat-palette.wasm" "$BUNDLED/"
 echo "Copied to $BUNDLED/"
 
 echo "Done."
