@@ -15,7 +15,7 @@ echo "  Project:   $PROJECT"
 
 # --- Dependency check ---
 MISSING=""
-for cmd in claude uv weechat tmux; do
+for cmd in claude uv weechat zellij; do
   command -v "$cmd" &>/dev/null || MISSING="$MISSING $cmd"
 done
 if [ -n "$MISSING" ]; then
@@ -27,7 +27,7 @@ echo "  Syncing deps..."
 (cd "$SCRIPT_DIR" && uv sync --quiet 2>/dev/null || true)
 (cd "$SCRIPT_DIR/zchat-channel-server" && uv sync --quiet 2>/dev/null || true)
 
-ZCHAT="ZCHAT_TMUX_SESSION=$SESSION uv run --project $SCRIPT_DIR python -m zchat.cli --project $PROJECT"
+ZCHAT="ZCHAT_ZELLIJ_SESSION=$SESSION uv run --project $SCRIPT_DIR python -m zchat.cli --project $PROJECT"
 
 # Create project if it doesn't exist
 if ! eval $ZCHAT project show &>/dev/null; then
@@ -40,5 +40,5 @@ eval $ZCHAT irc daemon start
 eval $ZCHAT irc start
 eval $ZCHAT agent create agent0 --workspace "$WORKSPACE"
 
-echo "  Launching tmux session '$SESSION'..."
-tmux -CC attach -t "$SESSION" 2>/dev/null || tmux attach -t "$SESSION"
+echo "  Launching Zellij session '$SESSION'..."
+zellij attach "$SESSION"

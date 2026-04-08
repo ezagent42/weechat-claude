@@ -5,39 +5,24 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from zchat.cli.app import _tmux_switch
+from zchat.cli.app import _zellij_switch
 
 
-class TestTmuxSwitch:
-    """Tests for the _tmux_switch helper."""
+class TestZellijSwitch:
+    """Tests for the _zellij_switch helper."""
 
-    @patch("zchat.cli.app.subprocess.run")
-    def test_select_window_inside_tmux(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0)
-        with patch.dict(os.environ, {"TMUX": "/tmp/tmux-1000/default,12345,0"}):
-            _tmux_switch("zchat-local", "alice-agent0")
-        mock_run.assert_called_once_with(
-            ["tmux", "select-window", "-t", "zchat-local:alice-agent0"],
-            capture_output=True,
-        )
+    @patch("zchat.cli.zellij.go_to_tab")
+    def test_go_to_tab_inside_zellij(self, mock_go_to_tab):
+        with patch.dict(os.environ, {"ZELLIJ": "0"}):
+            _zellij_switch("zchat-local", "alice-agent0")
+        mock_go_to_tab.assert_called_once_with("zchat-local", "alice-agent0")
 
-    @patch("zchat.cli.app.subprocess.run")
-    def test_attach_outside_tmux(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0)
-        env = {k: v for k, v in os.environ.items() if k != "TMUX"}
-        with patch.dict(os.environ, env, clear=True):
-            _tmux_switch("zchat-local", "alice-agent0")
-        mock_run.assert_called_once_with(
-            ["tmux", "attach", "-t", "zchat-local:alice-agent0"],
-        )
-
-    @patch("zchat.cli.app.subprocess.run")
-    def test_error_on_nonzero_returncode(self, mock_run):
+    def test_exit_outside_zellij(self):
         from click.exceptions import Exit
-        mock_run.return_value = MagicMock(returncode=1)
-        with patch.dict(os.environ, {"TMUX": "1"}):
+        env = {k: v for k, v in os.environ.items() if k != "ZELLIJ"}
+        with patch.dict(os.environ, env, clear=True):
             with pytest.raises(Exit):
-                _tmux_switch("zchat-local", "nonexistent")
+                _zellij_switch("zchat-local", "alice-agent0")
 
 
 class TestFocusHideCommands:
@@ -79,5 +64,5 @@ class TestFocusHideCommands:
         """'all' should not call get_status."""
         mgr = self._make_manager()
         # If get_status were called with "all", it would raise ValueError
-        # We just verify session_name is accessible (the tmux call would be mocked in integration)
+        # We just verify session_name is accessible (the zellij call would be mocked in integration)
         assert mgr.session_name == "zchat"

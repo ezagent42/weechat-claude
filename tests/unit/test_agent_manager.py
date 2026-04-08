@@ -102,8 +102,8 @@ def test_wait_for_ready_timeout(tmp_path):
 
 
 def test_send_succeeds_when_ready(tmp_path):
-    """send() delivers text when agent is ready and window exists."""
-    from unittest.mock import patch, MagicMock
+    """send() delivers text when agent is ready and tab exists."""
+    from unittest.mock import patch
     mgr = _make_manager(
         state_file=str(tmp_path / "agents.json"),
         project_dir=str(tmp_path),
@@ -112,16 +112,14 @@ def test_send_succeeds_when_ready(tmp_path):
     (tmp_path / "agents" / "alice-helper.ready").touch()
     mgr._agents["alice-helper"] = {
         "type": "claude", "workspace": "/tmp/x",
-        "window_name": "alice-helper", "status": "running",
+        "tab_name": "alice-helper", "status": "running",
         "created_at": 0, "channels": ["#general"],
     }
-    mock_pane = MagicMock()
-    mock_window = MagicMock()
-    mock_window.active_pane = mock_pane
     with patch.object(mgr, "_check_alive", return_value="running"), \
-         patch("zchat.cli.tmux.find_window", return_value=mock_window):
+         patch("zchat.cli.zellij.get_pane_id", return_value="terminal_1"), \
+         patch("zchat.cli.zellij.send_command") as mock_send:
         mgr.send("helper", "hello")
-    mock_pane.send_keys.assert_called_once_with("hello", enter=True)
+    mock_send.assert_called_once_with(mgr._session_name, "terminal_1", "hello")
 
 
 def test_send_raises_when_not_ready(tmp_path):
@@ -134,7 +132,7 @@ def test_send_raises_when_not_ready(tmp_path):
     (tmp_path / "agents").mkdir()
     mgr._agents["alice-helper"] = {
         "type": "claude", "workspace": "/tmp/x",
-        "window_name": "alice-helper", "status": "running",
+        "tab_name": "alice-helper", "status": "running",
         "created_at": 0, "channels": ["#general"],
     }
     from unittest.mock import patch
@@ -144,7 +142,7 @@ def test_send_raises_when_not_ready(tmp_path):
 
 
 def test_send_raises_on_missing_window(tmp_path):
-    """send() raises ValueError when tmux window is not found."""
+    """send() raises ValueError when zellij tab is not found."""
     import pytest as _pytest
     mgr = _make_manager(
         state_file=str(tmp_path / "agents.json"),
@@ -154,13 +152,13 @@ def test_send_raises_on_missing_window(tmp_path):
     (tmp_path / "agents" / "alice-helper.ready").touch()
     mgr._agents["alice-helper"] = {
         "type": "claude", "workspace": "/tmp/x",
-        "window_name": "alice-helper", "status": "running",
+        "tab_name": "alice-helper", "status": "running",
         "created_at": 0, "channels": ["#general"],
     }
     from unittest.mock import patch
     with patch.object(mgr, "_check_alive", return_value="running"), \
-         patch("zchat.cli.tmux.find_window", return_value=None):
-        with _pytest.raises(ValueError, match="window not found"):
+         patch("zchat.cli.zellij.get_pane_id", return_value=None):
+        with _pytest.raises(ValueError, match="tab not found"):
             mgr.send("helper", "hello")
 
 
@@ -169,13 +167,13 @@ def test_agent_state_persistence(tmp_path):
     mgr = _make_manager(state_file=state_file)
     mgr._agents["alice-helper"] = {
         "type": "claude",
-        "workspace": "/tmp/x", "window_name": "alice-helper", "status": "running",
+        "workspace": "/tmp/x", "tab_name": "alice-helper", "status": "running",
         "created_at": 0, "channels": ["#general"],
     }
     mgr._save_state()
     mgr2 = _make_manager(state_file=state_file)
     assert "alice-helper" in mgr2._agents
-    assert mgr2._agents["alice-helper"]["window_name"] == "alice-helper"
+    assert mgr2._agents["alice-helper"]["tab_name"] == "alice-helper"
 
 
 def test_find_channel_pkg_dir_via_uv(tmp_path):

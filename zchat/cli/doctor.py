@@ -61,7 +61,7 @@ def _check_command(name: str) -> tuple[bool, str]:
         out = subprocess.run([name] + args, capture_output=True, text=True, timeout=5)
         version = (out.stdout.strip() or out.stderr.strip()).split("\n")[0]
         # Strip program name prefix
-        for prefix in [f"{name} ", f"{name}-", "tmux "]:
+        for prefix in [f"{name} ", f"{name}-", "zellij "]:
             if version.lower().startswith(prefix.lower()):
                 version = version[len(prefix):]
                 break
@@ -75,8 +75,7 @@ def run_doctor():
     checks = [
         ("uv", True, "curl -LsSf https://astral.sh/uv/install.sh | sh"),
         ("python3", True, "uv python install 3.11"),
-        ("tmux", True, "brew install tmux"),
-        ("tmuxp", True, "uv tool install tmuxp"),
+        ("zellij", True, "brew install zellij"),
         ("claude", True, "https://docs.anthropic.com/en/docs/claude-code"),
         ("zchat-channel", True, "uv tool install zchat-channel-server"),
         ("ergo", False, "brew install ezagent42/zchat/ergo"),

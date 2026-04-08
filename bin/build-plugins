@@ -1,0 +1,48 @@
+#!/bin/bash
+# Build WASM plugins and install them.
+#
+# By default installs to ZCHAT_HOME (or .zchat/ in repo root for dev).
+# Also copies to zchat/cli/data/plugins/ so they get bundled in releases.
+#
+# Usage: ./bin/build-plugins          # build + install
+#        ./bin/build-plugins --check  # just verify compilation
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PLUGIN_DIR="$REPO_ROOT/zchat-hub-plugin"
+ZCHAT_HOME="${ZCHAT_HOME:-$REPO_ROOT/.zchat}"
+
+if [ ! -d "$PLUGIN_DIR" ]; then
+    echo "Error: $PLUGIN_DIR not found" >&2
+    exit 1
+fi
+
+# Ensure wasm target is available
+rustup target add wasm32-wasip1 2>/dev/null || true
+
+# Build (must cd into the dir so .cargo/config.toml is picked up)
+echo "Building plugins..."
+(cd "$PLUGIN_DIR" && cargo build --release)
+
+WASM_DIR="$PLUGIN_DIR/target/wasm32-wasip1/release"
+
+if [ "${1:-}" = "--check" ]; then
+    echo "Build OK:"
+    ls -lh "$WASM_DIR"/zchat-*.wasm
+    exit 0
+fi
+
+# Install to ZCHAT_HOME/plugins/
+mkdir -p "$ZCHAT_HOME/plugins"
+cp "$WASM_DIR/zchat-status.wasm" "$ZCHAT_HOME/plugins/"
+cp "$WASM_DIR/zchat-palette.wasm" "$ZCHAT_HOME/plugins/"
+echo "Installed to $ZCHAT_HOME/plugins/"
+
+# Also copy to bundled data dir (for PyPI releases)
+BUNDLED="$REPO_ROOT/zchat/cli/data/plugins"
+mkdir -p "$BUNDLED"
+cp "$WASM_DIR/zchat-status.wasm" "$BUNDLED/"
+cp "$WASM_DIR/zchat-palette.wasm" "$BUNDLED/"
+echo "Copied to $BUNDLED/"
+
+echo "Done."

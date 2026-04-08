@@ -12,6 +12,6 @@ jobs:
         with:
           submodules: true
       - uses: astral-sh/setup-uv@v4
-      - run: brew install tmux
+      - run: brew install zellij
       - run: uv sync
       - run: uv run pytest tests/unit/ -v

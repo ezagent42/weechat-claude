@@ -3,6 +3,12 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 
+# Dev local state
+/.zchat/
+
+# Rust build artifacts
+zchat-hub-plugin/target/
+
 # Runtime artifacts
 .mcp.json
 ircd.db

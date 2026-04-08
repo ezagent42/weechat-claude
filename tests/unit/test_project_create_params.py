@@ -12,12 +12,22 @@ runner = CliRunner()
 def isolated_home(tmp_path, monkeypatch):
     """Redirect ZCHAT_HOME to temp dir for each test."""
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setattr("zchat.cli.config_cmd.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setattr("zchat.cli.runner.ZCHAT_DIR", str(tmp_path))
     return tmp_path
 
 
 def _load_config(home, name):
     with open(os.path.join(str(home), "projects", name, "config.toml"), "rb") as f:
         return tomllib.load(f)
+
+
+def _load_global_config(home):
+    path = os.path.join(str(home), "config.toml")
+    if os.path.isfile(path):
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    return {}
 
 
 def test_create_with_all_params(isolated_home):
@@ -32,15 +42,19 @@ def test_create_with_all_params(isolated_home):
     ])
     assert result.exit_code == 0, result.output
     cfg = _load_config(isolated_home, "test-proj")
-    assert cfg["irc"]["server"] == "127.0.0.1"
-    assert cfg["irc"]["port"] == 6667
-    assert cfg["irc"]["tls"] is False
-    assert cfg["agents"]["default_type"] == "claude"
-    assert "#general" in cfg["agents"]["default_channels"]
+    # Server stored as reference name
+    assert cfg["server"] == "local"
+    assert "#general" in cfg["default_channels"]
+    assert "zellij" in cfg
+    assert cfg["zellij"]["session"].startswith("zchat-")
+    # Global config should have the server definition
+    gcfg = _load_global_config(isolated_home)
+    assert "local" in gcfg.get("servers", {})
+    assert gcfg["servers"]["local"]["host"] == "127.0.0.1"
 
 
 def test_create_with_zchat_inside_server(isolated_home):
-    """--server zchat.inside.h2os.cloud → defaults: port 6697, tls True."""
+    """--server zchat.inside.h2os.cloud → auto-creates 'cloud' server in global config."""
     result = runner.invoke(app, [
         "project", "create", "tls-proj",
         "--server", "zchat.inside.h2os.cloud",
@@ -50,12 +64,16 @@ def test_create_with_zchat_inside_server(isolated_home):
     ])
     assert result.exit_code == 0, result.output
     cfg = _load_config(isolated_home, "tls-proj")
-    assert cfg["irc"]["port"] == 6697
-    assert cfg["irc"]["tls"] is True
+    # The server name is derived from hostname
+    assert cfg["server"] in ("cloud", "zchat-inside-h2os-cloud")
+    gcfg = _load_global_config(isolated_home)
+    srv_name = cfg["server"]
+    assert gcfg["servers"][srv_name]["host"] == "zchat.inside.h2os.cloud"
+    assert gcfg["servers"][srv_name]["tls"] is True
 
 
 def test_create_with_explicit_port_tls(isolated_home):
-    """Explicit --port and --tls override server defaults."""
+    """Explicit --port and --tls → server stored with those settings."""
     result = runner.invoke(app, [
         "project", "create", "custom-proj",
         "--server", "127.0.0.1",
@@ -67,8 +85,11 @@ def test_create_with_explicit_port_tls(isolated_home):
     ])
     assert result.exit_code == 0, result.output
     cfg = _load_config(isolated_home, "custom-proj")
-    assert cfg["irc"]["port"] == 7000
-    assert cfg["irc"]["tls"] is True
+    assert cfg["server"] == "local"
+    assert "#dev" in cfg["default_channels"]
+    gcfg = _load_global_config(isolated_home)
+    assert gcfg["servers"]["local"]["port"] == 7000
+    assert gcfg["servers"]["local"]["tls"] is True
 
 
 def test_create_with_proxy(isolated_home):

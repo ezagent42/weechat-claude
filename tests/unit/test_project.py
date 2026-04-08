@@ -1,4 +1,5 @@
 import os
+import tomllib
 
 from zchat.cli.project import (
     create_project_config, list_projects, get_default_project,
@@ -6,17 +7,69 @@ from zchat.cli.project import (
     remove_project, set_config_value,
 )
 
+
 def test_create_project_config(tmp_path, monkeypatch):
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    create_project_config("test-proj", server="10.0.0.1", port=6667,
-                          tls=False, password="", nick="alice", channels="#general")
+    create_project_config("test-proj", server="local", nick="alice",
+                          channels="#general")
     cfg_path = tmp_path / "projects" / "test-proj" / "config.toml"
     assert cfg_path.exists()
-    import tomllib
     with open(cfg_path, "rb") as f:
         cfg = tomllib.load(f)
-    assert cfg["irc"]["server"] == "10.0.0.1"
-    assert cfg["agents"]["username"] == "alice"
+    assert cfg["server"] == "local"
+    assert cfg["username"] == "alice"
+    assert cfg["default_channels"] == ["#general"]
+    assert cfg["zellij"]["session"] == "zchat-test-proj"
+
+
+def test_create_project_no_tmuxp_yaml(tmp_path, monkeypatch):
+    """New config should NOT generate tmuxp.yaml or bootstrap.sh."""
+    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    create_project_config("test-no-tmux", server="local", nick="",
+                          channels="#general")
+    pdir = tmp_path / "projects" / "test-no-tmux"
+    assert not (pdir / "tmuxp.yaml").exists()
+    assert not (pdir / "bootstrap.sh").exists()
+
+
+def test_create_project_default_runner(tmp_path, monkeypatch):
+    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    create_project_config("dr", nick="", channels="#general")
+    cfg = load_project_config("dr")
+    assert cfg["default_runner"] == "claude-channel"
+
+
+def test_create_project_custom_runner(tmp_path, monkeypatch):
+    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    create_project_config("cr", nick="", channels="#general",
+                          default_runner="codex")
+    cfg = load_project_config("cr")
+    assert cfg["default_runner"] == "codex"
+
+
+def test_create_project_zellij_session(tmp_path, monkeypatch):
+    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    create_project_config("ztest", nick="", channels="#general")
+    cfg = load_project_config("ztest")
+    assert cfg["zellij"]["session"] == "zchat-ztest"
+
+
+def test_create_project_mcp_server_cmd(tmp_path, monkeypatch):
+    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    create_project_config("mcp", nick="", channels="#general",
+                          mcp_server_cmd=["uv", "run", "zchat-channel"])
+    cfg = load_project_config("mcp")
+    assert cfg["mcp_server_cmd"] == ["uv", "run", "zchat-channel"]
+
+
+def test_create_project_with_env_file(tmp_path, monkeypatch):
+    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
+    env_path = "/some/path/env"
+    create_project_config("proxy", nick="", channels="#general",
+                          env_file=env_path)
+    cfg = load_project_config("proxy")
+    assert cfg["env_file"] == env_path
+
 
 def test_list_projects(tmp_path, monkeypatch):
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
@@ -24,15 +77,18 @@ def test_list_projects(tmp_path, monkeypatch):
     (tmp_path / "projects" / "b").mkdir(parents=True)
     assert set(list_projects()) == {"a", "b"}
 
+
 def test_default_project(tmp_path, monkeypatch):
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
     assert get_default_project() is None
     set_default_project("my-proj")
     assert get_default_project() == "my-proj"
 
+
 def test_resolve_project_explicit(tmp_path, monkeypatch):
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
     assert resolve_project(explicit="my-proj") == "my-proj"
+
 
 def test_resolve_project_from_cwd(tmp_path, monkeypatch):
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
@@ -41,93 +97,68 @@ def test_resolve_project_from_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert resolve_project() == "cwd-proj"
 
+
 def test_resolve_project_from_default(tmp_path, monkeypatch):
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
     set_default_project("default-proj")
     assert resolve_project() == "default-proj"
 
+
 def test_remove_project(tmp_path, monkeypatch):
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    create_project_config("to-remove", server="localhost", port=6667,
-                          tls=False, password="", nick="x", channels="#g")
+    create_project_config("to-remove", nick="x", channels="#g")
     remove_project("to-remove")
     assert not (tmp_path / "projects" / "to-remove").exists()
 
-def test_load_project_config(tmp_path, monkeypatch):
+
+def test_load_project_config_new_format(tmp_path, monkeypatch):
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    create_project_config("cfg-test", server="10.0.0.1", port=6697,
-                          tls=True, password="pw", nick="bob", channels="#dev,#general")
-    cfg = load_project_config("cfg-test")
-    assert cfg["irc"]["server"] == "10.0.0.1"
-    assert cfg["irc"]["tls"] is True
-    assert cfg["agents"]["username"] == "bob"
-    assert "auth" not in cfg
+    create_project_config("cfg-new", server="local", nick="bob",
+                          channels="#dev,#general")
+    cfg = load_project_config("cfg-new")
+    assert cfg["server"] == "local"
+    assert cfg["username"] == "bob"
+    assert cfg["default_channels"] == ["#dev", "#general"]
+    assert "irc" not in cfg
 
 
-def test_config_has_default_type(tmp_path, monkeypatch):
-    """config.toml should have default_type instead of claude_args."""
+def test_load_project_config_old_format_rejected(tmp_path, monkeypatch):
+    """Old [irc]/[tmux] format should be rejected with a clear error."""
+    import pytest
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    create_project_config("test", server="127.0.0.1", port=6667, tls=False,
-                          password="", nick="alice", channels="#general")
-    cfg = load_project_config("test")
-    assert cfg["agents"]["default_type"] == "claude"
-    assert "claude_args" not in cfg["agents"]
+    pdir = tmp_path / "projects" / "old-fmt"
+    pdir.mkdir(parents=True)
+    (pdir / "config.toml").write_text('''[irc]
+server = "10.0.0.1"
+port = 6697
+
+[tmux]
+session = "zchat-abc12345-old-fmt"
+''')
+    with pytest.raises(SystemExit, match="old config format"):
+        load_project_config("old-fmt")
 
 
 def test_set_config_value(tmp_path, monkeypatch):
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    create_project_config("test-set", server="127.0.0.1", port=6667,
-                          tls=False, password="", nick="alice", channels="#general")
-    set_config_value("test-set", "agents.default_type", "codex")
+    create_project_config("test-set", nick="alice", channels="#general")
+    set_config_value("test-set", "default_runner", "codex")
     cfg = load_project_config("test-set")
-    assert cfg["agents"]["default_type"] == "codex"
+    assert cfg["default_runner"] == "codex"
 
 
-def test_create_project_config_no_auth_section(tmp_path, monkeypatch):
-    """config.toml should not contain [auth] section."""
+def test_load_defaults(tmp_path, monkeypatch):
+    """load_project_config fills defaults for missing keys."""
     monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    create_project_config("test", server="127.0.0.1", port=6667, tls=False,
-                          password="", nick="", channels="#general")
-    cfg = load_project_config("test")
-    assert "auth" not in cfg
-
-
-def test_project_create_config_with_default_type(tmp_path, monkeypatch):
-    """create_project_config stores the selected default_type."""
-    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    create_project_config("typed", server="127.0.0.1", port=6667, tls=False,
-                          password="", nick="", channels="#general",
-                          default_type="claude")
-    cfg = load_project_config("typed")
-    assert cfg["agents"]["default_type"] == "claude"
-    assert "auth" not in cfg
-
-
-def test_project_create_with_env_file(tmp_path, monkeypatch):
-    """Proxy env_file path is stored in config."""
-    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    env_path = str(tmp_path / "projects" / "proxy-test" / "claude.local.env")
-    create_project_config("proxy-test", server="127.0.0.1", port=6667, tls=False,
-                          password="", nick="", channels="#general",
-                          env_file=env_path)
-    cfg = load_project_config("proxy-test")
-    assert cfg["agents"]["env_file"] == env_path
-
-
-def test_create_project_generates_tmuxp_yaml(tmp_path, monkeypatch):
-    """project create should generate tmuxp.yaml and bootstrap.sh."""
-    import yaml
-    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    create_project_config("test-tmuxp", server="127.0.0.1", port=6667,
-                          tls=False, password="", nick="", channels="#general")
-    pdir = tmp_path / "projects" / "test-tmuxp"
-    tmuxp_path = pdir / "tmuxp.yaml"
-    bootstrap_path = pdir / "bootstrap.sh"
-    assert tmuxp_path.exists()
-    assert bootstrap_path.exists()
-    with open(tmuxp_path) as f:
-        cfg = yaml.safe_load(f)
-    assert cfg["session_name"].startswith("zchat-")
-    assert cfg["before_script"] == str(bootstrap_path)
-    assert str(pdir) in cfg["start_directory"]
-    assert os.access(str(bootstrap_path), os.X_OK)
+    import tomli_w
+    pdir = tmp_path / "projects" / "minimal"
+    pdir.mkdir(parents=True)
+    # Write a minimal config
+    with open(pdir / "config.toml", "wb") as f:
+        tomli_w.dump({"server": "remote"}, f)
+    cfg = load_project_config("minimal")
+    assert cfg["server"] == "remote"
+    assert cfg["default_runner"] == "claude-channel"
+    assert cfg["default_channels"] == ["#general"]
+    assert cfg["mcp_server_cmd"] == ["zchat-channel"]
+    assert "zellij" in cfg

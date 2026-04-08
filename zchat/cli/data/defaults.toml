@@ -1,0 +1,23 @@
+# zchat default configuration
+# These values are used when no user config exists.
+# Users can override by editing ~/.zchat/config.toml.
+
+[defaults]
+channels = ["#general"]
+runner = "claude-channel"
+mcp_server_cmd = ["zchat-channel"]
+
+# Server presets shown during `project create`.
+# Each preset becomes a selectable option.
+# The first entry is the default.
+[server_presets.cloud]
+host = "zchat.inside.h2os.cloud"
+port = 6697
+tls = true
+label = "zchat.inside.h2os.cloud (recommended)"
+
+[server_presets.local]
+host = "127.0.0.1"
+port = 6667
+tls = false
+label = "Local (127.0.0.1:6667)"

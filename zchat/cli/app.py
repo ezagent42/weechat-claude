@@ -25,6 +25,7 @@ from zchat.cli.update import (
 from zchat.cli.config_cmd import (
     load_global_config, save_global_config,
     get_config_value, set_config_value,
+    resolve_server, ensure_server_in_global,
 )
 
 app = typer.Typer(name="zchat", help="Claude Code agent lifecycle management")
@@ -55,36 +56,94 @@ def _get_config(ctx: typer.Context) -> dict:
     return cfg
 
 
-def _get_tmux_session(ctx: typer.Context) -> str:
-    """Get tmux session name from project config."""
+def _prompt_new_server(global_cfg: dict) -> str:
+    """Interactive prompt to add a new IRC server to global config."""
+    from zchat.cli.defaults import server_presets
+    presets = server_presets()
+    preset_names = list(presets.keys())
+
+    typer.echo("Add new IRC server:")
+    for i, name in enumerate(preset_names, 1):
+        typer.echo(f"  {i}) {presets[name].get('label', name)}")
+    typer.echo(f"  {len(preset_names) + 1}) Custom")
+    choice = typer.prompt("Choose", default="1")
+
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(preset_names):
+            name = preset_names[idx]
+            p = presets[name]
+            ensure_server_in_global(name, p["host"], p["port"], p.get("tls", False), "", global_cfg)
+            return name
+    except (ValueError, IndexError):
+        pass
+
+    # Custom
+    host = typer.prompt("Hostname", default="127.0.0.1")
+    port = typer.prompt("Port", default=6667, type=int)
+    use_tls = typer.confirm("TLS", default=False)
+    pw = typer.prompt("Password", default="", show_default=False)
+    server_name = host.replace(".", "-").split(":")[0]
+    if server_name in ("127-0-0-1", "localhost"):
+        server_name = "local"
+    ensure_server_in_global(server_name, host, port, use_tls, pw, global_cfg)
+    return server_name
+
+
+def _get_irc_config(cfg: dict) -> dict:
+    """Resolve IRC connection details from project config + global config.
+
+    For new-format configs, resolves the server reference via global config.
+    For old-format configs (with [irc] section), returns directly.
+    """
+    if "irc" in cfg:
+        raise SystemExit(
+            f"Error: Project uses old config format ([irc] section).\n"
+            f"Please delete the project and recreate it:\n"
+            f"  zchat project remove <name> && zchat project create <name>"
+        )
+    # New format — resolve server reference
+    server_ref = cfg.get("server", "local")
+    return resolve_server(server_ref)
+
+
+def _get_zellij_session(ctx: typer.Context) -> str:
+    """Get Zellij session name from project config."""
     cfg = _get_config(ctx)
+    # New format
+    session = cfg.get("zellij", {}).get("session")
+    if session:
+        return session
+    # Legacy fallback
     session = cfg.get("tmux", {}).get("session")
-    if not session:
-        # Fallback for projects created before tmux session tracking
-        project_name = ctx.obj["project"]
-        session = f"zchat-{project_name}"
-    return session
+    if session:
+        return session
+    project_name = ctx.obj["project"]
+    return f"zchat-{project_name}"
 
 
-def _tmux_switch(session_name: str, window_name: str):
-    """Switch to a tmux window. Attach if outside tmux, select-window if inside."""
-    target = f"{session_name}:{window_name}"
-    if os.environ.get("TMUX"):
-        result = subprocess.run(["tmux", "select-window", "-t", target], capture_output=True)
+def _zellij_switch(session_name: str, tab_name: str):
+    """Switch to a Zellij tab. Uses go-to-tab-name inside Zellij, or prints hint outside."""
+    from zchat.cli import zellij
+    if os.environ.get("ZELLIJ"):
+        zellij.go_to_tab(session_name, tab_name)
     else:
-        result = subprocess.run(["tmux", "attach", "-t", target])
-    if result.returncode != 0:
-        typer.echo(f"Error: tmux window '{window_name}' not found")
+        typer.echo(f"Not inside Zellij. Run: zellij attach {session_name}")
         raise typer.Exit(1)
 
 
 def _get_irc_manager(ctx: typer.Context) -> IrcManager:
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
+    # Inject resolved IRC config so IrcManager sees it at cfg["irc"]
+    if "irc" not in cfg:
+        cfg["irc"] = _get_irc_config(cfg)
+        # Map host→server for IrcManager's irc_config property
+        cfg["irc"].setdefault("server", cfg["irc"].get("host", "127.0.0.1"))
     return IrcManager(
         config=cfg,
         state_file=state_file_path(project_name),
-        tmux_session=_get_tmux_session(ctx),
+        zellij_session=_get_zellij_session(ctx),
     )
 
 
@@ -92,16 +151,17 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
     from zchat.cli.auth import get_username
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
+    irc = _get_irc_config(cfg)
     return AgentManager(
-        irc_server=cfg["irc"]["server"],
-        irc_port=cfg["irc"]["port"],
-        irc_tls=cfg["irc"].get("tls", False),
-        irc_password=cfg["irc"].get("password", ""),
+        irc_server=irc["host"],
+        irc_port=irc["port"],
+        irc_tls=irc.get("tls", False),
+        irc_password=irc.get("password", ""),
         username=get_username(),
-        default_channels=cfg["agents"]["default_channels"],
-        env_file=cfg["agents"].get("env_file", ""),
-        default_type=cfg["agents"].get("default_type", "claude"),
-        tmux_session=_get_tmux_session(ctx),
+        default_channels=cfg.get("default_channels", []),
+        env_file=cfg.get("env_file", ""),
+        default_type=cfg.get("default_runner", ""),
+        zellij_session=_get_zellij_session(ctx),
         state_file=state_file_path(project_name),
         project_dir=project_dir(project_name),
     )
@@ -129,14 +189,17 @@ def _spawn_update_check(state: dict, auto_upgrade: bool = True) -> None:
     )
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
     project: Optional[str] = typer.Option(None, help="Project name (overrides auto-detection)"),
     version: bool = typer.Option(False, "--version", "-V", callback=_version_callback,
                                  is_eager=True, help="Show version and exit"),
 ):
-    """Claude Code agent lifecycle management."""
+    """Claude Code agent lifecycle management.
+
+    Run without subcommand to start/attach the Zellij session.
+    """
     ctx.ensure_object(dict)
 
     resolved = resolve_project(explicit=project)
@@ -161,6 +224,296 @@ def main(
     except Exception:
         pass  # Never block CLI startup
 
+    # No subcommand → enter zchat main session
+    if ctx.invoked_subcommand is None:
+        _enter_main_session()
+
+
+def _ensure_plugins():
+    """Copy bundled .wasm plugins to ~/.zchat/plugins/ if missing or outdated."""
+    plugins_dir = os.path.join(ZCHAT_DIR, "plugins")
+    os.makedirs(plugins_dir, exist_ok=True)
+    bundled_dir = os.path.join(os.path.dirname(__file__), "data", "plugins")
+    if not os.path.isdir(bundled_dir):
+        return
+    for wasm in os.listdir(bundled_dir):
+        if wasm.endswith(".wasm"):
+            src = os.path.join(bundled_dir, wasm)
+            dest = os.path.join(plugins_dir, wasm)
+            src_mtime = os.path.getmtime(src)
+            if not os.path.isfile(dest) or os.path.getmtime(dest) < src_mtime:
+                import shutil
+                shutil.copy2(src, dest)
+
+
+def _zchat_bin() -> str:
+    """Return the path to invoke zchat in a subprocess.
+
+    Prefers the system-installed 'zchat' binary. Falls back to
+    sys.executable -m zchat.cli for dev environments.
+    """
+    import sys
+    import shutil
+    # 1. If sys.argv[0] resolves to an executable, use it
+    argv0 = sys.argv[0]
+    if os.path.isabs(argv0) and os.path.isfile(argv0):
+        return argv0
+    resolved = shutil.which(argv0)
+    if resolved:
+        return resolved
+    # 2. Check if 'zchat' is on PATH (e.g. Homebrew install)
+    zchat_path = shutil.which("zchat")
+    if zchat_path:
+        return zchat_path
+    # 3. Fallback: use sys.executable -m zchat.cli
+    return f"{sys.executable} -m zchat.cli"
+
+
+def _resolve_static_choices(source_name: str) -> list[dict] | None:
+    """Resolve static choices for a source name.
+
+    Returns list of {"value": ..., "label": ...} dicts.
+    Merges built-in presets (from defaults.toml) with user config.
+    """
+    if source_name == "servers":
+        from zchat.cli.defaults import server_presets
+        seen = set()
+        choices = []
+        # Built-in presets first
+        for name, preset in server_presets().items():
+            choices.append({"value": name, "label": preset.get("label", name)})
+            seen.add(name)
+        # User-configured servers
+        try:
+            global_cfg = load_global_config()
+            for name, srv in global_cfg.get("servers", {}).items():
+                if name not in seen:
+                    host = srv.get("host", "?")
+                    port = srv.get("port", "?")
+                    choices.append({"value": name, "label": f"{name} ({host}:{port})"})
+        except Exception:
+            pass
+        return choices if choices else None
+    if source_name == "projects":
+        try:
+            projects = list_projects()
+            if projects:
+                return [{"value": p, "label": p} for p in sorted(projects)]
+        except Exception:
+            pass
+        return None
+    return None
+
+
+def _get_commands_json() -> str:
+    """Return list-commands output as a JSON string.
+
+    For args with a ``source``, includes pre-resolved ``choices`` when
+    the source is static (e.g. servers from global config).  Runtime
+    sources (running_agents, projects) are resolved by the plugin from
+    Zellij events.
+    """
+    import json as _json
+    import click
+
+    click_group = typer.main.get_group(app)
+    commands = []
+
+    def walk(group, prefix=""):
+        for name in sorted(group.list_commands(None) or []):
+            cmd = group.get_command(None, name)
+            if cmd is None:
+                continue
+            full = f"{prefix} {name}".strip()
+            if isinstance(cmd, click.Group):
+                if not getattr(cmd, "hidden", False):
+                    walk(cmd, full)
+            elif getattr(cmd, "hidden", False):
+                continue
+            else:
+                sources = _ARG_SOURCES.get(full, {})
+                args = []
+                for p in cmd.params:
+                    if p.name in ("ctx",) or p.name.startswith("_"):
+                        continue
+                    arg = {"name": p.name, "required": p.required}
+                    if p.name in sources:
+                        source = sources[p.name]
+                        arg["source"] = source
+                        # Pre-resolve static choices
+                        choices = _resolve_static_choices(source)
+                        if choices:
+                            arg["choices"] = choices
+                    args.append(arg)
+                commands.append({"name": full, "args": args})
+
+    walk(click_group)
+    return _json.dumps(commands)
+
+
+def _write_config_kdl(project_dir_path) -> str:
+    """Generate config.kdl with correct plugin path and write to project dir."""
+    import json as _json
+    plugins_dir = os.path.join(ZCHAT_DIR, "plugins")
+    zchat_bin = _zchat_bin()
+    commands_json = _get_commands_json()
+    # Escape for KDL string (backslashes and quotes)
+    commands_escaped = commands_json.replace("\\", "\\\\").replace('"', '\\"')
+    config_kdl = os.path.join(project_dir_path, "config.kdl")
+    content = f"""\
+keybinds {{
+    shared_except "locked" {{
+        bind "Ctrl k" {{
+            LaunchOrFocusPlugin "file:{plugins_dir}/zchat-palette.wasm" {{
+                floating true
+                move_to_focused_tab true
+                zchat_bin "{zchat_bin}"
+                zchat_home "{ZCHAT_DIR}"
+                commands_json "{commands_escaped}"
+            }}
+        }}
+    }}
+}}
+"""
+    with open(config_kdl, "w") as f:
+        f.write(content)
+    return config_kdl
+
+
+def _enter_main_session():
+    """Always enter the zchat main Zellij session.
+
+    This is the hub. From here users manage projects, create agents,
+    and switch to project sessions via ``zchat project use <name>``.
+    """
+    from zchat.cli import zellij
+    from zchat.cli.layout import generate_layout
+
+    _ensure_plugins()
+
+    session_name = "zchat"
+
+    # Already inside the main session → nothing to do
+    if os.environ.get("ZELLIJ_SESSION_NAME") == session_name:
+        return
+
+    # Inside a different Zellij session → switch
+    if os.environ.get("ZELLIJ"):
+        zellij.switch_session(session_name)
+        return
+
+    # Session exists → attach
+    if zellij.session_exists(session_name):
+        os.execvp("zellij", ["zellij", "attach", session_name])
+        return
+
+    # Create new main session with a ctl tab
+    main_dir = os.path.join(ZCHAT_DIR, "main")
+    os.makedirs(main_dir, exist_ok=True)
+
+    layout_kdl_path = os.path.join(main_dir, "layout.kdl")
+    with open(layout_kdl_path, "w") as f:
+        f.write("layout {\n")
+        f.write("    default_tab_template {\n")
+        f.write('        pane size=1 borderless=true {\n')
+        f.write('            plugin location="zellij:tab-bar"\n')
+        f.write("        }\n")
+        f.write("        children\n")
+        plugins = os.path.join(ZCHAT_DIR, "plugins")
+        f.write(f'        pane size=1 borderless=true {{\n')
+        f.write(f'            plugin location="file:{plugins}/zchat-status.wasm"\n')
+        f.write("        }\n")
+        f.write('        pane size=2 borderless=true {\n')
+        f.write('            plugin location="zellij:status-bar"\n')
+        f.write("        }\n")
+        f.write("    }\n")
+        f.write('    tab name="ctl" focus=true {\n')
+        f.write("        pane\n")
+        f.write("    }\n")
+        f.write("}\n")
+
+    config_kdl = _write_config_kdl(main_dir)
+    os.execvp("zellij", ["zellij", "--config", str(config_kdl),
+                          "--new-session-with-layout", layout_kdl_path,
+                          "--session", session_name])
+
+
+def _launch_project_session(name: str):
+    """Ensure the project's Zellij session is running, then switch/attach to it.
+
+    If already inside Zellij → switch_session.
+    If outside → create session (if needed) and attach.
+    """
+    from zchat.cli import zellij
+    from zchat.cli.layout import write_layout
+    from zchat.cli.auth import get_username
+
+    _ensure_plugins()
+
+    cfg = load_project_config(name)
+    session_name = cfg.get("zellij", {}).get("session") or f"zchat-{name}"
+    pdir = project_dir(name)
+
+    # Already inside Zellij → switch session (create first if needed)
+    if os.environ.get("ZELLIJ"):
+        if not zellij.session_exists(session_name):
+            _create_project_zellij_session(name, cfg, session_name, pdir)
+        zellij.switch_session(session_name)
+        return
+
+    # Outside Zellij — session exists → attach
+    if zellij.session_exists(session_name):
+        os.execvp("zellij", ["zellij", "attach", session_name])
+        return
+
+    # Outside Zellij — create and attach
+    _create_project_zellij_session(name, cfg, session_name, pdir)
+    os.execvp("zellij", ["zellij", "attach", session_name])
+
+
+def _create_project_zellij_session(name: str, cfg: dict, session_name: str, pdir: str):
+    """Create a new Zellij session for a project (does NOT attach)."""
+    from zchat.cli.layout import write_layout
+
+    irc = _get_irc_config(cfg)
+
+    # Build IrcManager to get weechat cmd and optionally start ergo
+    irc_cfg = dict(cfg)
+    if "irc" not in irc_cfg:
+        irc_cfg["irc"] = irc
+        irc_cfg["irc"].setdefault("server", irc.get("host", "127.0.0.1"))
+    irc_manager = IrcManager(
+        config=irc_cfg,
+        state_file=state_file_path(name),
+        zellij_session=session_name,
+    )
+
+    # Start ergo if local
+    server = irc["host"]
+    if server in ("127.0.0.1", "localhost", "::1"):
+        irc_manager.daemon_start()
+
+    weechat_cmd = irc_manager.build_weechat_cmd()
+    state_path = state_file_path(name)
+    state = {}
+    if os.path.isfile(state_path):
+        import json
+        with open(state_path) as f:
+            try:
+                state = json.load(f)
+            except Exception:
+                pass
+
+    layout_path = write_layout(pdir, cfg, state,
+                               weechat_cmd=weechat_cmd,
+                               project_name=name)
+    config_kdl = _write_config_kdl(pdir)
+
+    # Create session in background (detached)
+    from zchat.cli import zellij
+    zellij.ensure_session(session_name, layout=str(layout_path),
+                          config=str(config_kdl))
+
 
 # ============================================================
 # project commands
@@ -169,15 +522,18 @@ def main(
 @project_app.command("create")
 def cmd_project_create(
     name: str,
-    server: Optional[str] = typer.Option(None, help="IRC server address"),
-    port: Optional[int] = typer.Option(None, help="IRC port"),
-    tls: Optional[bool] = typer.Option(None, help="Enable TLS"),
-    password: Optional[str] = typer.Option(None, help="IRC password"),
+    server: Optional[str] = typer.Option(None, help="Server name (from global config) or hostname"),
+    port: Optional[int] = typer.Option(None, help="IRC port (only for new server)"),
+    tls: Optional[bool] = typer.Option(None, help="Enable TLS (only for new server)"),
+    password: Optional[str] = typer.Option(None, help="IRC password (only for new server)"),
     channels: Optional[str] = typer.Option(None, help="Default channels (comma-separated)"),
     agent_type: Optional[str] = typer.Option(None, "--agent-type", help="Agent template name (e.g. 'claude')"),
     proxy: Optional[str] = typer.Option(None, help="HTTP proxy (ip:port, empty string for none)"),
 ):
     """Create a new project with config setup.
+
+    --server can be a name from global config (e.g. 'local', 'cloud') or a
+    hostname. If the server doesn't exist in global config, it is created.
 
     When all required options are provided, runs non-interactively.
     Otherwise, prompts for missing values.
@@ -187,38 +543,59 @@ def cmd_project_create(
         typer.echo(f"Project '{name}' already exists.")
         raise typer.Exit(1)
 
-    # --- IRC server ---
-    _server: str
-    _port: int
-    _tls: bool
-    _password: str
+    global_cfg = load_global_config()
+    existing_servers = global_cfg.get("servers", {})
+
+    # --- IRC server selection ---
+    _server_ref: str
     if server is not None:
-        _server = server
-        if server == "zchat.inside.h2os.cloud":
-            _port = port if port is not None else 6697
-            _tls = tls if tls is not None else True
+        _server_ref = server
+    else:
+        # Show existing servers + options to add new
+        choices = list(existing_servers.keys())
+        if choices:
+            typer.echo("IRC Server:")
+            for i, sname in enumerate(choices, 1):
+                srv = existing_servers[sname]
+                typer.echo(f"  {i}) {sname} ({srv.get('host', '?')}:{srv.get('port', '?')})")
+            typer.echo(f"  {len(choices) + 1}) Add new server")
+            choice = typer.prompt("Choose", default="1")
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(choices):
+                    _server_ref = choices[idx]
+                else:
+                    raise ValueError
+            except ValueError:
+                _server_ref = _prompt_new_server(global_cfg)
+        else:
+            _server_ref = _prompt_new_server(global_cfg)
+
+    # Ensure server exists in global config (auto-create if it's a hostname)
+    if _server_ref not in global_cfg.get("servers", {}):
+        from zchat.cli.defaults import server_presets
+        presets = server_presets()
+        # Check if it matches a preset by hostname
+        preset_match = next((n for n, p in presets.items() if p["host"] == _server_ref), None)
+        if preset_match:
+            p = presets[preset_match]
+            _port = port if port is not None else p["port"]
+            _tls = tls if tls is not None else p.get("tls", False)
+            ensure_server_in_global(preset_match, p["host"], _port, _tls, password or "", global_cfg)
+            _server_ref = preset_match
         else:
             _port = port if port is not None else 6667
             _tls = tls if tls is not None else False
-        _password = password if password is not None else ""
-    else:
-        typer.echo("IRC Server:")
-        typer.echo("  1) zchat.inside.h2os.cloud (recommended)")
-        typer.echo("  2) Custom server")
-        server_choice = typer.prompt("Choose", default="1")
-        if server_choice == "1":
-            _server = "zchat.inside.h2os.cloud"
-            _port = 6697
-            _tls = True
-            _password = ""
-        else:
-            _server = typer.prompt("IRC server", default="127.0.0.1")
-            _port = typer.prompt("IRC port", default=6667, type=int)
-            _tls = typer.confirm("TLS", default=False)
-            _password = typer.prompt("Password", default="", show_default=False)
+            _password = password if password is not None else ""
+            server_name = _server_ref.replace(".", "-").split(":")[0]
+            if server_name in ("127-0-0-1", "localhost"):
+                server_name = "local"
+            ensure_server_in_global(server_name, _server_ref, _port, _tls, _password, global_cfg)
+            _server_ref = server_name
 
     # --- Channels ---
-    _channels: str = channels if channels is not None else typer.prompt("Default channels", default="#general")
+    from zchat.cli.defaults import default_channels as _default_channels
+    _channels: str = channels if channels is not None else typer.prompt("Default channels", default=",".join(_default_channels()))
 
     # --- Agent type ---
     from zchat.cli.template_loader import list_templates
@@ -276,9 +653,8 @@ def cmd_project_create(
                     f.write(f"HTTPS_PROXY={proxy_url}\n")
                 env_file = env_path
 
-    create_project_config(name, server=_server, port=_port, tls=_tls,
-                          password=_password, nick="", channels=_channels,
-                          env_file=env_file, default_type=default_type)
+    create_project_config(name, server=_server_ref, nick="", channels=_channels,
+                          env_file=env_file, default_runner=default_type)
     typer.echo(f"\nProject '{name}' created at {pdir}/")
     typer.echo(f"Config saved to {pdir}/config.toml")
     if env_file:
@@ -294,33 +670,17 @@ def cmd_project_list():
         return
     for p in projects:
         marker = " (default)" if p == default else ""
-        typer.echo(f"  {p}{marker}")
+        typer.echo(f"  {p}{marker}  {project_dir(p)}")
 
 @project_app.command("use")
 def cmd_project_use(name: str):
-    """Set default project and attach to its tmux session."""
+    """Set default project and launch/switch to its Zellij session."""
     if not os.path.isdir(project_dir(name)):
         typer.echo(f"Project '{name}' does not exist.")
         raise typer.Exit(1)
     set_default_project(name)
-    cfg = load_project_config(name)
-    session_name = cfg.get("tmux", {}).get("session", f"zchat-{name}")
     typer.echo(f"Default project set to '{name}'.")
-    # Attach to the project's tmux session if it exists
-    import subprocess
-    result = subprocess.run(
-        ["tmux", "has-session", "-t", session_name],
-        capture_output=True,
-    )
-    if result.returncode != 0:
-        typer.echo(
-            f"Session not running. Use 'zchat irc start' to start it."
-        )
-        return
-    if os.environ.get("TMUX"):
-        subprocess.run(["tmux", "switch-client", "-t", session_name])
-    else:
-        subprocess.run(["tmux", "attach", "-t", session_name])
+    _launch_project_session(name)
 
 @project_app.command("remove")
 def cmd_project_remove(name: str):
@@ -333,12 +693,13 @@ def cmd_project_remove(name: str):
     try:
         from zchat.cli.auth import get_username
         cfg = load_project_config(name)
+        irc = _get_irc_config(cfg)
         mgr = AgentManager(
-            irc_server=cfg["irc"]["server"], irc_port=cfg["irc"]["port"],
-            irc_tls=cfg["irc"].get("tls", False),
-            irc_password=cfg["irc"].get("password", ""),
+            irc_server=irc["host"], irc_port=irc["port"],
+            irc_tls=irc.get("tls", False),
+            irc_password=irc.get("password", ""),
             username=get_username(),
-            default_channels=cfg["agents"]["default_channels"],
+            default_channels=cfg.get("default_channels", []),
             state_file=state_file_path(name),
         )
         running = [n for n, i in mgr.list_agents().items() if i["status"] == "running"]
@@ -599,7 +960,7 @@ def cmd_irc_start(
     ctx: typer.Context,
     nick: Optional[str] = typer.Option(None, help="Override nickname from config"),
 ):
-    """Start WeeChat in tmux, auto-connect to IRC."""
+    """Start WeeChat in Zellij, auto-connect to IRC."""
 
     mgr = _get_irc_manager(ctx)
     try:
@@ -658,8 +1019,8 @@ def cmd_agent_create(
         raise typer.Exit(1)
     scoped = mgr.scoped(name)
     typer.echo(f"Created {scoped} (type: {info['type']})")
-    typer.echo(f"  window: {info['window_name']}")
-    typer.echo(f"  workspace: {info['workspace']}")
+    typer.echo(f"  tab: {info.get('tab_name', info.get('window_name', '—'))}")
+    typer.echo(f"  workspace: {info.get('workspace', '—')}")
 
 @agent_app.command("stop")
 def cmd_agent_stop(ctx: typer.Context, name: str = typer.Argument(...)):
@@ -670,16 +1031,24 @@ def cmd_agent_stop(ctx: typer.Context, name: str = typer.Argument(...)):
     typer.echo(f"Stopped {scoped}")
 
 @agent_app.command("list")
-def cmd_agent_list(ctx: typer.Context):
+def cmd_agent_list(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
     """List all agents with status."""
     mgr = _get_agent_manager(ctx)
     agents = mgr.list_agents()
+    if json_output:
+        import json as _json
+        out = [{"name": n, **info} for n, info in agents.items()]
+        typer.echo(_json.dumps(out))
+        return
     if not agents:
         typer.echo("No agents")
         return
     for name, info in agents.items():
         status = info["status"]
-        window = info.get("window_name", info.get("pane_id", "—"))
+        window = info.get("tab_name", "—")
         ws = info.get("workspace", "—")
         elapsed = time.time() - info.get("created_at", time.time())
         if status != "offline" and elapsed > 0:
@@ -707,7 +1076,7 @@ def cmd_agent_status(ctx: typer.Context, name: str = typer.Argument(...)):
     typer.echo(f"  type:      {info.get('type', 'unknown')}")
     typer.echo(f"  status:    {info['status']}")
     typer.echo(f"  uptime:    {mins}m {secs}s")
-    typer.echo(f"  window:    {info.get('window_name', info.get('pane_id', '—'))}")
+    typer.echo(f"  tab:       {info.get('tab_name', '—')}")
     typer.echo(f"  workspace: {info.get('workspace', '—')}")
     typer.echo(f"  channels:  {', '.join(info.get('channels', []))}")
 
@@ -715,9 +1084,9 @@ def cmd_agent_status(ctx: typer.Context, name: str = typer.Argument(...)):
 def cmd_agent_send(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Agent name"),
-    text: str = typer.Argument(..., help="Text to send to agent's tmux window"),
+    text: str = typer.Argument(..., help="Text to send to agent's Zellij tab"),
 ):
-    """Send text to agent's tmux window (tmux send-keys)."""
+    """Send text to agent's pane."""
 
     mgr = _get_agent_manager(ctx)
     scoped = mgr.scoped(name)
@@ -738,25 +1107,25 @@ def cmd_agent_focus(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Agent name"),
 ):
-    """Switch to an agent's tmux window."""
+    """Switch to an agent's tab."""
     mgr = _get_agent_manager(ctx)
     agent = mgr.get_status(name)
     scoped = mgr.scoped(name)
     if agent["status"] == "offline":
         typer.echo(f"{scoped} is offline")
         raise typer.Exit(1)
-    _tmux_switch(mgr.session_name, agent["window_name"])
+    _zellij_switch(mgr.session_name, agent.get("tab_name") or agent.get("window_name"))
 
 @agent_app.command("hide")
 def cmd_agent_hide(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Agent name or 'all'"),
 ):
-    """Switch back to WeeChat window (hide agent view)."""
+    """Switch back to WeeChat tab."""
     mgr = _get_agent_manager(ctx)
     if name != "all":
         mgr.get_status(name)
-    _tmux_switch(mgr.session_name, "weechat")
+    _zellij_switch(mgr.session_name, "weechat")
 
 
 # ============================================================
@@ -765,7 +1134,7 @@ def cmd_agent_hide(
 
 @app.command("shutdown")
 def cmd_shutdown(ctx: typer.Context):
-    """Stop all agents + WeeChat + ergo + tmux session."""
+    """Stop all agents + WeeChat + ergo + Zellij session."""
     try:
         mgr = _get_agent_manager(ctx)
         agents = mgr.list_agents()
@@ -781,13 +1150,12 @@ def cmd_shutdown(ctx: typer.Context):
         irc.daemon_stop()
     except (SystemExit, Exception):
         pass
-    # Kill tmux session
+    # Kill Zellij session
     try:
-        session_name = _get_tmux_session(ctx)
-        from zchat.cli.tmux import get_session
-        session = get_session(session_name)
-        session.kill()
-    except (KeyError, SystemExit, Exception):
+        session_name = _get_zellij_session(ctx)
+        from zchat.cli import zellij
+        zellij.kill_session(session_name)
+    except (SystemExit, Exception):
         pass
     typer.echo("Shutdown complete.")
 
@@ -909,6 +1277,36 @@ def cmd_config_list():
         if isinstance(values, dict):
             for k, v in values.items():
                 typer.echo(f"{section}.{k} = {v}")
+
+
+# ============================================================
+# plugin discovery
+# ============================================================
+
+# Registry: which command args get selection lists in the palette plugin.
+# "source" = runtime data (resolved by plugin from Zellij events)
+# "choices_from" = static data (resolved by CLI at config generation time)
+_ARG_SOURCES = {
+    "agent stop": {"name": "running_agents"},
+    "agent focus": {"name": "running_agents"},
+    "agent hide": {"name": "running_agents"},
+    "agent restart": {"name": "running_agents"},
+    "agent send": {"name": "running_agents"},
+    "agent status": {"name": "running_agents"},
+    "project use": {"name": "projects"},
+    "project remove": {"name": "projects"},
+    "project show": {"name": "projects"},
+    "project create": {"server": "servers"},
+}
+
+
+@app.command("list-commands", hidden=True)
+def cmd_list_commands():
+    """Output all CLI commands as JSON (for plugin/integration discovery).
+
+    Includes arg sources and pre-resolved choices where available.
+    """
+    typer.echo(_get_commands_json())
 
 
 if __name__ == "__main__":

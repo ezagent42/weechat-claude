@@ -7,7 +7,7 @@ import pytest
 
 @pytest.mark.e2e
 @pytest.mark.order(1)
-def test_weechat_connects(irc_probe, weechat_window):
+def test_weechat_connects(irc_probe, weechat_tab):
     """Phase 1: zchat irc start → WeeChat connects to IRC."""
     assert irc_probe.wait_for_nick("alice", timeout=30), "alice not on IRC"
 
@@ -46,9 +46,9 @@ def test_agent_send_to_channel(zchat_cli, irc_probe):
 
 @pytest.mark.e2e
 @pytest.mark.order(4)
-def test_mention_triggers_reply(irc_probe, weechat_window, tmux_send):
+def test_mention_triggers_reply(irc_probe, weechat_tab, zellij_send):
     """Phase 4: @mention in WeeChat → agent auto-responds."""
-    tmux_send(weechat_window, "@alice-agent0 what is 2+2?")
+    zellij_send(weechat_tab, "@alice-agent0 what is 2+2?")
     reply = irc_probe.wait_for_message("alice-agent0", timeout=30)
     assert reply is not None, "agent0 did not respond to @mention"
 
@@ -77,7 +77,7 @@ def test_agent_to_agent(zchat_cli, irc_probe):
 
 @pytest.mark.e2e
 @pytest.mark.order(7)
-def test_alice_bob_conversation(irc_probe, bob_probe, weechat_window, tmux_send):
+def test_alice_bob_conversation(irc_probe, bob_probe, weechat_tab, zellij_send):
     """Phase 7: Two users exchange messages in #general."""
     # Bob sends to #general
     bob_probe.privmsg("#general", "Hello from bob")
@@ -86,7 +86,7 @@ def test_alice_bob_conversation(irc_probe, bob_probe, weechat_window, tmux_send)
     assert msg["nick"] == "bob"
 
     # Alice sends to #general via WeeChat (use /msg to avoid buffer-focus issues)
-    tmux_send(weechat_window, "/msg #general Hello from alice")
+    zellij_send(weechat_tab, "/msg #general Hello from alice")
     msg = bob_probe.wait_for_message("Hello from alice", timeout=10)
     assert msg is not None, "alice's message not seen by bob"
     assert msg["nick"] == "alice"

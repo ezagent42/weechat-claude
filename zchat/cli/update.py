@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 import urllib.request
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 
 from zchat.cli.project import ZCHAT_DIR
 
@@ -52,7 +52,8 @@ def should_check_today(state: dict) -> bool:
         return True
     try:
         last_date = datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").date()
-        return last_date < date.today()
+        today_utc = datetime.now(timezone.utc).date()
+        return last_date < today_utc
     except ValueError:
         return True
 

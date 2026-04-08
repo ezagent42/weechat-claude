@@ -4,7 +4,6 @@ import os
 import shutil
 import tomllib
 import tomli_w
-import uuid
 
 ZCHAT_DIR = os.environ.get("ZCHAT_HOME", os.path.expanduser("~/.zchat"))
 
@@ -13,70 +12,47 @@ def project_dir(name: str) -> str:
     return os.path.join(ZCHAT_DIR, "projects", name)
 
 
-def _generate_tmux_session_name(project_name: str) -> str:
-    """Generate a unique tmux session name for a project."""
-    short_id = uuid.uuid4().hex[:8]
-    return f"zchat-{short_id}-{project_name}"
+def _generate_session_name(project_name: str) -> str:
+    """Generate a Zellij session name for a project."""
+    return f"zchat-{project_name}"
 
 
-def create_project_config(name: str, server: str, port: int, tls: bool,
-                          password: str, nick: str, channels: str,
-                          env_file: str = "", default_type: str = "claude"):
+def create_project_config(name: str, server: str = "local",
+                          nick: str = "", channels: str | None = None,
+                          env_file: str = "",
+                          default_runner: str | None = None,
+                          mcp_server_cmd: list[str] | None = None,
+                          # Legacy params kept for backward compat
+                          port: int = 6667, tls: bool = False,
+                          password: str = "",
+                          default_type: str = "claude"):
     """Create project directory and write config.toml."""
+    from zchat.cli.defaults import default_channels, default_runner as _default_runner, default_mcp_server_cmd
     pdir = project_dir(name)
     os.makedirs(pdir, exist_ok=True)
+    if channels is None:
+        channels = ",".join(default_channels())
     channels_list = [ch.strip() for ch in channels.split(",") if ch.strip()]
-    channels_toml = ", ".join(f'"{ch}"' for ch in channels_list)
-    tmux_session = _generate_tmux_session_name(name)
-    config_content = f'''[irc]
-server = "{server}"
-port = {port}
-tls = {"true" if tls else "false"}
-password = "{password}"
+    session = _generate_session_name(name)
+    if default_runner is None:
+        default_runner = _default_runner()
+    if mcp_server_cmd is None:
+        mcp_server_cmd = default_mcp_server_cmd()
 
-[agents]
-default_type = "{default_type}"
-default_channels = [{channels_toml}]
-username = "{nick}"
-env_file = "{env_file}"
-
-[tmux]
-session = "{tmux_session}"
-'''
-    with open(os.path.join(pdir, "config.toml"), "w") as f:
-        f.write(config_content)
-
-    # Generate tmuxp.yaml
-    import yaml
-    tmuxp_config = {
-        "session_name": tmux_session,
-        "start_directory": pdir,
-        "before_script": os.path.join(pdir, "bootstrap.sh"),
-        "windows": [
-            {"window_name": "main", "panes": ["blank"]},
-        ],
+    config = {
+        "server": server,
+        "default_runner": default_runner,
+        "default_channels": channels_list,
+        "username": nick,
+        "env_file": env_file,
+        "mcp_server_cmd": mcp_server_cmd,
+        "zellij": {
+            "session": session,
+        },
     }
-    with open(os.path.join(pdir, "tmuxp.yaml"), "w") as f:
-        yaml.dump(tmuxp_config, f, default_flow_style=False)
 
-    # Generate bootstrap.sh
-    bootstrap_content = f'''#!/bin/bash
-set -euo pipefail
-PROJECT_DIR="{pdir}"
-mkdir -p "$PROJECT_DIR/agents"
-# Clean ready markers for agents not currently running
-for f in "$PROJECT_DIR/agents"/*.ready; do
-    [ -f "$f" ] || continue
-    agent=$(basename "$f" .ready)
-    if ! grep -q "\\"$agent\\".*\\"running\\"" "$PROJECT_DIR/state.json" 2>/dev/null; then
-        rm -f "$f"
-    fi
-done
-'''
-    bootstrap_path = os.path.join(pdir, "bootstrap.sh")
-    with open(bootstrap_path, "w") as f:
-        f.write(bootstrap_content)
-    os.chmod(bootstrap_path, 0o755)
+    with open(os.path.join(pdir, "config.toml"), "wb") as f:
+        tomli_w.dump(config, f)
 
 
 def list_projects() -> list[str]:
@@ -114,19 +90,31 @@ def resolve_project(explicit: str | None = None) -> str | None:
 
 
 def load_project_config(name: str) -> dict:
-    """Load and validate project config.toml."""
+    """Load and validate project config.toml (new format only).
+
+    Old-format configs (with [irc]/[tmux] sections) are rejected with a
+    clear error message asking the user to recreate the project.
+    """
     config_path = os.path.join(project_dir(name), "config.toml")
     with open(config_path, "rb") as f:
         cfg = tomllib.load(f)
-    irc = cfg.setdefault("irc", {})
-    irc.setdefault("server", "127.0.0.1")
-    irc.setdefault("port", 6667)
-    irc.setdefault("tls", False)
-    irc.setdefault("password", "")
-    agents = cfg.setdefault("agents", {})
-    agents.setdefault("default_channels", ["#general"])
-    agents.setdefault("env_file", "")
-    agents.setdefault("default_type", "claude")
+
+    if "irc" in cfg or "tmux" in cfg:
+        raise SystemExit(
+            f"Error: Project '{name}' uses old config format.\n"
+            f"Please delete and recreate:\n"
+            f"  zchat project remove {name} && zchat project create {name}"
+        )
+
+    from zchat.cli.defaults import default_channels, default_runner, default_mcp_server_cmd
+    cfg.setdefault("server", "local")
+    cfg.setdefault("default_runner", default_runner())
+    cfg.setdefault("default_channels", default_channels())
+    cfg.setdefault("username", "")
+    cfg.setdefault("env_file", "")
+    cfg.setdefault("mcp_server_cmd", default_mcp_server_cmd())
+    cfg.setdefault("zellij", {})
+    cfg["zellij"].setdefault("session", _generate_session_name(name))
     return cfg
 
 
