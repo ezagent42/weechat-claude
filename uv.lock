@@ -1029,6 +1029,7 @@ name = "zchat"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "python-dotenv" },
     { name = "segno" },
     { name = "tomli-w" },
     { name = "typer" },
@@ -1047,6 +1048,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "segno", specifier = ">=1.6.0" },
     { name = "tomli-w", specifier = ">=1.0.0" },
     { name = "typer", extras = ["all"], specifier = ">=0.9.0" },

@@ -1,15 +1,19 @@
 # zchat/cli/project.py
 """Project management: create, list, use, remove, resolve."""
-import os
+from __future__ import annotations
+
 import shutil
 import tomllib
+from pathlib import Path
+
 import tomli_w
 
-ZCHAT_DIR = os.environ.get("ZCHAT_HOME", os.path.expanduser("~/.zchat"))
+from zchat.cli import paths
 
 
 def project_dir(name: str) -> str:
-    return os.path.join(ZCHAT_DIR, "projects", name)
+    """Return project directory path as string (legacy compat)."""
+    return str(paths.project_dir(name))
 
 
 def _generate_session_name(project_name: str) -> str:
@@ -28,8 +32,8 @@ def create_project_config(name: str, server: str = "local",
                           default_type: str = "claude"):
     """Create project directory and write config.toml."""
     from zchat.cli.defaults import default_channels, default_runner as _default_runner, default_mcp_server_cmd
-    pdir = project_dir(name)
-    os.makedirs(pdir, exist_ok=True)
+    pdir = paths.project_dir(name)
+    pdir.mkdir(parents=True, exist_ok=True)
     if channels is None:
         channels = ",".join(default_channels())
     channels_list = [ch.strip() for ch in channels.split(",") if ch.strip()]
@@ -51,41 +55,39 @@ def create_project_config(name: str, server: str = "local",
         },
     }
 
-    with open(os.path.join(pdir, "config.toml"), "wb") as f:
+    with open(pdir / "config.toml", "wb") as f:
         tomli_w.dump(config, f)
 
 
 def list_projects() -> list[str]:
-    projects_dir = os.path.join(ZCHAT_DIR, "projects")
-    if not os.path.isdir(projects_dir):
+    pdir = paths.projects_dir()
+    if not pdir.is_dir():
         return []
-    return sorted(d for d in os.listdir(projects_dir)
-                  if os.path.isdir(os.path.join(projects_dir, d)))
+    return sorted(d.name for d in pdir.iterdir() if d.is_dir())
 
 
 def get_default_project() -> str | None:
-    default_file = os.path.join(ZCHAT_DIR, "default")
-    if os.path.isfile(default_file):
-        return open(default_file).read().strip() or None
+    default_file = paths.default_project_file()
+    if default_file.is_file():
+        return default_file.read_text().strip() or None
     return None
 
 
 def set_default_project(name: str):
-    os.makedirs(ZCHAT_DIR, exist_ok=True)
-    with open(os.path.join(ZCHAT_DIR, "default"), "w") as f:
-        f.write(name)
+    paths.zchat_home().mkdir(parents=True, exist_ok=True)
+    paths.default_project_file().write_text(name)
 
 
 def resolve_project(explicit: str | None = None) -> str | None:
     """Resolve project: explicit > .zchat file > default."""
     if explicit:
         return explicit
-    path = os.getcwd()
-    while path != "/":
-        marker = os.path.join(path, ".zchat")
-        if os.path.isfile(marker):
-            return open(marker).read().strip() or None
-        path = os.path.dirname(path)
+    path = Path.cwd()
+    while path != path.parent:
+        marker = path / ".zchat"
+        if marker.is_file():
+            return marker.read_text().strip() or None
+        path = path.parent
     return get_default_project()
 
 
@@ -95,7 +97,7 @@ def load_project_config(name: str) -> dict:
     Old-format configs (with [irc]/[tmux] sections) are rejected with a
     clear error message asking the user to recreate the project.
     """
-    config_path = os.path.join(project_dir(name), "config.toml")
+    config_path = paths.project_config(name)
     with open(config_path, "rb") as f:
         cfg = tomllib.load(f)
 
@@ -120,19 +122,19 @@ def load_project_config(name: str) -> dict:
 
 def remove_project(name: str):
     """Remove project directory."""
-    pdir = project_dir(name)
-    if os.path.isdir(pdir):
+    pdir = paths.project_dir(name)
+    if pdir.is_dir():
         shutil.rmtree(pdir)
 
 
 def state_file_path(name: str) -> str:
     """Return path to project state.json."""
-    return os.path.join(project_dir(name), "state.json")
+    return str(paths.project_state(name))
 
 
 def set_config_value(name: str, key: str, value: str):
     """Set a dotted key in project config.toml. e.g., 'agents.default_type' = 'codex'."""
-    config_path = os.path.join(project_dir(name), "config.toml")
+    config_path = paths.project_config(name)
     with open(config_path, "rb") as f:
         cfg = tomllib.load(f)
 

@@ -1,8 +1,9 @@
 """KDL layout generation for Zellij sessions."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
+
+from zchat.cli import paths
 
 
 def _escape_kdl(s: str) -> str:
@@ -12,8 +13,7 @@ def _escape_kdl(s: str) -> str:
 
 def _plugins_dir() -> str:
     """Return the absolute path to the zchat plugins directory."""
-    from zchat.cli.project import ZCHAT_DIR
-    return os.path.join(ZCHAT_DIR, "plugins")
+    return str(paths.plugins_dir())
 
 
 def generate_layout(

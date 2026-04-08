@@ -1,11 +1,12 @@
 """Global configuration management (~/.zchat/config.toml)."""
 from __future__ import annotations
 
-import os
 import tomllib
+from pathlib import Path
+
 import tomli_w
 
-from zchat.cli.project import ZCHAT_DIR
+from zchat.cli import paths
 
 _DEFAULTS = {
     "update": {
@@ -17,11 +18,10 @@ _DEFAULTS = {
 
 def load_global_config(path: str | None = None) -> dict:
     """Load global config, filling defaults for missing keys."""
-    if path is None:
-        path = os.path.join(ZCHAT_DIR, "config.toml")
+    p = Path(path) if path else paths.global_config_path()
     data: dict = {}
-    if os.path.isfile(path):
-        with open(path, "rb") as f:
+    if p.is_file():
+        with open(p, "rb") as f:
             data = tomllib.load(f)
     for section, defaults in _DEFAULTS.items():
         data.setdefault(section, {})
@@ -32,10 +32,9 @@ def load_global_config(path: str | None = None) -> dict:
 
 def save_global_config(config: dict, path: str | None = None) -> None:
     """Write global config to TOML file."""
-    if path is None:
-        path = os.path.join(ZCHAT_DIR, "config.toml")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as f:
+    p = Path(path) if path else paths.global_config_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "wb") as f:
         tomli_w.dump(config, f)
 
 

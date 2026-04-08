@@ -10,8 +10,9 @@ from typing import Optional
 import typer
 
 
+from zchat.cli import paths
 from zchat.cli.project import (
-    ZCHAT_DIR, create_project_config, list_projects,
+    create_project_config, list_projects,
     get_default_project, set_default_project, resolve_project,
     load_project_config, remove_project, project_dir, state_file_path,
 )
@@ -231,7 +232,7 @@ def main(
 
 def _ensure_plugins():
     """Copy bundled .wasm plugins to ~/.zchat/plugins/ if missing or outdated."""
-    plugins_dir = os.path.join(ZCHAT_DIR, "plugins")
+    plugins_dir = str(paths.plugins_dir())
     os.makedirs(plugins_dir, exist_ok=True)
     bundled_dir = os.path.join(os.path.dirname(__file__), "data", "plugins")
     if not os.path.isdir(bundled_dir):
@@ -354,7 +355,8 @@ def _get_commands_json() -> str:
 def _write_config_kdl(project_dir_path) -> str:
     """Generate config.kdl with correct plugin path and write to project dir."""
     import json as _json
-    plugins_dir = os.path.join(ZCHAT_DIR, "plugins")
+    plugins_dir = str(paths.plugins_dir())
+    zchat_home = str(paths.zchat_home())
     zchat_bin = _zchat_bin()
     commands_json = _get_commands_json()
     # Escape for KDL string (backslashes and quotes)
@@ -368,7 +370,7 @@ keybinds {{
                 floating true
                 move_to_focused_tab true
                 zchat_bin "{zchat_bin}"
-                zchat_home "{ZCHAT_DIR}"
+                zchat_home "{zchat_home}"
                 commands_json "{commands_escaped}"
             }}
         }}
@@ -408,7 +410,7 @@ def _enter_main_session():
         return
 
     # Create new main session with a ctl tab
-    main_dir = os.path.join(ZCHAT_DIR, "main")
+    main_dir = str(paths.zellij_layout_dir())
     os.makedirs(main_dir, exist_ok=True)
 
     layout_kdl_path = os.path.join(main_dir, "layout.kdl")
@@ -419,7 +421,7 @@ def _enter_main_session():
         f.write('            plugin location="zellij:tab-bar"\n')
         f.write("        }\n")
         f.write("        children\n")
-        plugins = os.path.join(ZCHAT_DIR, "plugins")
+        plugins = str(paths.plugins_dir())
         f.write(f'        pane size=1 borderless=true {{\n')
         f.write(f'            plugin location="file:{plugins}/zchat-status.wasm"\n')
         f.write("        }\n")
@@ -888,21 +890,23 @@ def cmd_template_set(
     value: str = typer.Argument(..., help="Value"),
 ):
     """Set a template .env variable."""
-    from zchat.cli.template_loader import resolve_template_dir, _parse_env_file
-    from zchat.cli.project import ZCHAT_DIR
+    from pathlib import Path
+    from dotenv import dotenv_values
+    from zchat.cli.template_loader import resolve_template_dir
     try:
         tpl_dir = resolve_template_dir(name)
     except Exception as e:
         typer.echo(f"Error: {e}")
         raise typer.Exit(1)
     # If template is built-in (inside package), .env goes to user dir
-    user_tpl_dir = os.path.join(ZCHAT_DIR, "templates", name)
-    if not tpl_dir.startswith(ZCHAT_DIR):
-        os.makedirs(user_tpl_dir, exist_ok=True)
-        env_path = os.path.join(user_tpl_dir, ".env")
+    user_tpl_dir = paths.templates_dir() / name
+    zchat_home_str = str(paths.zchat_home())
+    if not tpl_dir.startswith(zchat_home_str):
+        user_tpl_dir.mkdir(parents=True, exist_ok=True)
+        env_path = str(user_tpl_dir / ".env")
     else:
         env_path = os.path.join(tpl_dir, ".env")
-    env = _parse_env_file(env_path)
+    env = {k: v for k, v in dotenv_values(env_path).items() if v is not None}
     env[key] = value
     with open(env_path, "w") as f:
         for k, v in env.items():
@@ -913,21 +917,21 @@ def cmd_template_set(
 @template_app.command("create")
 def cmd_template_create(name: str = typer.Argument(..., help="Template name")):
     """Create an empty template scaffold."""
-    from zchat.cli.project import ZCHAT_DIR
-    tpl_dir = os.path.join(ZCHAT_DIR, "templates", name)
-    if os.path.exists(tpl_dir):
+    from pathlib import Path
+    tpl_dir = paths.templates_dir() / name
+    if tpl_dir.exists():
         typer.echo(f"Template '{name}' already exists at {tpl_dir}")
         raise typer.Exit(1)
-    os.makedirs(tpl_dir)
-    with open(os.path.join(tpl_dir, "template.toml"), "w") as f:
-        f.write(f'[template]\nname = "{name}"\ndescription = ""\n\n[hooks]\npre_stop = ""\n')
-    with open(os.path.join(tpl_dir, "start.sh"), "w") as f:
-        f.write("#!/bin/bash\nset -euo pipefail\nexec echo \"TODO: implement start script\"\n")
-    os.chmod(os.path.join(tpl_dir, "start.sh"), 0o755)
-    with open(os.path.join(tpl_dir, ".env.example"), "w") as f:
-        f.write("# Auto-injected by zchat\nAGENT_NAME={{agent_name}}\nIRC_SERVER={{irc_server}}\n"
-                "IRC_PORT={{irc_port}}\nIRC_CHANNELS={{irc_channels}}\nIRC_TLS={{irc_tls}}\n"
-                "IRC_PASSWORD={{irc_password}}\nWORKSPACE={{workspace}}\n")
+    tpl_dir.mkdir(parents=True)
+    (tpl_dir / "template.toml").write_text(
+        f'[template]\nname = "{name}"\ndescription = ""\n\n[hooks]\npre_stop = ""\n')
+    start_sh = tpl_dir / "start.sh"
+    start_sh.write_text("#!/bin/bash\nset -euo pipefail\nexec echo \"TODO: implement start script\"\n")
+    start_sh.chmod(0o755)
+    (tpl_dir / ".env.example").write_text(
+        "# Auto-injected by zchat\nAGENT_NAME={{agent_name}}\nIRC_SERVER={{irc_server}}\n"
+        "IRC_PORT={{irc_port}}\nIRC_CHANNELS={{irc_channels}}\nIRC_TLS={{irc_tls}}\n"
+        "IRC_PASSWORD={{irc_password}}\nWORKSPACE={{workspace}}\n")
     typer.echo(f"Created template scaffold at {tpl_dir}/")
 
 

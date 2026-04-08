@@ -1,10 +1,10 @@
 """Load built-in default configuration from data/defaults.toml."""
 from __future__ import annotations
 
-import os
 import tomllib
+from pathlib import Path
 
-_DEFAULTS_PATH = os.path.join(os.path.dirname(__file__), "data", "defaults.toml")
+_DEFAULTS_PATH = Path(__file__).parent / "data" / "defaults.toml"
 _cache: dict | None = None
 
 

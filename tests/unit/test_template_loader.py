@@ -5,7 +5,7 @@ from zchat.cli.template_loader import resolve_template_dir, TemplateNotFoundErro
 
 def test_resolve_user_template(tmp_path, monkeypatch):
     """User template dir takes priority over built-in."""
-    monkeypatch.setattr("zchat.cli.template_loader.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     user_tpl = tmp_path / "templates" / "my-bot"
     user_tpl.mkdir(parents=True)
     (user_tpl / "template.toml").write_text('[template]\nname = "my-bot"\n')
@@ -14,20 +14,20 @@ def test_resolve_user_template(tmp_path, monkeypatch):
 
 def test_resolve_builtin_template(tmp_path, monkeypatch):
     """Falls back to built-in template."""
-    monkeypatch.setattr("zchat.cli.template_loader.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     result = resolve_template_dir("claude")
     assert "templates/claude" in result
     assert os.path.isfile(os.path.join(result, "template.toml"))
 
 
 def test_resolve_unknown_template_raises(tmp_path, monkeypatch):
-    monkeypatch.setattr("zchat.cli.template_loader.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     with pytest.raises(TemplateNotFoundError):
         resolve_template_dir("nonexistent")
 
 
 def test_load_template_returns_metadata(tmp_path, monkeypatch):
-    monkeypatch.setattr("zchat.cli.template_loader.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     tpl_dir = tmp_path / "templates" / "test-tpl"
     tpl_dir.mkdir(parents=True)
     (tpl_dir / "template.toml").write_text(
@@ -40,7 +40,7 @@ def test_load_template_returns_metadata(tmp_path, monkeypatch):
 
 
 def test_render_env_replaces_placeholders(tmp_path, monkeypatch):
-    monkeypatch.setattr("zchat.cli.template_loader.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     tpl_dir = tmp_path / "templates" / "test-tpl"
     tpl_dir.mkdir(parents=True)
     (tpl_dir / "template.toml").write_text('[template]\nname = "test-tpl"\n')
@@ -55,7 +55,7 @@ def test_render_env_replaces_placeholders(tmp_path, monkeypatch):
 
 
 def test_render_env_dot_env_overrides(tmp_path, monkeypatch):
-    monkeypatch.setattr("zchat.cli.template_loader.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     tpl_dir = tmp_path / "templates" / "test-tpl"
     tpl_dir.mkdir(parents=True)
     (tpl_dir / "template.toml").write_text('[template]\nname = "test-tpl"\n')
@@ -68,14 +68,14 @@ def test_render_env_dot_env_overrides(tmp_path, monkeypatch):
 
 
 def test_list_templates_includes_builtin(tmp_path, monkeypatch):
-    monkeypatch.setattr("zchat.cli.template_loader.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     templates = list_templates()
     names = [t["template"]["name"] for t in templates]
     assert "claude" in names
 
 
 def test_list_templates_user_overrides_builtin(tmp_path, monkeypatch):
-    monkeypatch.setattr("zchat.cli.template_loader.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     user_tpl = tmp_path / "templates" / "claude"
     user_tpl.mkdir(parents=True)
     (user_tpl / "template.toml").write_text(

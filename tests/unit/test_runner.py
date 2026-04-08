@@ -15,7 +15,7 @@ from zchat.cli.runner import (
 
 @pytest.fixture
 def zchat_home(tmp_path, monkeypatch):
-    monkeypatch.setattr("zchat.cli.runner.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     return tmp_path
 
 

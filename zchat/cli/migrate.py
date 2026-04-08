@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import tomllib
+from pathlib import Path
+
 import tomli_w
 
 
@@ -13,8 +14,8 @@ def migrate_config_if_needed(project_dir: str) -> bool:
 
     Returns True if migration was performed.
     """
-    config_path = os.path.join(project_dir, "config.toml")
-    if not os.path.isfile(config_path):
+    config_path = Path(project_dir) / "config.toml"
+    if not config_path.is_file():
         return False
 
     with open(config_path, "rb") as f:
@@ -24,7 +25,7 @@ def migrate_config_if_needed(project_dir: str) -> bool:
         return False  # Already new format or no tmux section
 
     # Backup original
-    backup_path = config_path + ".bak"
+    backup_path = str(config_path) + ".bak"
     shutil.copy2(config_path, backup_path)
 
     # Extract old values
@@ -44,7 +45,7 @@ def migrate_config_if_needed(project_dir: str) -> bool:
             # Simplify session name: zchat-{uuid}-{name} → zchat-{name}
             "session": _simplify_session_name(
                 tmux.get("session", ""),
-                os.path.basename(project_dir),
+                Path(project_dir).name,
             ),
         },
     }
@@ -60,8 +61,8 @@ def migrate_state_if_needed(project_dir: str) -> bool:
 
     Returns True if migration was performed.
     """
-    state_path = os.path.join(project_dir, "state.json")
-    if not os.path.isfile(state_path):
+    state_path = Path(project_dir) / "state.json"
+    if not state_path.is_file():
         return False
 
     with open(state_path) as f:
@@ -97,7 +98,7 @@ def migrate_state_if_needed(project_dir: str) -> bool:
         changed = True
 
     if changed:
-        backup_path = state_path + ".bak"
+        backup_path = str(state_path) + ".bak"
         shutil.copy2(state_path, backup_path)
         with open(state_path, "w") as f:
             json.dump(state, f, indent=2)
