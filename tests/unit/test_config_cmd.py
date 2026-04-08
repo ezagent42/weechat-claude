@@ -7,10 +7,6 @@ import pytest
 @pytest.fixture
 def config_toml(tmp_path, monkeypatch):
     monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
-    import zchat.cli.project as proj
-    monkeypatch.setattr(proj, "ZCHAT_DIR", str(tmp_path))
-    import zchat.cli.config_cmd as cfg
-    monkeypatch.setattr(cfg, "ZCHAT_DIR", str(tmp_path))
     return str(tmp_path / "config.toml")
 
 

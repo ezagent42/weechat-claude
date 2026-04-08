@@ -10,12 +10,13 @@ the template_loader behaviour so that existing setups keep working.
 
 from __future__ import annotations
 
-import os
 import re
 import tomllib
 from pathlib import Path
 
-from zchat.cli.project import ZCHAT_DIR
+from dotenv import dotenv_values
+
+from zchat.cli import paths
 
 _BUILTIN_DIR = Path(__file__).parent / "templates"
 
@@ -30,17 +31,9 @@ class RunnerNotFoundError(Exception):
 
 def _parse_env_file(path: str) -> dict[str, str]:
     """Parse a .env file into a dict. Skips comments and blank lines."""
-    env: dict[str, str] = {}
-    if not os.path.isfile(path):
-        return env
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            key, _, value = line.partition("=")
-            env[key.strip()] = value.strip()
-    return env
+    if not Path(path).is_file():
+        return {}
+    return {k: v for k, v in dotenv_values(path).items() if v is not None}
 
 
 def _resolve_template_dir(name: str, user_template_dirs: list[str] | None = None) -> str | None:
@@ -48,14 +41,14 @@ def _resolve_template_dir(name: str, user_template_dirs: list[str] | None = None
     # Check extra user dirs first
     if user_template_dirs:
         for base in user_template_dirs:
-            candidate = os.path.join(base, name)
-            if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, "template.toml")):
-                return candidate
+            candidate = Path(base) / name
+            if candidate.is_dir() and (candidate / "template.toml").is_file():
+                return str(candidate)
 
     # Default user dir
-    user_dir = os.path.join(ZCHAT_DIR, "templates", name)
-    if os.path.isdir(user_dir) and os.path.isfile(os.path.join(user_dir, "template.toml")):
-        return user_dir
+    user_dir = paths.templates_dir() / name
+    if user_dir.is_dir() and (user_dir / "template.toml").is_file():
+        return str(user_dir)
 
     # Built-in
     builtin = _BUILTIN_DIR / name
@@ -67,7 +60,7 @@ def _resolve_template_dir(name: str, user_template_dirs: list[str] | None = None
 
 def _load_template_toml(template_dir: str) -> dict:
     """Load template.toml from a directory."""
-    toml_path = os.path.join(template_dir, "template.toml")
+    toml_path = Path(template_dir) / "template.toml"
     with open(toml_path, "rb") as f:
         data = tomllib.load(f)
     data.setdefault("hooks", {})
@@ -130,12 +123,12 @@ def resolve_runner(
     start_script = None
     env_template = None
     if template_dir:
-        ss = os.path.join(template_dir, "start.sh")
-        if os.path.isfile(ss):
-            start_script = ss
-        et = os.path.join(template_dir, ".env.example")
-        if os.path.isfile(et):
-            env_template = et
+        ss = Path(template_dir) / "start.sh"
+        if ss.is_file():
+            start_script = str(ss)
+        et = Path(template_dir) / ".env.example"
+        if et.is_file():
+            env_template = str(et)
 
     return {
         "name": name,
@@ -154,17 +147,19 @@ def render_env(template_dir_or_name: str, context: dict) -> dict[str, str]:
     *template_dir_or_name* can be either an absolute directory path or a
     template name (resolved via ``_resolve_template_dir``).
     """
-    if os.path.isdir(template_dir_or_name):
+    tpl_path = Path(template_dir_or_name)
+    if tpl_path.is_dir():
         tpl_dir = template_dir_or_name
-        name = os.path.basename(tpl_dir)
+        name = tpl_path.name
     else:
         name = template_dir_or_name
         resolved = _resolve_template_dir(name)
         if resolved is None:
             raise RunnerNotFoundError(f"Template '{name}' not found")
         tpl_dir = resolved
+        tpl_path = Path(tpl_dir)
 
-    example = _parse_env_file(os.path.join(tpl_dir, ".env.example"))
+    example = _parse_env_file(str(tpl_path / ".env.example"))
     rendered: dict[str, str] = {}
     placeholder_re = re.compile(r"\{\{(\w+)\}\}")
     for key, value in example.items():
@@ -173,11 +168,11 @@ def render_env(template_dir_or_name: str, context: dict) -> dict[str, str]:
         )
 
     # Overlay .env from template dir
-    user_env = _parse_env_file(os.path.join(tpl_dir, ".env"))
+    user_env = _parse_env_file(str(tpl_path / ".env"))
     # Also check user-scoped dir (for built-in templates)
-    user_dir = os.path.join(ZCHAT_DIR, "templates", name)
-    if user_dir != tpl_dir:
-        user_env.update(_parse_env_file(os.path.join(user_dir, ".env")))
+    user_dir = paths.templates_dir() / name
+    if str(user_dir) != tpl_dir:
+        user_env.update(_parse_env_file(str(user_dir / ".env")))
     rendered.update(user_env)
 
     return rendered
@@ -206,26 +201,25 @@ def list_runners(
     # 2. Extra user template dirs
     if user_template_dirs:
         for base in user_template_dirs:
-            if not os.path.isdir(base):
+            base_path = Path(base)
+            if not base_path.is_dir():
                 continue
-            for entry in sorted(os.listdir(base)):
-                if entry in seen:
+            for entry_path in sorted(base_path.iterdir(), key=lambda p: p.name):
+                if entry_path.name in seen:
                     continue
-                toml_path = os.path.join(base, entry, "template.toml")
-                if os.path.isfile(toml_path):
-                    runners.append({"name": entry, "source": "user", "command": ""})
-                    seen.add(entry)
+                if (entry_path / "template.toml").is_file():
+                    runners.append({"name": entry_path.name, "source": "user", "command": ""})
+                    seen.add(entry_path.name)
 
     # 3. Default user templates dir
-    user_dir = os.path.join(ZCHAT_DIR, "templates")
-    if os.path.isdir(user_dir):
-        for entry in sorted(os.listdir(user_dir)):
-            if entry in seen:
+    user_dir = paths.templates_dir()
+    if user_dir.is_dir():
+        for entry_path in sorted(user_dir.iterdir(), key=lambda p: p.name):
+            if entry_path.name in seen:
                 continue
-            toml_path = os.path.join(user_dir, entry, "template.toml")
-            if os.path.isfile(toml_path):
-                runners.append({"name": entry, "source": "user", "command": ""})
-                seen.add(entry)
+            if (entry_path / "template.toml").is_file():
+                runners.append({"name": entry_path.name, "source": "user", "command": ""})
+                seen.add(entry_path.name)
 
     # 4. Built-in templates
     if _BUILTIN_DIR.is_dir():

@@ -1,11 +1,12 @@
 """Template loading: resolve, load, render environment variables."""
 
-import os
 import re
 import tomllib
 from pathlib import Path
 
-from zchat.cli.project import ZCHAT_DIR
+from dotenv import dotenv_values
+
+from zchat.cli import paths
 
 _BUILTIN_DIR = Path(__file__).parent / "templates"
 
@@ -16,9 +17,9 @@ class TemplateNotFoundError(Exception):
 
 def resolve_template_dir(name: str) -> str:
     """Resolve template directory. User dir takes priority over built-in."""
-    user_dir = os.path.join(ZCHAT_DIR, "templates", name)
-    if os.path.isdir(user_dir) and os.path.isfile(os.path.join(user_dir, "template.toml")):
-        return user_dir
+    user_dir = paths.templates_dir() / name
+    if user_dir.is_dir() and (user_dir / "template.toml").is_file():
+        return str(user_dir)
     builtin = _BUILTIN_DIR / name
     if builtin.is_dir() and (builtin / "template.toml").is_file():
         return str(builtin)
@@ -27,23 +28,15 @@ def resolve_template_dir(name: str) -> str:
 
 def _parse_env_file(path: str) -> dict[str, str]:
     """Parse a .env file into a dict. Skips comments and blank lines."""
-    env = {}
-    if not os.path.isfile(path):
-        return env
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            key, _, value = line.partition("=")
-            env[key.strip()] = value.strip()
-    return env
+    if not Path(path).is_file():
+        return {}
+    return {k: v for k, v in dotenv_values(path).items() if v is not None}
 
 
 def load_template(name: str) -> dict:
     """Load template.toml metadata. Returns dict with 'template' and 'hooks' keys."""
     tpl_dir = resolve_template_dir(name)
-    toml_path = os.path.join(tpl_dir, "template.toml")
+    toml_path = Path(tpl_dir) / "template.toml"
     with open(toml_path, "rb") as f:
         data = tomllib.load(f)
     data.setdefault("hooks", {})
@@ -58,9 +51,10 @@ def render_env(name: str, context: dict) -> dict[str, str]:
                   irc_password, workspace
     """
     tpl_dir = resolve_template_dir(name)
+    tpl_path = Path(tpl_dir)
 
     # 1. Parse .env.example and render {{placeholders}}
-    example = _parse_env_file(os.path.join(tpl_dir, ".env.example"))
+    example = _parse_env_file(str(tpl_path / ".env.example"))
     rendered = {}
     placeholder_re = re.compile(r"\{\{(\w+)\}\}")
     for key, value in example.items():
@@ -69,11 +63,11 @@ def render_env(name: str, context: dict) -> dict[str, str]:
         )
 
     # 2. Overlay .env (user overrides) — check both template dir and user dir
-    user_env = _parse_env_file(os.path.join(tpl_dir, ".env"))
+    user_env = _parse_env_file(str(tpl_path / ".env"))
     # Also check user-scoped .env (for built-in templates where .env is in ~/.zchat/templates/)
-    user_dir = os.path.join(ZCHAT_DIR, "templates", name)
-    if user_dir != tpl_dir:
-        user_env.update(_parse_env_file(os.path.join(user_dir, ".env")))
+    user_dir = paths.templates_dir() / name
+    if str(user_dir) != tpl_dir:
+        user_env.update(_parse_env_file(str(user_dir / ".env")))
     rendered.update(user_env)
 
     return rendered
@@ -82,10 +76,10 @@ def render_env(name: str, context: dict) -> dict[str, str]:
 def get_start_script(name: str) -> str:
     """Return absolute path to template's start.sh."""
     tpl_dir = resolve_template_dir(name)
-    script = os.path.join(tpl_dir, "start.sh")
-    if not os.path.isfile(script):
+    script = Path(tpl_dir) / "start.sh"
+    if not script.is_file():
         raise FileNotFoundError(f"start.sh not found in template '{name}'")
-    return script
+    return str(script)
 
 
 def list_templates() -> list[dict]:
@@ -94,11 +88,11 @@ def list_templates() -> list[dict]:
     templates = []
 
     # User templates first
-    user_dir = os.path.join(ZCHAT_DIR, "templates")
-    if os.path.isdir(user_dir):
-        for name in sorted(os.listdir(user_dir)):
-            toml_path = os.path.join(user_dir, name, "template.toml")
-            if os.path.isfile(toml_path):
+    user_dir = paths.templates_dir()
+    if user_dir.is_dir():
+        for name in sorted(entry.name for entry in user_dir.iterdir()):
+            toml_path = user_dir / name / "template.toml"
+            if toml_path.is_file():
                 tpl = load_template(name)
                 tpl["source"] = "user"
                 templates.append(tpl)

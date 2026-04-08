@@ -2,14 +2,14 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 
-from zchat.cli.project import ZCHAT_DIR
+from zchat.cli import paths
 
-UPDATE_STATE_FILE = os.path.join(ZCHAT_DIR, "update.json")
+UPDATE_STATE_FILE = str(paths.update_state())
 
 _ZCHAT_REPO = "https://github.com/ezagent42/zchat.git"
 _CHANNEL_REPO = "https://github.com/ezagent42/claude-zchat-channel.git"
@@ -25,7 +25,7 @@ _DEFAULT_STATE = {
 
 def load_update_state(path: str = UPDATE_STATE_FILE) -> dict:
     """Load update state from JSON file. Returns defaults if missing."""
-    if os.path.isfile(path):
+    if Path(path).is_file():
         with open(path) as f:
             data = json.load(f)
         for key, default in _DEFAULT_STATE.items():
@@ -40,7 +40,7 @@ def load_update_state(path: str = UPDATE_STATE_FILE) -> dict:
 
 def save_update_state(state: dict, path: str = UPDATE_STATE_FILE) -> None:
     """Save update state to JSON file."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump(state, f, indent=2)
 

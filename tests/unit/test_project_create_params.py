@@ -11,9 +11,7 @@ runner = CliRunner()
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path, monkeypatch):
     """Redirect ZCHAT_HOME to temp dir for each test."""
-    monkeypatch.setattr("zchat.cli.project.ZCHAT_DIR", str(tmp_path))
-    monkeypatch.setattr("zchat.cli.config_cmd.ZCHAT_DIR", str(tmp_path))
-    monkeypatch.setattr("zchat.cli.runner.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     return tmp_path
 
 

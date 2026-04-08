@@ -2,8 +2,11 @@
 import json
 import os
 import time
+from pathlib import Path
 
 import httpx
+
+from zchat.cli import paths
 
 
 AUTH_FILE = "auth.json"
@@ -11,8 +14,7 @@ AUTH_FILE = "auth.json"
 
 def _global_auth_dir() -> str:
     """Return the global zchat directory for auth storage (~/.zchat/)."""
-    from zchat.cli.project import ZCHAT_DIR
-    return ZCHAT_DIR
+    return str(paths.zchat_home())
 
 
 def get_username(base_dir: str | None = None) -> str:
@@ -25,8 +27,8 @@ def get_username(base_dir: str | None = None) -> str:
     """
     if base_dir is None:
         base_dir = _global_auth_dir()
-    auth_path = os.path.join(base_dir, AUTH_FILE)
-    if not os.path.isfile(auth_path):
+    auth_path = Path(base_dir) / AUTH_FILE
+    if not auth_path.is_file():
         raise RuntimeError(
             "No username configured. Run one of:\n"
             "  zchat auth login                              # OIDC authentication\n"
@@ -46,8 +48,8 @@ def get_username(base_dir: str | None = None) -> str:
 
 def save_token(base_dir: str, token_data: dict):
     """Save token data to auth.json with restricted permissions (0600)."""
-    os.makedirs(base_dir, exist_ok=True)
-    auth_path = os.path.join(base_dir, AUTH_FILE)
+    Path(base_dir).mkdir(parents=True, exist_ok=True)
+    auth_path = str(Path(base_dir) / AUTH_FILE)
     fd = os.open(auth_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(token_data, f, indent=2)
@@ -55,8 +57,8 @@ def save_token(base_dir: str, token_data: dict):
 
 def load_cached_token(base_dir: str) -> dict | None:
     """Load cached token if it exists and is not expired. Returns None otherwise."""
-    auth_path = os.path.join(base_dir, AUTH_FILE)
-    if not os.path.isfile(auth_path):
+    auth_path = Path(base_dir) / AUTH_FILE
+    if not auth_path.is_file():
         return None
     try:
         with open(auth_path) as f:
@@ -209,8 +211,8 @@ def refresh_token_if_needed(
     http_client: httpx.Client | None = None,
 ) -> dict | None:
     """Refresh the access token using the refresh_token. Returns updated token data or None."""
-    auth_path = os.path.join(base_dir, AUTH_FILE)
-    if not os.path.isfile(auth_path):
+    auth_path = Path(base_dir) / AUTH_FILE
+    if not auth_path.is_file():
         return None
     with open(auth_path) as f:
         data = json.load(f)
@@ -249,8 +251,8 @@ def get_credentials(
         base_dir = _global_auth_dir()
     data = load_cached_token(base_dir)
     if data is None:
-        auth_path = os.path.join(base_dir, AUTH_FILE)
-        if not os.path.isfile(auth_path):
+        auth_path = Path(base_dir) / AUTH_FILE
+        if not auth_path.is_file():
             return None
         with open(auth_path) as f:
             stored = json.load(f)

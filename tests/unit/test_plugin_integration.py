@@ -25,7 +25,7 @@ def test_get_commands_json_includes_sources():
 
 def test_write_config_kdl_contains_zchat_bin(tmp_path, monkeypatch):
     """config.kdl should pass zchat_bin to the palette plugin."""
-    monkeypatch.setattr("zchat.cli.app.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     path = _write_config_kdl(str(tmp_path))
     content = open(path).read()
     assert "zchat_bin" in content
@@ -33,7 +33,7 @@ def test_write_config_kdl_contains_zchat_bin(tmp_path, monkeypatch):
 
 def test_write_config_kdl_embeds_commands_json(tmp_path, monkeypatch):
     """config.kdl should embed commands JSON inline for WASM sandbox compat."""
-    monkeypatch.setattr("zchat.cli.app.ZCHAT_DIR", str(tmp_path))
+    monkeypatch.setenv("ZCHAT_HOME", str(tmp_path))
     path = _write_config_kdl(str(tmp_path))
     content = open(path).read()
     assert "commands_json" in content

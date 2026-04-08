@@ -2,10 +2,10 @@
 """Environment diagnostics and component setup."""
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import urllib.request
+from pathlib import Path
 
 import typer
 
@@ -15,25 +15,25 @@ WEECHAT_PLUGIN_URL = "https://raw.githubusercontent.com/ezagent42/weechat-zchat-
 
 # WeeChat plugin directories (in priority order)
 _WEECHAT_DIRS = [
-    os.path.expanduser("~/.local/share/weechat"),
-    os.path.expanduser("~/.weechat"),
+    Path("~/.local/share/weechat").expanduser(),
+    Path("~/.weechat").expanduser(),
 ]
 
 
 def _weechat_autoload_dir() -> str | None:
     """Find the WeeChat python autoload directory, or None."""
     for base in _WEECHAT_DIRS:
-        if os.path.isdir(base):
-            return os.path.join(base, "python", "autoload")
+        if base.is_dir():
+            return str(base / "python" / "autoload")
     return None
 
 
 def _weechat_plugin_installed() -> str | None:
     """Return path to installed zchat.py plugin, or None."""
     for base in _WEECHAT_DIRS:
-        path = os.path.join(base, "python", "autoload", "zchat.py")
-        if os.path.isfile(path):
-            return path
+        path = base / "python" / "autoload" / "zchat.py"
+        if path.is_file():
+            return str(path)
     return None
 
 
@@ -156,17 +156,17 @@ def setup_weechat(force: bool = False):
     autoload = _weechat_autoload_dir()
     if not autoload:
         # WeeChat installed but no config dir yet — use default
-        autoload = os.path.join(_WEECHAT_DIRS[0], "python", "autoload")
+        autoload = str(_WEECHAT_DIRS[0] / "python" / "autoload")
 
-    target = os.path.join(autoload, "zchat.py")
+    target = str(Path(autoload) / "zchat.py")
 
-    if os.path.isfile(target) and not force:
+    if Path(target).is_file() and not force:
         overwrite = typer.confirm(f"Plugin already exists at {target}. Overwrite?", default=False)
         if not overwrite:
             typer.echo("Skipped.")
             return
 
-    os.makedirs(autoload, exist_ok=True)
+    Path(autoload).mkdir(parents=True, exist_ok=True)
 
     typer.echo(f"Downloading zchat.py from GitHub...")
     try:

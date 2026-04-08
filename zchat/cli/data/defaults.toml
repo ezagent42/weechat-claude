@@ -16,6 +16,11 @@ port = 6697
 tls = true
 label = "zchat.inside.h2os.cloud (recommended)"
 
+[paths]
+plugins = "plugins"
+templates = "templates"
+projects = "projects"
+
 [server_presets.local]
 host = "127.0.0.1"
 port = 6667
