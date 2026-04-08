@@ -122,8 +122,8 @@ def list_panes(session: str | None = None) -> list[dict]:
 
 
 def send_command(session: str, pane_id: str, text: str) -> None:
-    """Send text to pane using paste + send-keys Enter."""
-    _run(["paste", "--pane-id", pane_id, text], session=session)
+    """Send text to pane using write-chars + send-keys Enter."""
+    _run(["write-chars", "--pane-id", pane_id, "--", text], session=session)
     _run(["send-keys", "--pane-id", pane_id, "Enter"], session=session)
 
 

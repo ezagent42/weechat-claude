@@ -8,10 +8,12 @@ Run with: uv run pytest tests/pre_release/ -v -m "prerelease and not manual"
 """
 import os
 import socket
+import subprocess
 import time
 
 import pytest
 
+from zchat.cli import zellij
 from tests.shared.irc_probe import IrcProbe
 from tests.shared.cli_runner import make_cli_runner
 from tests.pre_release import PROJECT_NAME
@@ -31,7 +33,6 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(scope="session")
 def zchat_cmd():
     """Resolve zchat command from ZCHAT_CMD env var (default: "zchat")."""
-    import subprocess
     cmd = os.environ.get("ZCHAT_CMD", "zchat")
     result = subprocess.run([cmd, "--version"], capture_output=True, text=True)
     assert result.returncode == 0, (
@@ -53,31 +54,38 @@ def e2e_home(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def tmux_session():
-    """Create headless tmux session, destroy on teardown."""
-    import libtmux
-    srv = libtmux.Server()
+def zellij_session():
+    """Create headless Zellij session, destroy on teardown."""
     name = f"prerelease-{os.getpid()}"
-    session = srv.new_session(session_name=name, attach=False, x=220, y=60)
+    # Clean any stale session
+    try:
+        zellij.kill_session(name)
+        time.sleep(1)
+    except Exception:
+        pass
+    subprocess.run(["zellij", "delete-session", name], capture_output=True)
+    time.sleep(0.5)
+
+    zellij.ensure_session(name)
+    time.sleep(2)
     yield name
     try:
-        session.kill()
+        zellij.kill_session(name)
     except Exception:
         pass
 
 
 @pytest.fixture(scope="session")
-def cli(zchat_cmd, e2e_home, tmux_session):
+def cli(zchat_cmd, e2e_home, zellij_session):
     """CLI runner closure targeting the pre-release project."""
     env = {
         "ZCHAT_HOME": e2e_home,
-        "ZCHAT_TMUX_SESSION": tmux_session,
     }
     return make_cli_runner(cmd=[zchat_cmd], project=PROJECT_NAME, env=env)
 
 
 @pytest.fixture(scope="session")
-def project(cli, e2e_port, tmux_session):
+def project(cli, e2e_port, zellij_session):
     """Create the main test project via CLI. Teardown removes it."""
     cli(
         "project", "create", PROJECT_NAME,
@@ -87,8 +95,8 @@ def project(cli, e2e_port, tmux_session):
         "--agent-type", "claude",
         "--proxy", "127.0.0.1:7897",
     )
-    # Set the tmux session name in config to match our test session
-    cli("set", "tmux.session", tmux_session)
+    # Set the zellij session name in config to match our test session
+    cli("set", "zellij.session", zellij_session)
     # Set up local auth for get_username()
     cli("auth", "login", "--method", "local", "--username", os.environ.get("USER", "test"))
     yield PROJECT_NAME
@@ -132,24 +140,22 @@ def bob_probe(ergo_server):
 
 
 @pytest.fixture(scope="session")
-def weechat_window(tmux_session):
-    """Return the WeeChat tmux window name.
+def weechat_tab(zellij_session):
+    """Return the WeeChat Zellij tab name.
 
     WeeChat is started by test_03_irc via cli("irc", "start"), which creates
-    a tmux window named "weechat". This fixture returns the known name.
+    a Zellij tab named "weechat". This fixture returns the known name.
     """
     return "weechat"
 
 
 @pytest.fixture(scope="session")
-def tmux_send(tmux_session):
-    """Send keys to a tmux window by name."""
-    from zchat.cli.tmux import get_session, find_window
+def zellij_send(zellij_session):
+    """Send keys to a Zellij tab by name."""
     def send(target: str, text: str):
-        session = get_session(tmux_session)
-        window = find_window(session, target)
-        if window and window.active_pane:
-            window.active_pane.send_keys(text, enter=True)
+        pane_id = zellij.get_pane_id(zellij_session, target)
+        if pane_id:
+            zellij.send_command(zellij_session, pane_id, text)
     return send
 
 

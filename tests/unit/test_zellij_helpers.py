@@ -99,7 +99,7 @@ def test_new_tab_minimal(mock_run):
 
 
 # ---------------------------------------------------------------------------
-# send_command — paste + enter
+# send_command — write-chars + enter
 # ---------------------------------------------------------------------------
 
 @patch("zchat.cli.zellij._run")
@@ -107,7 +107,7 @@ def test_send_command_uses_paste_then_enter(mock_run):
     zellij.send_command("sess", "terminal_3", "ls -la")
     assert mock_run.call_count == 2
     mock_run.assert_any_call(
-        ["paste", "--pane-id", "terminal_3", "ls -la"], session="sess",
+        ["write-chars", "--pane-id", "terminal_3", "--", "ls -la"], session="sess",
     )
     mock_run.assert_any_call(
         ["send-keys", "--pane-id", "terminal_3", "Enter"], session="sess",
@@ -115,7 +115,7 @@ def test_send_command_uses_paste_then_enter(mock_run):
     # Verify order: paste before send-keys
     calls = mock_run.call_args_list
     assert calls[0] == call(
-        ["paste", "--pane-id", "terminal_3", "ls -la"], session="sess",
+        ["write-chars", "--pane-id", "terminal_3", "--", "ls -la"], session="sess",
     )
     assert calls[1] == call(
         ["send-keys", "--pane-id", "terminal_3", "Enter"], session="sess",

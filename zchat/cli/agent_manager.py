@@ -274,7 +274,11 @@ class AgentManager:
         return False
 
     def _auto_confirm_startup(self, tab_name: str, timeout: int = 60):
-        """Background thread: watch pane for confirmation prompts, send Enter."""
+        """Background thread: poll pane screen for confirmation prompts, send Enter.
+
+        Uses dump-screen polling instead of subscribe to avoid leaving
+        orphan zellij processes that block the parent from exiting.
+        """
         def _watch():
             pane_id = None
             # Wait briefly for tab to be ready
@@ -286,29 +290,31 @@ class AgentManager:
             if not pane_id:
                 return
 
-            proc = zellij.subscribe_pane(self._session_name, pane_id)
-            try:
-                deadline = time.time() + timeout
-                confirm_patterns = ["I trust this folder", "local development", "Enter to confirm"]
-                confirmed: set[str] = set()
-                for line in proc.stdout:
-                    if time.time() > deadline:
+            deadline = time.time() + timeout
+            # Patterns that appear in Claude Code startup prompts
+            confirm_patterns = [
+                "i trust this folder",
+                "local development",
+                "enter to confirm",
+                "development channels",
+                "experimental",
+            ]
+            confirmed: set[str] = set()
+            while time.time() < deadline:
+                screen = zellij.dump_screen(self._session_name, pane_id).lower()
+                if not screen:
+                    time.sleep(1)
+                    continue
+                for pattern in confirm_patterns:
+                    if pattern in screen and pattern not in confirmed:
+                        zellij.send_keys(self._session_name, pane_id, "Enter")
+                        confirmed.add(pattern)
+                        time.sleep(1)
                         break
-                    try:
-                        event = json.loads(line)
-                        if event.get("event") != "pane_update":
-                            continue
-                        for vp_line in event.get("viewport", []):
-                            for pattern in confirm_patterns:
-                                if pattern.lower() in vp_line.lower() and pattern not in confirmed:
-                                    zellij.send_keys(self._session_name, pane_id, "Enter")
-                                    confirmed.add(pattern)
-                                    time.sleep(1)
-                                    break
-                    except json.JSONDecodeError:
-                        continue
-            finally:
-                proc.terminate()
+                # Stop polling once Claude Code is ready (INSERT mode visible)
+                if "insert" in screen:
+                    break
+                time.sleep(1)
 
         thread = threading.Thread(target=_watch, daemon=True)
         thread.start()
