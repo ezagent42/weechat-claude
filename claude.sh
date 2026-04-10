@@ -63,6 +63,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source user-local environment (proxy, API keys, etc.)
 if [ -f "$SCRIPT_DIR/claude.local.env" ]; then
     set -a && source "$SCRIPT_DIR/claude.local.env" && set +a
+
+    # WSL2: replace 127.0.0.1 proxy with Windows host gateway IP.
+    # In WSL2, 127.0.0.1 points to the Linux VM, not the Windows host
+    # where the proxy (e.g. Clash) is running.
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        WSL_GATEWAY=$(grep nameserver /etc/resolv.conf 2>/dev/null | awk '{print $2}' | head -1)
+        if [ -n "$WSL_GATEWAY" ]; then
+            export http_proxy="${http_proxy//127.0.0.1/$WSL_GATEWAY}"
+            export https_proxy="${https_proxy//127.0.0.1/$WSL_GATEWAY}"
+            export HTTP_PROXY="${HTTP_PROXY//127.0.0.1/$WSL_GATEWAY}"
+            export HTTPS_PROXY="${HTTPS_PROXY//127.0.0.1/$WSL_GATEWAY}"
+        fi
+    fi
 else
     echo "⚠️  claude.local.env not found!"
     echo "   Create it from the example:"
