@@ -15,5 +15,5 @@ def test_doctor_checks_dependencies(cli):
     """doctor output mentions key dependencies."""
     result = cli("doctor", check=False)
     output = result.stdout.lower()
-    for dep in ["tmux", "ergo", "weechat"]:
+    for dep in ["zellij", "ergo", "weechat"]:
         assert dep in output, f"doctor output missing '{dep}' check"
