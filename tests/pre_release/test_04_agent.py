@@ -1,8 +1,17 @@
 # tests/pre_release/test_04_agent.py
 """Pre-release: agent lifecycle management."""
 import os
+import re
 
 import pytest
+
+
+def _irc_nick() -> str:
+    """Return the sanitized IRC nick matching what zchat auth stores."""
+    raw = os.environ.get("USER", "user")
+    nick = re.sub(r"[^A-Za-z0-9\-_\\\[\]\{\}\^|]", "", raw)
+    nick = nick.lstrip("0123456789-")
+    return nick or "user"
 
 
 @pytest.mark.order(1)
@@ -10,7 +19,7 @@ def test_agent_create(cli, irc_probe, ergo_server):
     """Create agent0, verify it joins IRC."""
     result = cli("agent", "create", "agent0")
     assert result.returncode == 0, f"agent create failed: {result.stderr}"
-    username = os.environ.get("USER", "user")
+    username = _irc_nick()
     assert irc_probe.wait_for_nick(
         f"{username}-agent0", timeout=30
     ), "agent0 not on IRC"
@@ -56,7 +65,7 @@ def _capture_agent_pane(username):
 @pytest.mark.order(4)
 def test_agent_send(cli, irc_probe):
     """Send message via agent0 to #general."""
-    username = os.environ.get("USER", "user")
+    username = _irc_nick()
 
     msg = None
     for attempt in range(3):
@@ -81,7 +90,7 @@ def test_agent_send(cli, irc_probe):
 def test_agent_create_second(cli, irc_probe):
     """Create agent1."""
     cli("agent", "create", "agent1")
-    username = os.environ.get("USER", "user")
+    username = _irc_nick()
     assert irc_probe.wait_for_nick(
         f"{username}-agent1", timeout=30
     ), "agent1 not on IRC"
@@ -91,7 +100,7 @@ def test_agent_create_second(cli, irc_probe):
 def test_agent_restart(cli, irc_probe):
     """Restart agent1, verify it re-joins IRC."""
     cli("agent", "restart", "agent1")
-    username = os.environ.get("USER", "user")
+    username = _irc_nick()
     assert irc_probe.wait_for_nick(
         f"{username}-agent1", timeout=30
     ), "agent1 not back on IRC after restart"
@@ -101,7 +110,7 @@ def test_agent_restart(cli, irc_probe):
 def test_agent_stop(cli, irc_probe):
     """Stop agent1, verify it leaves IRC."""
     cli("agent", "stop", "agent1")
-    username = os.environ.get("USER", "user")
+    username = _irc_nick()
     assert irc_probe.wait_for_nick_gone(
         f"{username}-agent1", timeout=10
     ), "agent1 still on IRC after stop"
