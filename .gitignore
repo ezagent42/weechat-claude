@@ -24,3 +24,10 @@ languages/
 .claude/worktrees/
 claude.local.env
 .mcp.env
+
+# Bootstrap generated artifacts
+.artifacts/bootstrap/module-reports/
+.artifacts/bootstrap/bootstrap-report.md
+
+# One-time test run reports
+docs/discuss/skill-dev/e2e-report/
