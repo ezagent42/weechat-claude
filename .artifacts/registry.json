@@ -162,6 +162,62 @@
       "related_ids": [
         "test-plan-004"
       ]
+    },
+    {
+      "id": "eval-doc-004",
+      "name": "WSL2 代理地址 127.0.0.1 导致 ECONNREFUSED（#40）",
+      "type": "eval-doc",
+      "status": "confirmed",
+      "producer": "skill-5",
+      "consumers": [],
+      "path": ".artifacts/eval-docs/eval-wsl2-proxy-003.md",
+      "created_at": "2026-04-13T00:00:00Z",
+      "updated_at": "2026-04-13T00:00:00Z",
+      "related_ids": [
+        "test-plan-005"
+      ]
+    },
+    {
+      "id": "eval-doc-005",
+      "name": "ergo Homebrew 安装后 languages 目录缺失（#41）",
+      "type": "eval-doc",
+      "status": "confirmed",
+      "producer": "skill-5",
+      "consumers": [],
+      "path": ".artifacts/eval-docs/eval-ergo-languages-004.md",
+      "created_at": "2026-04-13T00:00:00Z",
+      "updated_at": "2026-04-13T00:00:00Z",
+      "related_ids": [
+        "test-plan-006"
+      ]
+    },
+    {
+      "id": "test-plan-005",
+      "name": "WSL2 proxy 自动重写测试计划（#40）",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": [],
+      "path": ".artifacts/test-plans/plan-wsl2-proxy-005.md",
+      "created_at": "2026-04-13T00:00:00Z",
+      "updated_at": "2026-04-13T00:00:00Z",
+      "related_ids": [
+        "eval-doc-004"
+      ]
+    },
+    {
+      "id": "test-plan-006",
+      "name": "ergo languages 多路径查找测试计划（#41）",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": [],
+      "path": ".artifacts/test-plans/plan-ergo-languages-005.md",
+      "created_at": "2026-04-13T00:00:00Z",
+      "updated_at": "2026-04-13T00:00:00Z",
+      "related_ids": [
+        "eval-doc-005"
+      ]
     }
   ]
 }

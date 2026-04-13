@@ -1,7 +1,7 @@
 ---
 type: eval-doc
 id: eval-ergo-languages-004
-status: draft
+status: confirmed
 producer: skill-5
 created_at: "2026-04-13T00:00:00Z"
 mode: verify
@@ -17,7 +17,7 @@ related:
 - 模式：验证
 - 提交人：zyli
 - 日期：2026-04-13
-- 状态：draft
+- 状态：confirmed
 
 ## Testcase 表格
 
