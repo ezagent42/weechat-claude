@@ -3,6 +3,7 @@
 
 覆盖 plan-ergo-languages-005 中的 TC-01 ~ TC-08。
 """
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -114,26 +115,27 @@ def _run_languages_copy(ergo_data_dir: str, side_effects: dict) -> None:
 # ---------------------------------------------------------------------------
 class TestTC01LocalShareExists(unittest.TestCase):
     def test_copies_from_local_share(self):
+        local_src = str(Path("~/.local/share/ergo/languages").expanduser())
+        dest = "/tmp/ergo_test/languages"
+
+        # 只有 local_share 路径存在
+        existing = {local_src}
+
+        def fake_isdir(p):
+            return os.path.abspath(str(p)) in {os.path.abspath(s) for s in existing}
+
         with patch("shutil.copytree") as mock_copytree, \
              patch("shutil.which", return_value=None), \
-             patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1, stdout="")
-
-            local_src = str(Path("~/.local/share/ergo/languages").expanduser())
-            dest = "/tmp/ergo_test/languages"
-
-            def fake_isdir(p):
-                return str(p) == local_src
-
-            with patch("os.path.isdir", side_effect=fake_isdir), \
-                 patch("os.path.realpath", side_effect=lambda p: str(Path(p).resolve())):
-                if not fake_isdir(dest):
-                    candidates = [local_src]
-                    for c in candidates:
-                        c = str(Path(c).resolve())
-                        if fake_isdir(c):
-                            mock_copytree(c, dest)
-                            break
+             patch("subprocess.run", return_value=MagicMock(returncode=1, stdout="")), \
+             patch("os.path.isdir", side_effect=fake_isdir), \
+             patch("os.path.realpath", side_effect=lambda p, **kw: os.path.abspath(str(p))):
+            if not fake_isdir(dest):
+                candidates = [local_src]
+                for c in candidates:
+                    c = os.path.abspath(c)
+                    if fake_isdir(c):
+                        mock_copytree(c, dest)
+                        break
 
             mock_copytree.assert_called_once()
             src_arg = mock_copytree.call_args[0][0]
@@ -149,28 +151,27 @@ class TestTC02BrewShareExists(unittest.TestCase):
         brew_share_lang = str(Path(brew_prefix) / "share" / "languages")
         dest = "/tmp/ergo_test2/languages"
 
+        existing = {brew_share_lang}
+
+        def fake_isdir(p):
+            return os.path.abspath(str(p)) in {os.path.abspath(s) for s in existing}
+
         with patch("shutil.copytree") as mock_copytree, \
              patch("shutil.which", return_value=None), \
-             patch("subprocess.run") as mock_run:
-
-            mock_run.return_value = MagicMock(returncode=0, stdout=brew_prefix + "\n")
-
-            def fake_isdir(p):
-                return str(Path(p).resolve()) == str(Path(brew_share_lang).resolve())
-
-            with patch("os.path.isdir", side_effect=fake_isdir), \
-                 patch("os.path.realpath", side_effect=lambda p: str(Path(p).resolve())):
-                if not fake_isdir(dest):
-                    candidates = [
-                        str(Path("~/.local/share/ergo/languages").expanduser()),
-                        brew_share_lang,
-                        str(Path(brew_prefix) / "languages"),
-                    ]
-                    for c in candidates:
-                        c = str(Path(c).resolve())
-                        if fake_isdir(c):
-                            mock_copytree(c, dest)
-                            break
+             patch("subprocess.run", return_value=MagicMock(returncode=0, stdout=brew_prefix + "\n")), \
+             patch("os.path.isdir", side_effect=fake_isdir), \
+             patch("os.path.realpath", side_effect=lambda p, **kw: os.path.abspath(str(p))):
+            if not fake_isdir(dest):
+                candidates = [
+                    str(Path("~/.local/share/ergo/languages").expanduser()),
+                    brew_share_lang,
+                    str(Path(brew_prefix) / "languages"),
+                ]
+                for c in candidates:
+                    c = os.path.abspath(c)
+                    if fake_isdir(c):
+                        mock_copytree(c, dest)
+                        break
 
             mock_copytree.assert_called_once()
             src_arg = mock_copytree.call_args[0][0]
@@ -261,34 +262,29 @@ class TestTC08FirstMatchOnly(unittest.TestCase):
         brew_share = str(Path(brew_prefix) / "share" / "languages")
         dest = "/tmp/ergo_multi/languages"
 
+        # 两个路径都"存在"
+        existing = {local_src, brew_share}
+
+        def fake_isdir(p):
+            return os.path.abspath(str(p)) in {os.path.abspath(s) for s in existing}
+
         with patch("shutil.copytree") as mock_copytree, \
              patch("shutil.which", return_value=None), \
-             patch("subprocess.run") as mock_run:
+             patch("subprocess.run", return_value=MagicMock(returncode=0, stdout=brew_prefix + "\n")), \
+             patch("os.path.isdir", side_effect=fake_isdir), \
+             patch("os.path.realpath", side_effect=lambda p, **kw: os.path.abspath(str(p))):
+            if not fake_isdir(dest):
+                candidates = [local_src, brew_share]
+                for c in candidates:
+                    c = os.path.abspath(c)
+                    if fake_isdir(c):
+                        mock_copytree(c, dest)
+                        break
 
-            mock_run.return_value = MagicMock(returncode=0, stdout=brew_prefix + "\n")
-
-            # 两个路径都"存在"
-            def fake_isdir(p):
-                resolved = str(Path(p).resolve())
-                return resolved in {
-                    str(Path(local_src).resolve()),
-                    str(Path(brew_share).resolve()),
-                }
-
-            with patch("os.path.isdir", side_effect=fake_isdir), \
-                 patch("os.path.realpath", side_effect=lambda p: str(Path(p).resolve())):
-                if not fake_isdir(dest):
-                    candidates = [local_src, brew_share]
-                    for c in candidates:
-                        c = str(Path(c).resolve())
-                        if fake_isdir(c):
-                            mock_copytree(c, dest)
-                            break
-
-            # 只应调用一次
-            self.assertEqual(mock_copytree.call_count, 1)
-            src_arg = mock_copytree.call_args[0][0]
-            self.assertIn("local", src_arg)  # 第一个命中的是 local_share
+        # 只应调用一次
+        self.assertEqual(mock_copytree.call_count, 1)
+        src_arg = mock_copytree.call_args[0][0]
+        self.assertIn("local", src_arg)  # 第一个命中的是 local_share
 
 
 if __name__ == "__main__":
