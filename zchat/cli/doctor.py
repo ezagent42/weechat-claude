@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import socket
 import subprocess
 import urllib.request
 from pathlib import Path
@@ -113,6 +114,47 @@ def run_doctor():
         typer.echo(f"  ✗ weechat plugin    (optional, run: zchat setup weechat)")
         optional_missing += 1
     optional_total += 1
+
+    # Check pytest availability
+    try:
+        out = subprocess.run(
+            ["uv", "run", "python", "-m", "pytest", "--version"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if "pytest" in out.stdout:
+            ver = out.stdout.strip().split("\n")[0]
+            typer.echo(f"  ✓ pytest            {ver}  (optional)")
+        else:
+            raise RuntimeError
+    except Exception:
+        typer.echo(f"  ✗ pytest            (optional, run: uv sync)")
+        optional_missing += 1
+    optional_total += 1
+
+    # Check IRC port 6667 free (default local ergo port)
+    irc_port = 6667
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        port_in_use = s.connect_ex(("127.0.0.1", irc_port)) == 0
+    if port_in_use:
+        typer.echo(f"  ✗ port {irc_port}         in use — local ergo may fail to bind  (optional)")
+        optional_missing += 1
+    else:
+        typer.echo(f"  ✓ port {irc_port}         free  (optional)")
+    optional_total += 1
+
+    # Check submodules initialised
+    root = Path(__file__).parent.parent.parent
+    submodules = {
+        "zchat-channel-server": root / "zchat-channel-server" / "pyproject.toml",
+        "zchat-protocol": root / "zchat-protocol" / "pyproject.toml",
+    }
+    for name, marker in submodules.items():
+        if marker.is_file():
+            typer.echo(f"  ✓ {name:<16}  (optional)")
+        else:
+            typer.echo(f"  ✗ {name:<16}  (optional, run: git submodule update --init)")
+            optional_missing += 1
+        optional_total += 1
 
     typer.echo("")
 
