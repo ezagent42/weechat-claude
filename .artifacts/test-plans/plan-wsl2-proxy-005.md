@@ -42,8 +42,8 @@ fi
 
 | TC-ID | 场景 | 测试类型 | 优先级 | 前置条件 | 操作 | 断言 |
 |-------|------|---------|-------|---------|------|------|
-| TC-01 | WSL2 下 127.0.0.1 代理被自动重写 | 人工/WSL2 | P0 | WSL2 环境；`claude.local.env` 设 `http_proxy=http://127.0.0.1:7897`；Clash 在 Windows 侧运行 | 执行 `./claude.sh`，观察是否成功连接 Claude API | 无 `ECONNREFUSED`，Claude 正常启动 |
-| TC-02 | 重写后 proxy 地址为 Windows host IP | 人工/WSL2 | P0 | 同上 | 在 `claude.sh` 中 `echo $http_proxy` 输出重写后的值 | 地址为 `172.x.x.x:7897`，非 `127.0.0.1` |
+| TC-01 | WSL2 下 127.0.0.1 代理被自动重写 | 人工/WSL2 | P0 | WSL2 环境；`claude.local.env` 设 `http_proxy=http://127.0.0.1:7890`；Clash 在 Windows 侧运行 | 执行 `./claude.sh`，观察是否成功连接 Claude API | 无 `ECONNREFUSED`，Claude 正常启动 |
+| TC-02 | 重写后 proxy 地址为 Windows host IP | 人工/WSL2 | P0 | 同上 | 在 `claude.sh` 中 `echo $http_proxy` 输出重写后的值 | 地址为 `172.x.x.x:7890`，非 `127.0.0.1` |
 | TC-03 | 非 WSL2 环境下 proxy 不被修改 | 人工/Linux | P1 | 原生 Linux 或 macOS；`/proc/version` 不含 `microsoft` | 执行 `./claude.sh`，检查 proxy 变量 | proxy 值与 `claude.local.env` 原始值相同 |
 | TC-04 | WSL2 下未设置 proxy 时正常启动 | 人工/WSL2 | P1 | WSL2 环境；`claude.local.env` 中无 proxy 设置 | 执行 `./claude.sh` | 正常启动，无报错 |
 | TC-05 | `/proc/version` 含 `microsoft` 时检测为 WSL2 | bash 单元 | P1 | mock `/proc/version` 内容 | 运行检测逻辑 | `grep -qi microsoft` 返回 0 |
@@ -66,9 +66,9 @@ fi
 # tests/bash/test_claude_sh_wsl2.bats
 @test "WSL2 proxy rewrite replaces 127.0.0.1" {
   source scripts/wsl2_proxy_rewrite.sh  # 需提取为独立函数
-  export http_proxy="http://127.0.0.1:7897"
+  export http_proxy="http://127.0.0.1:7890"
   WSL_HOST_IP="172.30.240.1"
   rewrite_proxy
-  [ "$http_proxy" = "http://172.30.240.1:7897" ]
+  [ "$http_proxy" = "http://172.30.240.1:7890" ]
 }
 ```
