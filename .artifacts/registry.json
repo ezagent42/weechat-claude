@@ -325,11 +325,27 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": [],
+      "consumers": ["test-plan-007"],
       "path": ".artifacts/eval-docs/eval-weechat-cache-006.md",
       "created_at": "2026-04-13T00:00:00Z",
-      "updated_at": "2026-04-13T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
       "related_ids": [
+        "code-diff-005",
+        "test-plan-007"
+      ]
+    },
+    {
+      "id": "code-diff-005",
+      "name": "WeeChat /set cache 覆盖修复 diff（#42）",
+      "type": "code-diff",
+      "status": "merged",
+      "producer": "manual",
+      "consumers": ["test-plan-007"],
+      "path": ".artifacts/code-diffs/diff-weechat-cache-fix.md",
+      "created_at": "2026-04-13T14:35:00Z",
+      "updated_at": "2026-04-13T14:35:00Z",
+      "related_ids": [
+        "eval-doc-006",
         "test-plan-007"
       ]
     },
@@ -339,11 +355,45 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": [],
+      "consumers": ["test-diff-004", "e2e-report-004"],
       "path": ".artifacts/test-plans/plan-weechat-cache-007.md",
       "created_at": "2026-04-13T00:00:00Z",
-      "updated_at": "2026-04-13T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
       "related_ids": [
+        "eval-doc-006",
+        "code-diff-005",
+        "test-diff-004",
+        "e2e-report-004"
+      ]
+    },
+    {
+      "id": "test-diff-004",
+      "name": "WeeChat server cache 强制更新单元测试（#42）",
+      "type": "test-diff",
+      "status": "merged",
+      "producer": "skill-3",
+      "consumers": ["e2e-report-004"],
+      "path": ".artifacts/test-diffs/test-diff-004.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "test-plan-007",
+        "eval-doc-006"
+      ]
+    },
+    {
+      "id": "e2e-report-004",
+      "name": "WeeChat server cache 强制更新验证报告（#42）—— 8/8 green",
+      "type": "e2e-report",
+      "status": "green",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/report-weechat-cache-004/report.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "test-plan-007",
+        "test-diff-004",
         "eval-doc-006"
       ]
     },
