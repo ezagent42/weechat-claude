@@ -1,1 +1,17 @@
-{"version":1,"artifacts":[]}
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "id": "coverage-matrix-001",
+      "name": "cs-coverage-matrix-001",
+      "type": "coverage-matrix",
+      "status": "draft",
+      "producer": "skill-0",
+      "consumers": [],
+      "path": ".artifacts/coverage/cs-coverage-matrix.md",
+      "created_at": "2026-04-14T09:21:50Z",
+      "updated_at": "2026-04-14T09:21:50Z",
+      "related_ids": []
+    }
+  ]
+}
