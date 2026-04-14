@@ -21,19 +21,33 @@ def _generate_session_name(project_name: str) -> str:
     return f"zchat-{project_name}"
 
 
-def create_project_config(name: str, server: str = "local",
-                          nick: str = "", channels: str | None = None,
-                          env_file: str = "",
-                          default_runner: str | None = None,
-                          mcp_server_cmd: list[str] | None = None,
-                          # Legacy params kept for backward compat
-                          port: int = 6667, tls: bool = False,
-                          password: str = "",
-                          default_type: str = "claude"):
-    """Create project directory and write config.toml."""
+def _channel_server_defaults() -> dict:
+    """Return default [channel_server] config section."""
+    return {
+        "bridge_port": 9999,
+        "plugins_dir": "plugins",
+        "db_path": "conversations.db",
+        "timers": {
+            "takeover_wait": 180,
+            "idle_timeout": 300,
+            "close_timeout": 3600,
+        },
+        "participants": {
+            "operators": [],
+            "bridge_prefixes": ["feishu-bridge", "web-bridge"],
+            "max_operator_concurrent": 5,
+        },
+    }
+
+
+def generate_default_config(name: str, server: str = "127.0.0.1",
+                            port: int = 6667, nick: str = "",
+                            channels: str | None = None,
+                            env_file: str = "",
+                            default_runner: str | None = None,
+                            mcp_server_cmd: list[str] | None = None) -> str:
+    """Generate default config as TOML text (no file I/O)."""
     from zchat.cli.defaults import default_channels, default_runner as _default_runner, default_mcp_server_cmd
-    pdir = paths.project_dir(name)
-    pdir.mkdir(parents=True, exist_ok=True)
     if channels is None:
         channels = ",".join(default_channels())
     channels_list = [ch.strip() for ch in channels.split(",") if ch.strip()]
@@ -53,10 +67,29 @@ def create_project_config(name: str, server: str = "local",
         "zellij": {
             "session": session,
         },
+        "channel_server": _channel_server_defaults(),
     }
+    return tomli_w.dumps(config)
 
-    with open(pdir / "config.toml", "wb") as f:
-        tomli_w.dump(config, f)
+
+def create_project_config(name: str, server: str = "local",
+                          nick: str = "", channels: str | None = None,
+                          env_file: str = "",
+                          default_runner: str | None = None,
+                          mcp_server_cmd: list[str] | None = None,
+                          # Legacy params kept for backward compat
+                          port: int = 6667, tls: bool = False,
+                          password: str = "",
+                          default_type: str = "claude"):
+    """Create project directory and write config.toml."""
+    pdir = paths.project_dir(name)
+    pdir.mkdir(parents=True, exist_ok=True)
+    text = generate_default_config(
+        name, server=server, nick=nick, channels=channels,
+        env_file=env_file, default_runner=default_runner,
+        mcp_server_cmd=mcp_server_cmd,
+    )
+    (pdir / "config.toml").write_text(text)
 
 
 def list_projects() -> list[str]:
@@ -117,6 +150,7 @@ def load_project_config(name: str) -> dict:
     cfg.setdefault("mcp_server_cmd", default_mcp_server_cmd())
     cfg.setdefault("zellij", {})
     cfg["zellij"].setdefault("session", _generate_session_name(name))
+    cfg.setdefault("channel_server", _channel_server_defaults())
     return cfg
 
 

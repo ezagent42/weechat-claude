@@ -1,0 +1,6 @@
+[template]
+name = "fast-response"
+description = "Quick replies, low latency — ideal for chat-heavy workflows"
+
+[hooks]
+pre_stop = "/exit"
