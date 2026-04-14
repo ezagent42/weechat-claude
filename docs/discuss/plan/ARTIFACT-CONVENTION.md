@@ -22,6 +22,7 @@
 | Phase 2 | `cs-eval-engine` | `cs-plan-engine` | `cs-diff-engine` | `cs-report-engine` |
 | Phase 3 | `cs-eval-bridge` | `cs-plan-bridge` | `cs-diff-bridge` | `cs-report-bridge` |
 | Phase 4 | `cs-eval-server` | `cs-plan-server` | `cs-diff-server` | `cs-report-server` |
+| Phase 4.5 | `cs-eval-feishu` | `cs-plan-feishu` | `cs-diff-feishu` | `cs-report-feishu` |
 | Phase 5 | `cs-eval-cli` | `cs-plan-cli` | `cs-diff-cli` | `cs-report-cli` |
 | Final | `cs-eval-prerelease` | `cs-plan-prerelease` | — | `cs-report-prerelease` |
 

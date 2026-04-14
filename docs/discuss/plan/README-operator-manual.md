@@ -125,13 +125,40 @@ source claude.local.env && claude
 
 ---
 
-## Phase Final — Pre-release
+## Phase 4.5 — 飞书 Bridge（Phase 4 之后）
+
+```bash
+tmux new-session -s cs-feishu
+cd ~/projects/zchat && git checkout feat/channel-server-v1
+source claude.local.env && claude
+```
+
+**Prompt：**
+```
+读取 docs/discuss/plan/05b-phase4.5-feishu-bridge.md。
+cd zchat-channel-server，基于 feat/server-v1 创建 feat/feishu-bridge。
+参考 /tmp/cc-openclaw/feishu/message_parsers.py 的消息解析器模式。
+Artifact: cs- 前缀。完成标准: .artifacts/e2e-reports/cs-report-feishu.md 0 FAIL 0 SKIP。
+```
+
+---
+
+## Phase Final — 飞书全自动 E2E（Phase 4.5 之后）
+
+**前提：3 个飞书测试群已创建，bot 已加入，feishu-e2e-config.yaml 已配置。**
 
 ```bash
 tmux new-session -s cs-final
 cd ~/projects/zchat && git checkout feat/channel-server-v1
 source claude.local.env && claude
-# Prompt: "读取 docs/discuss/plan/07-phase-final-testing.md。verify 模式。cs- 前缀。"
+```
+
+**Prompt：**
+```
+读取 docs/discuss/plan/07-phase-final-testing.md。
+cd zchat-channel-server。所有 Phase 已完成（含飞书 Bridge）。
+运行三层验收: unit 回归 + E2E Bridge API + 飞书全自动 E2E。
+Artifact: cs- 前缀。完成标准: .artifacts/e2e-reports/cs-report-prerelease.md 0 FAIL 0 SKIP。
 ```
 
 ---

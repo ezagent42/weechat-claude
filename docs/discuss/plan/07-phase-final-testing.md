@@ -1,17 +1,17 @@
 # Phase Final: Pre-release 验收测试
 
-> **执行位置:** dev branch（所有 Phase 已 merge）
-> **仓库:** zchat-channel-server
-> **Spec 参考:** `spec/channel-server/05-user-journeys.md` 全部 7 个旅程
-> **预估:** 2-3h
-> **依赖:** Phase 4 完成
+> **执行位置:** `~/projects/zchat/`（feat/channel-server-v1 分支）
+> **仓库:** zchat-channel-server submodule
+> **Spec 参考:** `spec/channel-server/05-user-journeys.md` + `09-feishu-bridge.md §7`
+> **预估:** 3-4h
+> **依赖:** Phase 4.5 (飞书 Bridge) 完成
 
 ---
 
 ## 工作环境
 
 **你被启动在 zchat 项目根目录 (`~/projects/zchat/`)。**
-所有 Phase 1-4 在 submodule 内已完成。
+所有 Phase 1-4.5 在 submodule 内已完成。
 
 ```bash
 cd zchat-channel-server
@@ -20,17 +20,18 @@ cd zchat-channel-server
 uv run python -c "
 from protocol.gate import gate_message
 from engine.conversation_manager import ConversationManager
-from engine.event_bus import EventBus
 from bridge_api.ws_server import BridgeAPIServer
 from transport.irc_transport import IRCTransport
-print('All v1.0 modules OK')
+from feishu_bridge.message_parsers import parse_message
+from feishu_bridge.test_client import FeishuTestClient
+print('All v1.0 modules + feishu_bridge OK')
 "
 
 # 确认 unit + E2E 基线全部通过
-uv run pytest tests/unit/ tests/e2e/ -v
+uv run pytest tests/unit/ tests/e2e/ feishu_bridge/tests/ -v
 ```
 
-**依赖:** Phase 4 (集成) 必须已完成。submodule 内所有代码已 merge。
+**依赖:** Phase 4.5 (飞书 Bridge) 必须已完成。
 
 ---
 
@@ -39,286 +40,270 @@ uv run pytest tests/unit/ tests/e2e/ -v
 **Artifact 命名约定:** 见 `ARTIFACT-CONVENTION.md`，所有 ID 用 `cs-` 前缀。
 
 ```bash
-# Step 1: eval-doc (verify 模式 — 验证而非提案)
+# Step 1: eval-doc (verify 模式)
 /dev-loop-skills:skill-5-feature-eval verify
-# 主题: "channel-server v1.0 端到端验收"
+# 主题: "channel-server v1.0 端到端验收（含飞书真实环境）"
 
-# Step 2: test-plan (从 verify eval-doc 生成验收 checklist)
+# Step 2: test-plan → .artifacts/test-plans/cs-plan-prerelease.md
 /dev-loop-skills:skill-2-test-plan-generator
 
-# Step 3: test-code (walkthrough script + WebSocket acceptance tests)
+# Step 3: test-code → tests/pre_release/*.py
 /dev-loop-skills:skill-3-test-code-writer
-# 输出: tests/pre_release/*.py + tests/pre_release/*.sh
 
 # Step 4: 执行验收测试
 
-# Step 5: test-run + 报告
+# Step 5: test-run → .artifacts/e2e-reports/cs-report-prerelease.md
 /dev-loop-skills:skill-4-test-runner
 
 # Step 6: artifact 注册
 /dev-loop-skills:skill-6-artifact-registry register --type e2e-report --id cs-report-prerelease
-# 验证: cs-eval-prerelease → cs-plan-prerelease → cs-report-prerelease
 ```
 
 **闭环完成标志:** `.artifacts/e2e-reports/cs-report-prerelease.md` 存在，0 FAIL 0 SKIP。
 
 ---
 
-## Task F.1: Pre-release walkthrough (asciinema 录制)
+## 三层验收
 
-**Files:** `tests/pre_release/channel_server_walkthrough.sh`
+### Layer 1: Unit 回归（所有 Phase 测试）
 
 ```bash
-#!/bin/bash
-# Channel-Server v1.0 Pre-release Walkthrough
-# 录制: asciinema rec tests/pre_release/evidence/walkthrough.cast
-set -e
-
-echo "=== Channel-Server v1.0 Pre-release ==="
-
-# 1. 启动 ergo
-echo ">>> Starting ergo on port 16700..."
-ERGO_PORT=16700
-ergo run --conf tests/pre_release/ergo.yaml &
-ERGO_PID=$!
-sleep 2
-
-# 2. 启动 channel-server
-echo ">>> Starting channel-server..."
-BRIDGE_PORT=19900
-IRC_SERVER=127.0.0.1 IRC_PORT=$ERGO_PORT BRIDGE_PORT=$BRIDGE_PORT \
-  AGENT_NAME=walkthrough-agent \
-  uv run python -m server &
-CS_PID=$!
-sleep 3
-
-# 3. Bridge API 连接测试
-echo ">>> Testing Bridge API register..."
-python3 -c "
-import asyncio, websockets, json
-async def test():
-    ws = await websockets.connect('ws://localhost:$BRIDGE_PORT')
-    await ws.send(json.dumps({
-        'type': 'register', 'bridge_type': 'test',
-        'instance_id': 'walkthrough',
-        'capabilities': ['customer', 'operator', 'admin']
-    }))
-    resp = json.loads(await ws.recv())
-    assert resp['type'] == 'registered', f'FAIL: {resp}'
-    print('  Bridge register: PASS')
-    
-    # 创建对话
-    await ws.send(json.dumps({
-        'type': 'customer_connect',
-        'conversation_id': 'walkthrough_001',
-        'customer': {'id': 'david', 'name': 'David'}
-    }))
-    print('  Customer connect: PASS')
-    
-    # /status
-    await ws.send(json.dumps({
-        'type': 'admin_command',
-        'admin_id': 'tester',
-        'command': '/status'
-    }))
-    status = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
-    print(f'  /status: {status}')
-    
-    await ws.close()
-asyncio.run(test())
-"
-
-echo ">>> All walkthrough checks passed!"
-kill $CS_PID $ERGO_PID 2>/dev/null
+uv run pytest tests/unit/ feishu_bridge/tests/ -v
 ```
 
-- [ ] **运行 walkthrough**
+Expected: ~70+ tests PASS
+
+### Layer 2: E2E — Bridge API（无需飞书凭证）
 
 ```bash
-chmod +x tests/pre_release/channel_server_walkthrough.sh
-asciinema rec tests/pre_release/evidence/walkthrough.cast -c ./tests/pre_release/channel_server_walkthrough.sh
+uv run pytest tests/e2e/ -v -m e2e --timeout=30
+```
+
+通过 WebSocket 模拟 Bridge，验证协议行为（conversation lifecycle, mode switching, gate enforcement）。
+
+### Layer 3: Pre-release — 飞书真实环境（需要飞书凭证）
+
+**前提：**
+- `.feishu-credentials.json` 存在（app_id + app_secret）
+- 3 个飞书测试群已创建，bot 已加入
+- `feishu-e2e-config.yaml` 配置正确
+
+---
+
+## 飞书 E2E 测试群配置
+
+### 需要的飞书群
+
+| 群名 | chat_id 配置项 | 用途 | 成员 |
+|------|--------------|------|------|
+| `[测试]客户对话` | `customer_chat` | 模拟客户聊天 | bot |
+| `[测试]小李分队` | `squad_chat` | 模拟人工客服工作区 | bot |
+| `[测试]管理群` | `admin_chat` | 模拟管理员操作 | bot |
+
+### 配置文件
+
+```yaml
+# tests/pre_release/feishu-e2e-config.yaml
+feishu:
+  app_id: ${FEISHU_APP_ID}
+  app_secret: ${FEISHU_APP_SECRET}
+
+groups:
+  customer_chat: "oc_customer_test_xxx"
+  squad_chat: "oc_squad_test_xxx"
+  admin_chat: "oc_admin_test_xxx"
+
+channel_server:
+  bridge_port: 9999
+  irc_port: 6667
 ```
 
 ---
 
-## Task F.2: Bridge API 自动化验收 (Playwright WebSocket)
-
-**Files:** `tests/pre_release/conftest.py` + `tests/pre_release/test_bridge_acceptance.py`
+## 飞书 E2E 测试代码
 
 ```python
-# tests/pre_release/conftest.py
-import os, subprocess, time
+# tests/pre_release/test_feishu_e2e.py
+"""全自动飞书 E2E 测试 — 6 步状态机完整走通"""
+
+import time
 import pytest
+import yaml
+from feishu_bridge.test_client import FeishuTestClient
 
-@pytest.fixture(scope="session")
-def full_stack(tmp_path_factory):
-    """启动完���的 ergo + channel-server 栈"""
-    work = tmp_path_factory.mktemp("prerelease")
-    ergo_port = 16700 + (os.getpid() % 100)
-    bridge_port = 19900 + (os.getpid() % 100)
-    
-    ergo_proc = subprocess.Popen(["ergo", "run", "--conf", "tests/pre_release/ergo.yaml"])
-    time.sleep(2)
-    
-    cs_proc = subprocess.Popen(
-        ["uv", "run", "python", "-m", "server"],
-        env={**os.environ,
-             "IRC_SERVER": "127.0.0.1", "IRC_PORT": str(ergo_port),
-             "BRIDGE_PORT": str(bridge_port), "AGENT_NAME": "prerelease-agent"},
-    )
-    time.sleep(3)
-    
-    yield {"ergo_port": ergo_port, "bridge_port": bridge_port}
-    
-    cs_proc.terminate()
-    ergo_proc.terminate()
-```
+@pytest.fixture(scope="module")
+def feishu_config():
+    with open("tests/pre_release/feishu-e2e-config.yaml") as f:
+        return yaml.safe_load(f)
 
-```python
-# tests/pre_release/test_bridge_acceptance.py
-import asyncio, json
-import pytest
-import websockets
+@pytest.fixture(scope="module")
+def feishu(feishu_config):
+    cfg = feishu_config["feishu"]
+    return FeishuTestClient(cfg["app_id"], cfg["app_secret"])
 
-@pytest.mark.prerelease
-@pytest.mark.asyncio
-async def test_full_lifecycle(full_stack):
-    """验收旅程: 接入 → 对话 → copilot → takeover → resolve → CSAT"""
-    ws = await websockets.connect(f"ws://localhost:{full_stack['bridge_port']}")
-    
-    # Register
-    await ws.send(json.dumps({
-        "type": "register", "bridge_type": "acceptance",
-        "instance_id": "at-1", "capabilities": ["customer", "operator", "admin"]
-    }))
-    assert json.loads(await ws.recv())["type"] == "registered"
-    
-    # Customer connect
-    conv_id = "acceptance_test_001"
-    await ws.send(json.dumps({
-        "type": "customer_connect", "conversation_id": conv_id,
-        "customer": {"id": "david", "name": "David"}
-    }))
-    
-    # Customer message
-    await ws.send(json.dumps({
-        "type": "customer_message", "conversation_id": conv_id,
-        "text": "hello", "message_id": "m1"
-    }))
-    
-    # Operator join → expect copilot
-    await ws.send(json.dumps({
-        "type": "operator_join", "conversation_id": conv_id,
-        "operator": {"id": "xiaoli", "name": "小李"}
-    }))
-    event = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
-    assert event.get("data", {}).get("to") == "copilot", f"Expected copilot, got {event}"
-    
-    # /hijack → expect takeover
-    await ws.send(json.dumps({
-        "type": "operator_command", "conversation_id": conv_id,
-        "operator_id": "xiaoli", "command": "/hijack"
-    }))
-    event = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
-    assert event.get("data", {}).get("to") == "takeover", f"Expected takeover, got {event}"
-    
-    # /resolve → expect csat_request
-    await ws.send(json.dumps({
-        "type": "operator_command", "conversation_id": conv_id,
-        "operator_id": "xiaoli", "command": "/resolve"
-    }))
-    csat = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
-    assert csat.get("type") == "csat_request", f"Expected csat_request, got {csat}"
-    
-    # CSAT response
-    await ws.send(json.dumps({
-        "type": "csat_response", "conversation_id": conv_id, "score": 5
-    }))
-    
-    await ws.close()
-    print("FULL LIFECYCLE: PASS")
+@pytest.fixture(scope="module")
+def groups(feishu_config):
+    return feishu_config["groups"]
+
+@pytest.fixture(scope="module")
+def full_stack():
+    """启动 ergo + channel-server + feishu_bridge"""
+    # ... 启动进程 ...
+    yield
+    # ... 清理 ...
 
 
 @pytest.mark.prerelease
-@pytest.mark.asyncio
-async def test_gate_isolation(full_stack):
-    """验收 Gate: 两个 bridge 连接，验证 side 消息不到 customer 端"""
-    port = full_stack["bridge_port"]
-    
-    # customer-only bridge
-    cust_ws = await websockets.connect(f"ws://localhost:{port}")
-    await cust_ws.send(json.dumps({
-        "type": "register", "bridge_type": "cust-view",
-        "instance_id": "cv-1", "capabilities": ["customer"]
-    }))
-    await cust_ws.recv()  # registered
-    
-    # operator-only bridge
-    op_ws = await websockets.connect(f"ws://localhost:{port}")
-    await op_ws.send(json.dumps({
-        "type": "register", "bridge_type": "op-view",
-        "instance_id": "ov-1", "capabilities": ["operator"]
-    }))
-    await op_ws.recv()  # registered
-    
-    # 创建对话 + operator join + /hijack
-    conv_id = "gate_test_001"
-    await cust_ws.send(json.dumps({
-        "type": "customer_connect", "conversation_id": conv_id,
-        "customer": {"id": "test", "name": "Test"}
-    }))
-    
-    # ... 验证 agent 在 takeover 下的 side 消息:
-    # op_ws ��到 (visibility=side)
-    # cust_ws 不收到 (timeout)
-    
-    await cust_ws.close()
-    await op_ws.close()
+class TestFeishuFullJourney:
+    """PRD 6 步状态机端到端验证"""
+
+    def test_step1_customer_onboard(self, feishu, groups, full_stack):
+        """US-2.1: 客户接入 → agent 回复"""
+        feishu.send_message(groups["customer_chat"], "B 套餐多少钱")
+        msg = feishu.assert_message_appears(
+            groups["customer_chat"],
+            contains="套餐",
+            timeout=15
+        )
+        assert msg is not None
+
+    def test_step2_squad_notification(self, feishu, groups, full_stack):
+        """US-2.3: 分队群收到对话通知"""
+        feishu.assert_message_appears(
+            groups["squad_chat"],
+            contains="进行中",
+            timeout=10
+        )
+
+    def test_step3_copilot_gate(self, feishu, groups, full_stack):
+        """US-2.4: copilot 模式 — operator 消息不到客户群"""
+        # operator 加入
+        feishu.send_message(groups["squad_chat"], "进入对话")
+        time.sleep(3)
+
+        # operator 发建议
+        test_text = f"建议强调优惠_{int(time.time())}"  # 唯一标识
+        feishu.send_message(groups["squad_chat"], test_text)
+        time.sleep(5)
+
+        # 验证: 客户群没有这条消息
+        feishu.assert_message_absent(
+            groups["customer_chat"],
+            contains=test_text,
+            wait=8
+        )
+
+        # 验证: 分队群有这条消息
+        feishu.assert_message_appears(
+            groups["squad_chat"],
+            contains=test_text,
+            timeout=3
+        )
+
+    def test_step4_hijack(self, feishu, groups, full_stack):
+        """US-2.5: /hijack → takeover"""
+        feishu.send_message(groups["squad_chat"], "/hijack")
+        feishu.assert_message_appears(
+            groups["squad_chat"],
+            contains="takeover",
+            timeout=10
+        )
+
+    def test_step5_operator_message_reaches_customer(self, feishu, groups, full_stack):
+        """US-2.6: takeover 下人工消息到客户"""
+        operator_text = f"您好我是客服小李_{int(time.time())}"
+        feishu.send_message(groups["squad_chat"], operator_text)
+
+        # 验证: 客户群收到
+        feishu.assert_message_appears(
+            groups["customer_chat"],
+            contains="客服小李",
+            timeout=10
+        )
+
+    def test_step6_resolve_and_csat(self, feishu, groups, full_stack):
+        """US-2.6: /resolve → CSAT"""
+        feishu.send_message(groups["squad_chat"], "/resolve")
+
+        # 验证: 客户群收到 CSAT 卡片
+        feishu.assert_message_appears(
+            groups["customer_chat"],
+            contains="评分",
+            timeout=10
+        )
+
+
+@pytest.mark.prerelease
+class TestFeishuGateIsolation:
+    """Gate 强制执行验证 — 最关键的安全测试"""
+
+    def test_takeover_agent_side_not_in_customer(self, feishu, groups, full_stack):
+        """takeover 下 agent 消息降为 side，客户看不到"""
+        # 需要先建立 takeover 状态
+        # ...
+        
+        # agent 发消息（会被 gate 降为 side）
+        # 验证: 分队群看到 [侧栏] 标签
+        # 验证: 客户群看不到
+        pass
+
+    def test_copilot_operator_not_in_customer(self, feishu, groups, full_stack):
+        """copilot 下 operator 消息降为 side，客户看不到"""
+        pass
+
+
+@pytest.mark.prerelease
+class TestFeishuAdminCommands:
+    """管理群命令测试"""
+
+    def test_status_command(self, feishu, groups, full_stack):
+        feishu.send_message(groups["admin_chat"], "/status")
+        feishu.assert_message_appears(
+            groups["admin_chat"],
+            contains="active",
+            timeout=10
+        )
 ```
 
-- [ ] **运行 pre-release**
+### 运行命令
 
 ```bash
-uv run pytest tests/pre_release/ -v -m prerelease --timeout=60
+# 需要飞书凭证
+FEISHU_APP_ID=xxx FEISHU_APP_SECRET=xxx \
+  uv run pytest tests/pre_release/test_feishu_e2e.py -v -m prerelease --timeout=120
 ```
 
 ---
 
-## Task F.3: 飞书真实验证 (可选)
-
-如果飞书凭证可用：
+## Walkthrough 录制
 
 ```bash
-# 方式 1: agent-browser 自动化飞书 Web
-/agent-browser:agent-browser
-# 打开 feishu.cn → 登录 → 找群 → 发消息 → 截图验证
-
-# 方式 2: 飞书 API 直接验证
-python3 tests/pre_release/feishu_api_test.py \
-  --app-id $FEISHU_APP_ID --app-secret $FEISHU_APP_SECRET \
-  --chat-id $TEST_CHAT_ID
-
-# 方式 3: 录屏
-# 手动在飞书中操作，用 OBS/asciinema 录屏保存到 evidence/
+# asciinema 录制完整流程
+asciinema rec tests/pre_release/evidence/feishu-e2e.cast -c \
+  "uv run pytest tests/pre_release/ -v -m prerelease --timeout=120"
 ```
 
-**证据保存:**
+---
+
+## 证据保存
 
 ```
 tests/pre_release/evidence/
-├── walkthrough.cast          # asciinema 录制
-├── walkthrough.gif           # agg 生成
-├── bridge_acceptance.log     # pytest 输出
-├── feishu_screenshot_*.png   # 飞书截图（如有）
-└── gate_isolation.log        # Gate 隔离测试日志
+├── feishu-e2e.cast              # asciinema 录制
+├── unit-regression.log          # unit 测试输出
+├── e2e-bridge-api.log           # Bridge API E2E 输出
+├── feishu-e2e.log               # 飞书 E2E 输出
+└── gate-isolation.log           # Gate 隔离验证输出
 ```
 
 ---
 
 ## 完成标准
 
-- [ ] walkthrough.sh 全部检查通过，asciinema 录制完成
-- [ ] `test_full_lifecycle` PASS — 完整 7 步生命周期
-- [ ] `test_gate_isolation` PASS — visibility 隔离验证
-- [ ] 所有证据保存到 `evidence/` 目录
-- [ ] （可选）飞书真实环境截图/录屏
+- [ ] Unit 回归: 全部 PASS (~70+ tests)
+- [ ] E2E Bridge API: 全部 PASS (4 scenarios)
+- [ ] 飞书 E2E 6 步状态机: 全部 PASS
+- [ ] 飞书 Gate 隔离验证: 全部 PASS
+- [ ] 飞书管理命令验证: 全部 PASS
+- [ ] `.artifacts/e2e-reports/cs-report-prerelease.md` 存在，0 FAIL 0 SKIP
+- [ ] evidence/ 目录有完整录制

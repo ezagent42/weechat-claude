@@ -237,6 +237,8 @@ IRC channel 名 = `#conv-{conversation_id}`
 | `05-user-journeys.md` | 三视角端到端用户旅程（含 /resolve + CSAT 采集流程） |
 | `06-gap-fixes.md` | 交叉验证修复补充（SLA timer、并发上限、CSAT、分队、多租户、v1.0 scope） |
 | `07-migration-plan.md` | 三层修改方案（zchat CLI / channel-server / AutoService） |
+| `08-implementation-plan.md` | 实现计划（Phase 0-Final，已拆分到 plan/ 目录） |
+| `09-feishu-bridge.md` | 飞书 Bridge 详细设计（消息解析器 + 群映射 + card + E2E 工具） |
 
 ---
 

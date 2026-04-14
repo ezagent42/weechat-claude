@@ -13,7 +13,7 @@ Phase 0 (phase0-infra) ── 必须先完成
     │
     ├── Phase 1 (feat/protocol) ──┐
     │                              ├── 可并行
-    └── Phase 5 (zchat wt)  ──────┘
+    └── Phase 5 (zchat CLI)  ─────┘
             │
             │ Phase 1 push 后
             ├── Phase 2 (feat/engine) ────┐
@@ -23,7 +23,9 @@ Phase 0 (phase0-infra) ── 必须先完成
                         │ Phase 2+3 merge 后
                         └── Phase 4 (feat/server-v1)
                                 │
-                                └── Phase Final (验收)
+                                └── Phase 4.5 (feat/feishu-bridge)
+                                        │
+                                        └── Phase Final (飞书全自动 E2E)
 ```
 
 ## 操作手册
@@ -41,8 +43,9 @@ Phase 0 (phase0-infra) ── 必须先完成
 | `03-phase2-engine.md` | engine/ 目录：8 个运行时模块 | `feat/engine` | Phase 1 | 3-4h |
 | `04-phase3-bridge.md` | bridge_api/ 目录：WebSocket server | `feat/bridge-api` | Phase 1 | 1-2h |
 | `05-phase4-integration.md` | transport/ + server.py 重构 + E2E | `feat/server-v1` | Phase 2+3 | 3-4h |
-| `06-phase5-zchat-cli.md` | zchat CLI 配置扩展 + 模板 | (zchat wt: channel-server 分支) | Phase 0 | 1h |
-| `07-phase-final-testing.md` | Pre-release 验收测试 | main | Phase 4 | 2-3h |
+| `05b-phase4.5-feishu-bridge.md` | 飞书 Bridge：消息解析+群映射+visibility 路由 | `feat/feishu-bridge` | Phase 4 | 3-4h |
+| `06-phase5-zchat-cli.md` | zchat CLI 配置扩展 + 模板 | (feat/channel-server-v1) | Phase 0 | 1h |
+| `07-phase-final-testing.md` | Pre-release 验收（含飞书全自动 E2E） | — | Phase 4.5 | 3-4h |
 
 ## 每个 agent 的启动指令
 
