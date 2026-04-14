@@ -63,6 +63,7 @@ def _capture_agent_pane(username):
 
 
 @pytest.mark.order(4)
+@pytest.mark.timeout(300)  # 3 attempts × 90s each; proxy environments can be slow
 def test_agent_send(cli, irc_probe):
     """Send message via agent0 to #general."""
     username = _irc_nick()
@@ -75,7 +76,7 @@ def test_agent_send(cli, irc_probe):
         if result.returncode != 0:
             print(f"[DEBUG] send attempt {attempt+1} failed: {result.stderr}")
             continue
-        msg = irc_probe.wait_for_message("prerelease-test-msg", timeout=60)
+        msg = irc_probe.wait_for_message("prerelease-test-msg", timeout=90)
         if msg is not None:
             break
         # Capture after each failed wait
@@ -87,8 +88,12 @@ def test_agent_send(cli, irc_probe):
 
 
 @pytest.mark.order(5)
+@pytest.mark.manual
 def test_agent_focus_hide(cli):
-    """agent focus/hide switch zellij tabs without error."""
+    """agent focus/hide switch zellij tabs without error.
+
+    Requires running inside a Zellij session — skip in headless CI.
+    """
     result = cli("agent", "focus", "agent0", check=False)
     assert result.returncode == 0, f"agent focus failed: {result.stderr}"
     result = cli("agent", "hide", "agent0", check=False)
