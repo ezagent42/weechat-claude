@@ -62,11 +62,14 @@
 │  ├── admin_command                                      │
 │  └── 接收 reply / edit / event / csat_request           │
 │                                                         │
-│  VisibilityRouter                                       │
-│  ├── public → 发到 customer 群                           │
-│  ├── side → 发到 squad 群                                │
-│  ├── system → 发到 squad 群 + admin 群                   │
-│  └── csat_request → 发 card 到 customer 群               │
+│  VisibilityRouter（card + thread 模型）                   │
+│  ├── conversation.created → send_card(squad群) 作 thread root │
+│  ├── public reply → 双写: customer_chat + squad thread   │
+│  ├── side message → squad thread only                    │
+│  ├── mode.changed → update_card(状态刷新)                │
+│  ├── conversation.closed → update_card(关闭标记)         │
+│  ├── csat_request → 发 card 到 customer 群               │
+│  └── cs_msg_id → feishu_msg_id 映射（用于 edit）         │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -293,6 +296,16 @@ class GroupManager:
             if chat_id == squad["chat_id"]:
                 return squad["operator_id"]
         return None
+
+    def is_operator_in_customer_chat(self, chat_id: str, sender_id: str) -> bool:
+        """检测已知 operator 在客户群发消息 → 自动触发 takeover。
+        
+        条件: chat_id 属于 customer_chats + sender_id 属于 known_operators。
+        触发时 feishu_bridge 自动发 operator_join + operator_command(/hijack)。
+        """
+        if chat_id not in self._dynamic_customer_chats:
+            return False
+        return sender_id in self._known_operator_ids
 ```
 
 ### 群事件处理（EventDispatcher 注册）
@@ -309,38 +322,92 @@ lark.EventDispatcherHandler.builder("", "")
 
 ---
 
-## 6. Visibility 路由
+## 6. Visibility 路由（card + thread 模型）
 
-Bridge 从 channel-server 收到带 `visibility` 的消息后：
+每个 conversation 在 squad群 对应一张**卡片（thread root）** + 一个 **thread**。对话全生命周期的消息通过 thread 聚合，卡片实时反映状态。
+
+### ConvThread 映射
+
+```python
+@dataclass
+class ConvThread:
+    """一个 conversation 在飞书中的映射"""
+    conversation_id: str
+    card_msg_id: str          # squad群 中的卡片 message_id（thread root）
+    customer_chat_id: str     # 客户群 chat_id
+    last_customer_msg_id: str | None = None
+    msg_id_map: dict[str, str] = field(default_factory=dict)  # cs_msg_id → feishu_msg_id
+```
+
+### VisibilityRouter 实现
 
 ```python
 class VisibilityRouter:
+    def __init__(self, sender, group_manager):
+        self._threads: dict[str, ConvThread] = {}  # conversation_id → ConvThread
+    
+    def on_conversation_created(self, conversation_id: str, customer_name: str):
+        """新对话 → squad群 发卡片（作为 thread root）"""
+        customer_chat = self.group_manager.get_customer_chat(conversation_id)
+        squad_chat = self.group_manager.get_squad_chat(conversation_id)
+        card = self._build_status_card(conversation_id, customer_name, mode="auto")
+        card_msg_id = self.sender.send_card(squad_chat, card)
+        self._threads[conversation_id] = ConvThread(
+            conversation_id=conversation_id,
+            card_msg_id=card_msg_id,
+            customer_chat_id=customer_chat,
+        )
+    
     def route(self, conversation_id: str, message: dict):
         visibility = message.get("visibility", "public")
         text = message.get("text", "")
+        msg_type = message.get("type", "reply")
+        cs_msg_id = message.get("message_id")
+        thread = self._threads.get(conversation_id)
         
-        customer_chat = self.group_manager.get_customer_chat(conversation_id)
-        squad_chat = self.group_manager.get_squad_chat(conversation_id)
+        if msg_type == "csat_request":
+            self.sender.send_card(thread.customer_chat_id, self.csat_card(conversation_id))
+            return
+        
+        if msg_type == "edit" and cs_msg_id:
+            # 查映射，编辑飞书消息
+            feishu_msg_id = thread.msg_id_map.get(cs_msg_id) if thread else None
+            if feishu_msg_id:
+                self.sender.update_message(feishu_msg_id, message.get("new_text", text))
+            return
         
         if visibility == "public":
-            # 客户群 + 分队群都收到
-            self.sender.send_text(customer_chat, text)
-            if squad_chat:
-                self.sender.send_text(squad_chat, f"[→客户] {text}")
+            # 双写: 客户群 + squad thread
+            feishu_msg_id = self.sender.send_text(thread.customer_chat_id, text)
+            if cs_msg_id and thread:
+                thread.msg_id_map[cs_msg_id] = feishu_msg_id
+            if thread:
+                self.sender.reply_in_thread(thread.card_msg_id, f"[→客户] {text}")
         
         elif visibility == "side":
-            # 只发到分队群
-            if squad_chat:
-                self.sender.send_text(squad_chat, f"[侧栏] {text}")
+            # squad thread only（客户看不到）
+            if thread:
+                self.sender.reply_in_thread(thread.card_msg_id, f"[侧栏] {text}")
         
         elif visibility == "system":
-            # 分队群 + 管理群
-            if squad_chat:
-                self.sender.send_text(squad_chat, f"[系统] {text}")
+            # squad thread + admin群
+            if thread:
+                self.sender.reply_in_thread(thread.card_msg_id, f"[系统] {text}")
             self.sender.send_text(self.admin_chat_id, f"[系统] {text}")
-        
-        if message.get("type") == "csat_request":
-            self.sender.send_card(customer_chat, self.csat_card(conversation_id))
+    
+    def on_mode_changed(self, conversation_id: str, new_mode: str):
+        """模式变更 → 更新卡片"""
+        thread = self._threads.get(conversation_id)
+        if thread:
+            card = self._build_status_card(conversation_id, mode=new_mode)
+            self.sender.update_message(thread.card_msg_id, card)
+    
+    def on_conversation_closed(self, conversation_id: str):
+        """关闭 → 更新卡片标记"""
+        thread = self._threads.get(conversation_id)
+        if thread:
+            card = self._build_status_card(conversation_id, mode="closed")
+            self.sender.update_message(thread.card_msg_id, card)
 ```
 
 ---

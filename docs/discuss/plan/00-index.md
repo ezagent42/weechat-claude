@@ -25,7 +25,9 @@ Phase 0 (phase0-infra) ── 必须先完成
                                 │
                                 └── Phase 4.5 (feat/feishu-bridge)
                                         │
-                                        └── Phase Final (飞书全自动 E2E)
+                                        └── Phase 4.6 (feat/architecture-split)
+                                                │
+                                                └── Phase Final (飞书全自动 E2E)
 ```
 
 ## 操作手册
@@ -44,8 +46,9 @@ Phase 0 (phase0-infra) ── 必须先完成
 | `04-phase3-bridge.md` | bridge_api/ 目录：WebSocket server | `feat/bridge-api` | Phase 1 | 1-2h |
 | `05-phase4-integration.md` | transport/ + server.py 重构 + E2E | `feat/server-v1` | Phase 2+3 | 3-4h |
 | `05b-phase4.5-feishu-bridge.md` | 飞书 Bridge：消息解析+群映射+visibility 路由 | `feat/feishu-bridge` | Phase 4 | 3-4h |
+| `06-phase4.6-architecture-split.md` | 架构拆分：server.py 独立化 + agent_mcp + IRC 协议 + routing + card/thread | `feat/architecture-split` | Phase 4.5 | 12-16h |
 | `06-phase5-zchat-cli.md` | zchat CLI 配置扩展 + 模板 | (feat/channel-server-v1) | Phase 0 | 1h |
-| `07-phase-final-testing.md` | Pre-release 验收（含飞书全自动 E2E） | — | Phase 4.5 | 3-4h |
+| `07-phase-final-testing.md` | Pre-release 验收（含飞书全自动 E2E） | — | Phase 4.6 | 3-4h |
 
 ## 每个 agent 的启动指令
 

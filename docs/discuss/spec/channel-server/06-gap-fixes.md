@@ -235,7 +235,9 @@ fast-agent 判断需要深度查询:
 | Dream Engine 完整 pipeline | Epic 4 | 复杂度高，需独立设计 | v1.1 |
 | 灰度发布引擎 | US-4.4 | 需要 A/B testing 框架 | v1.1 |
 | 事实准确率度量 | §6 | 需要 evaluation pipeline | v1.1 |
-| 快慢双模型路由策略 | §5 模块 B | Agent 行为层，v1.0 用 soul.md 实现 | v1.1 可考虑协议级支持 |
+| 快慢双模型 — soul.md 行为 | §5 模块 B | **v1.0**: 双 agent 各自 soul.md 定义协作行为（fast-agent 占位 + @deep-agent 委托） | v1.0 |
+| 快慢双模型 — 协议级智能路由 | §5 模块 B | **v1.1**: pipeline 引擎在 channel-server 层拦截消息、按配置路由 | v1.1 |
+| Agent 编排 pipeline 引擎 | 架构决策 #6 | **v1.1**: channel-server 读取 routing.toml [pipeline] 配置，自动拦截消息按顺序路由 | v1.1 |
 | 合规规则引擎 | US-1.4 | 需要法律团队输入 | v1.1 |
 | 虚拟客户预演 | US-1.3 | 上线向导的一部分 | v1.1 |
 | 管理仪表盘 Web UI | US-3.1 | Frontend 独立开发 | v1.1 |

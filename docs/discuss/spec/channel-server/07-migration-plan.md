@@ -13,9 +13,10 @@
 └──────────────────────────────────────────────────────────┘
 
 ┌─ channel-server (核心改造) ──────────────────────────────┐
-│  现有: server.py (320行) + message.py                    │
-│  新增: protocol/ + engine/ + transport/ + bridge_api/    │
-│  保留: MCP Server 入口 + IRC 连接基础                    │
+│  现有: server.py (644行) → 拆分为独立进程 + agent_mcp    │
+│  server.py: IRC bot + Bridge API + engine 组装（~300行） │
+│  agent_mcp.py (新建): 轻量 MCP server（~200行）          │
+│  保留: protocol/ + engine/ + transport/ + bridge_api/    │
 └──────────────────────────────────────────────────────────┘
 
 ┌─ AutoService (App 层适配) ──────────────────────────────┐
@@ -58,48 +59,15 @@ max_operator_concurrent = 5
 
 **改动量**: ~20 行，在 `project.py` 的默认配置中增加 channel_server 段。
 
-### 修改 1.2: Agent 模板系统
+### 修改 1.2: Agent 模板系统（v1.0 Out of Scope）
 
-**文件**: 新增 `zchat/cli/templates/` 下的模板
-
-```
-templates/
-├── claude-channel/          # 现有默认模板（保留）
-├── autoservice-fast/        # 新增
-│   ├── template.toml        # model=haiku, channels=["#general"]
-│   ├── soul.md              # 快速响应 + 占位策略
-│   └── start.sh
-├── autoservice-deep/        # 新增
-│   ├── template.toml        # model=opus, channels=["#general"]
-│   ├── soul.md              # 深度分析
-│   └── start.sh
-├── autoservice-triage/      # 新增：智能分流
-│   ├── template.toml
-│   ├── soul.md              # 路由决策 + SLA 守护
-│   └── start.sh
-└── autoservice-admin/       # 新增：管理 Agent
-    ├── template.toml
-    ├── soul.md              # 管理群命令 + 仪表盘
-    └── start.sh
-```
-
-**改动量**: 新建 4 组模板文件（每组 3 个文件）。`runner.py` 和 `template_loader.py` 已支持模板机制，不需要改代码。
-
-### 修改 1.3: 批量创建命令（可选，v1.0 可跳过）
-
-**文件**: `zchat/cli/agent_manager.py`
-**内容**: 新增 `create_team` 方法
-
-```python
-def create_team(self, team_name: str, templates: list[str]):
-    """批量创建一组 agent。"""
-    for tmpl in templates:
-        self.create(f"{team_name}-{tmpl}", agent_type=tmpl)
-```
-
-**CLI**: `zchat agent create-team autoservice --templates fast,deep,triage,admin`
-
-**改动量**: ~30 行。v1.0 可以手动 4 次 `zchat agent create` 替代。
+> **v1.0 不实现 agent 模板系统和批量创建命令**。Agent 配置（soul.md、模型选择）直接写到 agent workspace 目录下，通过 `zchat agent create` 逐个创建。
+>
+> v1.0 的 agent 配置方式：
+> - soul.md 手动放入 agent workspace（`~/.zchat/projects/{name}/agents/{agent_name}/`）
+> - 模型配置通过 `.mcp.json` 指定
+> - `zchat agent create fast-agent` → 手动配置 soul.md + 模型
+> - `zchat agent create deep-agent` → 同上
 
 ---
 
@@ -213,29 +181,44 @@ class BridgeAPIServer:
 
 **改动量**: ~150 行
 
-### 修改 2.5: server.py 改造
+### 修改 2.5: server.py 拆分为独立进程 + agent_mcp.py
 
-保留作为入口，但职责简化为胶水代码：
+server.py（644行）拆分为两个文件：
+
+**server.py（改造）** — 独立进程，不再是 MCP server：
 
 ```python
-# 改造后的 server.py 结构:
+# 改造后的 server.py 结构（~300行）:
 
-# 导入 protocol/ + engine/ + transport/ + bridge_api/
-# 现有 inject_message() 保留
-# 现有 create_server() 保留
-# register_tools() 扩展：新增 edit_message, join_conversation, ...
-
-# on_pubmsg 改造：
-#   原来: detect_mention → inject
-#   现在: participant_registry.identify → command_parser → gate → inject/bridge
-
-# main() 改造：
-#   新增: 初始化 engine 组件
-#   新增: 启动 bridge_api server
-#   新增: 加载 plugins
+# IRC bot: 连接 ergo，监听 #conv-* / #squad-*
+# Bridge API: WebSocket :9999
+# Engine 组装: ConversationManager + ModeManager + Gate + EventBus + TimerManager
+# 路由逻辑: IRC 消息前缀解析 → Gate → Bridge API
+# 启动: uv run zchat-channel
 ```
 
-**改动量**: server.py 从 320 行 → ~200 行（逻辑外移到 engine/，自身变薄）
+**agent_mcp.py（新建）** — 轻量 MCP server，每个 agent 一个进程：
+
+```python
+# agent_mcp.py（~200行）:
+
+# MCP stdio: 对 Claude Code 暴露 tools
+# Tools: reply(chat_id, text, edit_of?, side?) → 返回 message_id
+#         join_conversation(conversation_id)
+#         send_side_message(conversation_id, text)
+# IRC 连接: 发消息用 PRIVMSG + 前缀（__msg:/__edit:/__side:）
+# @mention 注入: IRC on_pubmsg → MCP notification 注入 Claude Code
+# 启动: 由 Claude Code .mcp.json 指定 zchat-agent-mcp
+```
+
+**pyproject.toml entry_points**:
+```toml
+[project.scripts]
+zchat-channel = "server:entry_point"          # 独立进程
+zchat-agent-mcp = "agent_mcp:entry_point"     # 轻量 MCP（agent 用）
+```
+
+**改动量**: server.py 从 644 行 → ~300 行 + agent_mcp.py ~200 行
 
 ### 修改 2.6: MCP Tools 扩展
 

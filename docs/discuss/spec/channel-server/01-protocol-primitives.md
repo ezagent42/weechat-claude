@@ -171,7 +171,9 @@ class ConversationMode(Enum):
 |------|----|------|------|
 | `auto` | `copilot` | operator JOIN conversation | 自动：operator 加入即进入 copilot |
 | `auto` | `takeover` | /hijack 命令 | 直接接管（跳过 copilot） |
+| `auto` | `takeover` | operator 在 customer_chat 发消息 | 自动 hijack：Bridge 层检测到已知 operator 在客户群发消息，自动发 operator_join + operator_command(/hijack) |
 | `copilot` | `takeover` | /hijack 命令 | 从旁听升级为接管 |
+| `copilot` | `takeover` | operator 在 customer_chat 发消息 | 同上，自动 hijack |
 | `copilot` | `auto` | operator PART conversation | 自动：operator 离开即恢复 auto |
 | `takeover` | `auto` | /release 命令 | 释放控制 |
 | `takeover` | `copilot` | /copilot 命令 | 降级为旁听（继续观察但还权给 agent） |

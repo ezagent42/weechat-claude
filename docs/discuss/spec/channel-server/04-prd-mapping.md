@@ -78,13 +78,13 @@
 
 | AC | 实现组件 | 实现方式 | Spec 引用 |
 |----|---------|---------|----------|
-| 新客户 → 卡片 | `P` + `CS` | conversation.created event → CS 在 #squad-{operator} channel 发系统消息（包含对话摘要） | `01-protocol.md §7 Event` |
-| 卡片实时刷新 | `CS` + agent 行为 | Agent 定期调用 `send_side_message` 发摘要到 squad channel；或 CS 在每 N 条 public 消息后自动推送摘要事件 | `02-channel-server.md §4 MCP Tools` |
-| 未读徽章 | `F` (IM 层) | 飞书群天然支持未读消息计数；Web 后台通过 WebSocket push 徽章 | — |
+| 新客户 → 卡片 | `CS` + `B` | conversation.created event → Bridge API → feishu_bridge 在 squad群 发 interactive card（作为 thread root） | `09-feishu-bridge.md §6` |
+| 卡片实时刷新 | `B` (feishu_bridge) | public reply → 双写（customer_chat + squad thread）；mode.changed → update_card 刷新状态 | `09-feishu-bridge.md §6` |
+| 未读徽章 | `F` (IM 层) | 飞书群 thread 天然支持未读消息计数 | — |
 
-**协议原语使用**: Event: conversation.created / Message visibility=system (卡片消息) / MCP Tool: send_side_message
+**协议原语使用**: Event: conversation.created / conversation.closed / mode.changed → Bridge API → feishu_bridge card + thread 模型
 
-**分队频道映射**: 每个 operator 有一个 IRC `#squad-{operator}` channel。Agent 在创建时配置属于哪个 operator 的分队。Agent 接入新对话后，在 squad channel 发卡片通知。
+**card + thread 模型**: 每个 conversation 在 squad群 对应一张卡片 + 一个 thread。卡片展示实时状态（mode、客户名），thread 聚合所有消息（public 双写 + side 仅 thread）。详见 `09-feishu-bridge.md §6`。
 
 ### US-2.4 · 对话监管（Copilot 模式）
 
@@ -146,16 +146,16 @@
 |----|---------|---------|
 | /status | `P` (Command) + `CS` | 协议内建命令 | `01-protocol.md §8` |
 | /dispatch | `P` (Command) + `CS` | 协议内建命令 | `01-protocol.md §8` |
-| /review | `A` (App 层命令) | 非协议命令。由 admin-agent 的 soul.md 处理，查询 EventBus 数据返回统计 | Agent 行为 |
+| /review | `CS` (内建命令) | channel-server 内建命令。EventBus.query 聚合昨日统计（对话数、接管次数、平均首回等），格式化返回 | `02-channel-server.md §4` |
 | /assign /reassign /squad | `P` (Command) + `CS` | 协议内建分队管理命令 | `01-protocol.md §8` |
 
 ### US-3.3 · SLA 超时告警
 
 | AC | 实现组件 | 实现方式 |
 |----|---------|---------|
-| 5 分钟滚动平均 | `A` + `P` (Timer + Event) | App 插件注册周期性 timer（每分钟），查询 EventBus 计算滚动平均 |
-| 告警推到管理群 | `CS` | timer 超时回调 → CS 向 #admin channel 发系统消息 |
-| 一键 /dispatch | `F` (IM 层) | 消息内嵌 /dispatch 命令，operator 可直接复制执行 |
+| SLA breach 单次告警 | `CS` + `P` (Timer + Event) | v1.0: SLA timer breach 时立即通过 Bridge API 向 admin群 发告警通知（单次 breach，不做滚动平均） |
+| 告警推到管理群 | `CS` + `B` | timer 超时 → Bridge API 通知 admin群（feishu_bridge 发告警消息） |
+| 一键 /dispatch | `F` (IM 层) | 告警消息内嵌 /dispatch 命令，admin 可直接复制执行 |
 
 ---
 

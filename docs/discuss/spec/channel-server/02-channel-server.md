@@ -6,24 +6,26 @@
 
 ## 1. 模块职责
 
-channel-server 是一个 Python 进程，同时扮演三个角色：
+channel-server 是一个**独立 Python 进程**，同时扮演三个角色：
 
-1. **MCP Server** — 对每个 Agent 的 Claude Code session 暴露 tools（reply、edit_message、join_conversation）
-2. **IRC Client** — 连接 ergo IRC server，管理 channel，收发消息
-3. **Bridge API Server** — 对 Bridge 层暴露 WebSocket 接口
+1. **IRC Bot** — 连接 ergo IRC server，监听所有 `#conv-*` / `#squad-*` 频道消息，解析 IRC 消息前缀并路由
+2. **Bridge API Server** — 对 Bridge 层暴露 WebSocket 接口
+3. **Engine** — 持有 ConversationManager + ModeManager + Gate + EventBus + TimerManager，统一管理状态
+
+> **注（目标架构，待 Phase 4.6.1 实现）**: MCP Server 将拆分到独立的 `agent_mcp.py`（轻量 MCP，每个 agent 一个进程）。Agent 通过 IRC 与 channel-server 交互，不直接连 channel-server 进程。当前代码（Phase 4）中 MCP Server 仍嵌入 server.py，拆分在 Phase 4.6.1 执行。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  channel-server 进程                                     │
 │                                                          │
-│  ┌─── MCP Server (stdio) ───┐   ┌─── Bridge API ────┐  │
-│  │  Tools:                   │   │  WebSocket :9999   │  │
-│  │  - reply                  │   │  register/message  │  │
-│  │  - edit_message           │   │  /reply/event      │  │
-│  │  - join_conversation      │   └────────┬───────────┘  │
-│  │  - list_conversations     │            │              │
-│  │  Notifications:           │            │              │
-│  │  - channel (inject msg)   │            │              │
+│  ┌─── IRC Bot ──────────────┐   ┌─── Bridge API ────┐  │
+│  │  监听 #conv-* / #squad-* │   │  WebSocket :9999   │  │
+│  │  解析消息前缀:            │   │  register/message  │  │
+│  │  - __msg:msg_id:text      │   │  /reply/event      │  │
+│  │  - __edit:msg_id:text     │   └────────┬───────────┘  │
+│  │  - __side:text            │            │              │
+│  │  - 无前缀 → Gate 判定     │            │              │
+│  │  IRC nick: cs-bot         │            │              │
 │  └────────────┬──────────────┘            │              │
 │               │                           │              │
 │  ┌────────────▼───────────────────────────▼──────────┐  │
@@ -398,19 +400,18 @@ class ParticipantRegistry:
 
 ---
 
-## 4. MCP Tools
+## 4. Agent MCP Tools（agent_mcp.py 提供）
 
-channel-server 对 Agent 暴露的 MCP tools：
+> MCP tools 由独立的 `agent_mcp.py` 进程提供（每个 agent 一个），不在 channel-server 内。
+> agent_mcp 通过 IRC 与 channel-server 交互：发消息时用 IRC PRIVMSG + 前缀协议，channel-server IRC bot 解析后路由到 Bridge API。
 
 | Tool | 参数 | 说明 |
 |------|------|------|
-| `reply` | `chat_id: str, text: str, visibility: str = "public"` | 发送消息（Gate 可能修改 visibility） |
-| `edit_message` | `message_id: str, text: str` | 编辑已发送的消息 |
-| `join_conversation` | `conversation_id: str` | 加入一个 conversation |
-| `leave_conversation` | `conversation_id: str` | 离开一个 conversation |
-| `list_conversations` | — | 列出 agent 参与的所有 active conversation |
-| `get_conversation_status` | `conversation_id: str` | 获取 conversation 状态（mode、participants） |
-| `send_side_message` | `conversation_id: str, text: str` | 发 side 消息（副驾驶建议） |
+| `reply` | `chat_id: str, text: str, edit_of?: str, side?: bool` | 发消息/编辑/side，返回 message_id。普通回复用 `__msg:msg_id:text` 前缀；edit_of 指定时用 `__edit:msg_id:text` 前缀；side=True 时用 `__side:text` 前缀 |
+| `join_conversation` | `conversation_id: str` | JOIN #conv-{id} |
+| `send_side_message` | `conversation_id: str, text: str` | 语法糖，等价于 reply(side=True) |
+
+> 注: `list_conversations`、`get_conversation_status`、`leave_conversation` 已从 agent MCP 移除。Agent 不直接查询 ConversationManager。如需查询，通过 IRC 发 `__query:status` 前缀消息，channel-server 回复。
 
 ### App MCP Tools（业务工具注册）
 
