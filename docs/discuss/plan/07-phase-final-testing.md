@@ -939,11 +939,14 @@ tests/pre_release/evidence/
 
 ### 架构前置
 
-- [ ] **server.py 拆分完成** — channel-server 独立进程启动正常（`uv run zchat-channel`）
-- [ ] **agent_mcp.py 实现完成** — 轻量 MCP server 启动正常（`uv run zchat-agent-mcp`）
-- [ ] **routing.toml 加载正常** — channel-server 启动时读取 default_agents / escalation_chain / available_agents
-- [ ] **IRC 消息前缀解析正常** — `__edit:msg_id:text` 和 `__side:text` 正确转为 Bridge event
-- [ ] **命令 handler 补全** — /resolve + /status + /dispatch + /review handler 已实现并有 unit test
+- [x] **server.py 拆分完成** — channel-server 独立进程 (Task 4.6.1, 0256535)
+- [x] **agent_mcp.py 实现完成** — 轻量 MCP server (Task 4.6.1)
+- [x] **routing.toml 加载正常** — routing_config.py (Task 4.6.3)
+- [x] **IRC 消息前缀解析正常** — __msg:/__edit:/__side: (Task 4.6.2)
+- [x] **命令 handler 补全** — /resolve /status /dispatch /review /assign /reassign /squad /abandon
+- [x] **DB 合并完成** — 单一 conversations.db, 5 表, FK + CASCADE (9e95d62)
+- [x] **卡片回调完成** — CardAwareClient + CSAT 闭环 (f5fc661)
+- [x] **Gate 修复** — send_event target_capabilities 过滤 (542fb29)
 
 ### 运行栈验证
 
