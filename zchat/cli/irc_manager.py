@@ -279,6 +279,7 @@ class IrcManager:
             f"; /set irc.server.{srv_name}.autoreconnect on"
             f"; /set irc.server.{srv_name}.autoreconnect_delay 10"
             f"; /set irc.server.{srv_name}.autojoin_dynamic on"
+            f"; /set irc.look.invite_auto_join on"
             f"{sasl_cmds}"
             f"; /connect {srv_name}{load_plugin}'"
         )
