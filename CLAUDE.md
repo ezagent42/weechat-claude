@@ -100,7 +100,7 @@ default_channels = ["#general"]
 default_type = "claude"  # agent 模板类型
 username = ""  # 空则从 $USER 读取
 env_file = ""  # 代理/API 密钥环境文件路径（可选）
-mcp_server_cmd = ["zchat-channel"]  # 开发时可用 ["uv", "run", "--project", "<path>", "zchat-channel"]
+mcp_server_cmd = ["zchat-agent-mcp"]  # 开发时可用 ["uv", "run", "--project", "<path>", "zchat-agent-mcp"]
 
 [tmux]
 session = "zchat-xxxxxxxx-local"  # tmuxp session 名称（自动生成）

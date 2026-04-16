@@ -47,8 +47,8 @@ jq -n \
     },
     permissions: {
       allow: [
-        "mcp__zchat-channel__reply",
-        "mcp__zchat-channel__join_channel"
+        "mcp__zchat-agent-mcp__reply",
+        "mcp__zchat-agent-mcp__join_channel"
       ]
     },
     enabledPlugins: {
@@ -101,7 +101,7 @@ if [ ${#MCP_ARGS[@]} -gt 0 ]; then
 fi
 
 # Write .mcp.json
-jq -n --argjson srv "$SERVER_JSON" '{"mcpServers": {"zchat-channel": $srv}}' > .mcp.json
+jq -n --argjson srv "$SERVER_JSON" '{"mcpServers": {"zchat-agent-mcp": $srv}}' > .mcp.json
 
 exec claude --permission-mode bypassPermissions \
-  --dangerously-load-development-channels server:zchat-channel
+  --dangerously-load-development-channels server:zchat-agent-mcp

@@ -40,7 +40,7 @@ def migrate_config_if_needed(project_dir: str) -> bool:
         "default_channels": agents.get("default_channels", ["#general"]),
         "username": agents.get("username", ""),
         "env_file": agents.get("env_file", ""),
-        "mcp_server_cmd": agents.get("mcp_server_cmd", ["zchat-channel"]),
+        "mcp_server_cmd": agents.get("mcp_server_cmd", ["zchat-agent-mcp"]),
         "zellij": {
             # Simplify session name: zchat-{uuid}-{name} → zchat-{name}
             "session": _simplify_session_name(
