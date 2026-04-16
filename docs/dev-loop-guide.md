@@ -188,10 +188,3 @@ GitHub：
 └── issue #55  ergo 稳定性（从 #54 拆出的 bug）
 ```
 
----
-
-## Agent 参考文档
-
-以下文档供 Agent 执行时查阅，人类一般不需要看：
-- [phases-guide](dev-loop-phases.md) — 各阶段详细操作步骤、入口出口条件
-- [templates](dev-loop-templates.md) — artifact 文件格式、命名规则、术语表
