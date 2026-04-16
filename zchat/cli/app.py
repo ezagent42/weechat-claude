@@ -153,6 +153,9 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
     cfg = _get_config(ctx)
     project_name = ctx.obj["project"]
     irc = _get_irc_config(cfg)
+    mcp_cmd = cfg.get("mcp_server_cmd")
+    if isinstance(mcp_cmd, str):
+        mcp_cmd = [mcp_cmd]
     return AgentManager(
         irc_server=irc["host"],
         irc_port=irc["port"],
@@ -165,6 +168,7 @@ def _get_agent_manager(ctx: typer.Context) -> AgentManager:
         zellij_session=_get_zellij_session(ctx),
         state_file=state_file_path(project_name),
         project_dir=project_dir(project_name),
+        mcp_server_cmd=mcp_cmd,
     )
 
 
@@ -422,9 +426,11 @@ def _enter_main_session():
         f.write("        }\n")
         f.write("        children\n")
         plugins = str(paths.plugins_dir())
-        f.write(f'        pane size=1 borderless=true {{\n')
-        f.write(f'            plugin location="file:{plugins}/zchat-status.wasm"\n')
-        f.write("        }\n")
+        wasm_path = os.path.join(plugins, "zchat-status.wasm")
+        if os.path.isfile(wasm_path):
+            f.write(f'        pane size=1 borderless=true {{\n')
+            f.write(f'            plugin location="file:{wasm_path}"\n')
+            f.write("        }\n")
         f.write('        pane size=2 borderless=true {\n')
         f.write('            plugin location="zellij:status-bar"\n')
         f.write("        }\n")
