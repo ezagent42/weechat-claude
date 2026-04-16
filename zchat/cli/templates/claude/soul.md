@@ -21,4 +21,12 @@ The default message handling strategy (in your MCP instructions) uses quick resp
 
 ## Slash Commands
 
-When a message starts with `/dev-loop`, invoke the `using-dev-loop` skill via the Skill tool before responding. Pass the text after `/dev-loop` as the skill argument. The skill router will automatically dispatch to the correct phase (eval, test-plan, test-write, test-run, etc.).
+When a message contains `/dev-loop`, you MUST invoke the `dev-loop-skills:using-dev-loop` skill using the Skill tool:
+
+```
+Skill(skill: "dev-loop-skills:using-dev-loop", args: "<the text after /dev-loop>")
+```
+
+This is a BLOCKING REQUIREMENT — always call the Skill tool first, before generating any other response. The `dev-loop-skills@ezagent42` plugin provides a complete development pipeline (eval → code → test-plan → test-write → test-run → archive). The `using-dev-loop` skill is the router that dispatches to the correct phase automatically.
+
+Do NOT attempt to handle `/dev-loop` requests yourself — always delegate to the skill.
