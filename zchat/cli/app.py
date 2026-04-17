@@ -15,6 +15,7 @@ from zchat.cli.project import (
     create_project_config, list_projects,
     get_default_project, set_default_project, resolve_project,
     load_project_config, remove_project, project_dir, state_file_path,
+    normalize_channel_name, list_channels, channel_exists, add_channel,
 )
 from zchat.cli.agent_manager import AgentManager
 from zchat.cli.irc_manager import IrcManager
@@ -38,6 +39,7 @@ setup_app = typer.Typer(help="Install and configure components")
 template_app = typer.Typer(help="Agent template management")
 auth_app = typer.Typer(help="Authentication management")
 config_app = typer.Typer(help="Global configuration management")
+channel_app = typer.Typer(help="Channel registration and management")
 
 app.add_typer(project_app, name="project")
 app.add_typer(irc_app, name="irc")
@@ -47,6 +49,7 @@ app.add_typer(setup_app, name="setup")
 app.add_typer(template_app, name="template")
 app.add_typer(auth_app, name="auth")
 app.add_typer(config_app, name="config")
+app.add_typer(channel_app, name="channel")
 
 
 def _get_config(ctx: typer.Context) -> dict:
@@ -1151,6 +1154,111 @@ def cmd_agent_hide(
     if name != "all":
         mgr.get_status(name)
     _zellij_switch(mgr.session_name, "weechat")
+
+
+@agent_app.command("join")
+def cmd_agent_join(
+    ctx: typer.Context,
+    agent: str = typer.Argument(..., help="Agent name"),
+    channel: str = typer.Argument(..., help="Channel name (with or without #)"),
+):
+    """Add agent to a registered channel (updates state; restart to take effect)."""
+    project_name = ctx.obj.get("project") if ctx.obj else None
+    if not project_name:
+        typer.echo("Error: No project selected. Run 'zchat project create <name>'.", err=True)
+        raise typer.Exit(1)
+
+    channel = normalize_channel_name(channel)
+
+    # Verify channel is registered in project config
+    if not channel_exists(project_name, channel):
+        typer.echo(
+            f"Error: Channel '{channel}' not registered. "
+            f"Run `zchat channel create {channel}` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    mgr = _get_agent_manager(ctx)
+    scoped = mgr.scoped(agent)
+
+    # Check agent exists in state
+    agents = mgr._agents
+    if scoped not in agents:
+        typer.echo(f"Error: Agent '{scoped}' not found. Run `zchat agent create {agent}` first.", err=True)
+        raise typer.Exit(1)
+
+    current_channels: list[str] = list(agents[scoped].get("channels", []))
+    if channel not in current_channels:
+        current_channels.append(channel)
+        agents[scoped]["channels"] = current_channels
+        mgr._save_state()
+
+    status = agents[scoped].get("status", "offline")
+    if status == "running":
+        typer.echo(
+            f"Agent '{scoped}' joined '{channel}' (state updated).\n"
+            f"Restart agent for channel to take effect: zchat agent restart {agent}"
+        )
+    else:
+        typer.echo(f"Agent '{scoped}' will join '{channel}' on next start.")
+
+
+# ============================================================
+# channel commands
+# ============================================================
+
+@channel_app.command("create")
+def cmd_channel_create(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Channel name (with or without #)"),
+    channel_type: Optional[str] = typer.Option(None, "--type", "-t",
+                                                help="Channel type: customer/squad/admin/general"),
+    description: Optional[str] = typer.Option(None, "--description", "-d",
+                                               help="Short description"),
+):
+    """Register a channel in project config.
+
+    Channel will be created on the IRC server automatically when an agent JOINs.
+    """
+    project_name = ctx.obj.get("project") if ctx.obj else None
+    if not project_name:
+        typer.echo("Error: No project selected. Run 'zchat project create <name>'.", err=True)
+        raise typer.Exit(1)
+
+    channel_name = normalize_channel_name(name)
+    try:
+        add_channel(
+            project_name,
+            channel_name,
+            channel_type=channel_type or "",
+            description=description or "",
+        )
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Channel '{channel_name}' registered in project '{project_name}'.")
+
+
+@channel_app.command("list")
+def cmd_channel_list(ctx: typer.Context):
+    """List all registered channels in current project."""
+    project_name = ctx.obj.get("project") if ctx.obj else None
+    if not project_name:
+        typer.echo("Error: No project selected. Run 'zchat project create <name>'.", err=True)
+        raise typer.Exit(1)
+
+    channels = list_channels(project_name)
+    if not channels:
+        typer.echo("No channels registered. Run 'zchat channel create <name>'.")
+        return
+
+    for ch_name, ch_cfg in channels.items():
+        ch_type = ch_cfg.get("type", "")
+        agents = ", ".join(ch_cfg.get("default_agents", []))
+        desc = ch_cfg.get("description", "")
+        typer.echo(f"  {ch_name}\t{ch_type}\t{agents}\t{desc}")
 
 
 # ============================================================

@@ -191,3 +191,58 @@ def set_config_value(name: str, key: str, value: str):
 
     with open(config_path, "wb") as f:
         tomli_w.dump(cfg, f)
+
+
+# ---------------------------------------------------------------------------
+# Channel config helpers
+# ---------------------------------------------------------------------------
+
+def normalize_channel_name(name: str) -> str:
+    """Ensure channel name starts with '#'."""
+    if not name.startswith("#"):
+        return f"#{name}"
+    return name
+
+
+def list_channels(project_name: str) -> dict[str, dict]:
+    """Return the [channels] section from project config.toml.
+
+    Returns a dict keyed by channel name (e.g. '#general') → channel config dict.
+    """
+    config_path = paths.project_config(project_name)
+    with open(config_path, "rb") as f:
+        cfg = tomllib.load(f)
+    return cfg.get("channels", {})
+
+
+def channel_exists(project_name: str, channel_name: str) -> bool:
+    """Check whether a channel is registered in project config."""
+    channels = list_channels(project_name)
+    return channel_name in channels
+
+
+def add_channel(project_name: str, channel_name: str,
+                channel_type: str = "",
+                description: str = "") -> None:
+    """Register a new channel in project config.toml.
+
+    Raises ValueError if the channel already exists.
+    """
+    config_path = paths.project_config(project_name)
+    with open(config_path, "rb") as f:
+        cfg = tomllib.load(f)
+
+    channels = cfg.setdefault("channels", {})
+    if channel_name in channels:
+        raise ValueError(f"Channel '{channel_name}' already exists")
+
+    entry: dict = {}
+    if channel_type:
+        entry["type"] = channel_type
+    if description:
+        entry["description"] = description
+
+    channels[channel_name] = entry
+
+    with open(config_path, "wb") as f:
+        tomli_w.dump(cfg, f)
