@@ -22,10 +22,12 @@ docs/discuss/
 .mcp.json
 ircd.db
 ircd.lock
+conversations*.db
 languages/
 .claude/worktrees/
 claude.local.env
 .mcp.env
+.feishu-credentials.json
 
 # One-time test run reports (subpath rules superseded by docs/discuss/ above)
 
