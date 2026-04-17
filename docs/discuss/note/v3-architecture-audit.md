@@ -1,86 +1,114 @@
-# V3 架构审计结论
+# V3 架构审计结论（修正版）
 
 日期: 2026-04-17
 
-## 三个仓库审计结果
-
-### zchat-protocol（基本干净，2 处需清理）
-
-| 文件 | 状态 | 动作 |
-|------|------|------|
-| naming.py | ✅ | 保持 |
-| sys_messages.py | ✅ | 保持 |
-| conversation.py | ✅ | 保持 |
-| mode.py | ✅ | 保持 |
-| message_types.py | ✅ | 保持 |
-| timer.py | ✅ | 保持 |
-| participant.py | ✅ | 保持 |
-| gate.py | ✅ | 保持（机制级，不可配置） |
-| **event.py** | ⚠️ | 删除 `SLA_BREACH`, `SQUAD_ASSIGNED`, `SQUAD_REASSIGNED`（业务事件不属于协议） |
-| **commands.py** | ⚠️ | 只保留核心命令 hijack/release/copilot/resolve，移除 squad/review/assign/reassign/dispatch（业务命令由 agent skill 处理） |
-
-### zchat-channel-server（5 个文件需重构）
-
-| 文件 | 状态 | 动作 |
-|------|------|------|
-| server.py (201行) | ✅ | 保持 |
-| transport/ | ✅ | 保持 |
-| bridge_api/ws_server.py | ✅ | 保持 |
-| engine/event_bus.py | ✅ | 保持 |
-| engine/message_store.py | ✅ | 保持 |
-| engine/conversation_manager.py | ✅ | 保持 |
-| engine/mode_manager.py | ✅ | 保持 |
-| engine/timer_manager.py | ✅ | 保持 |
-| engine/participant_registry.py | ✅ | 保持 |
-| **engine/command_handler.py** | ⚠️ | 拆分：保留 hijack/release/copilot/resolve（协议级）→ 移除 status/dispatch/review/assign/reassign/squad（业务级 → agent skill） |
-| **engine/message_router.py** | ⚠️ | 依赖 CommandHandler 拆分后调整 |
-| **feishu_bridge/bridge.py** | ⚠️ | 移除 auto-hijack 业务逻辑，简化为纯协议转换 |
-| **feishu_bridge/visibility_router.py** | ⚠️ | 拆分：visibility 路由规则 → engine/；card/thread 渲染 → 保留 |
-| **plugins/sla_app.py** | ⚠️ | SLA 策略移到 agent skill 配置，不硬编码在 plugin 中 |
-
-### zchat 主库（3 个关键缺失 + 2 处重构）
-
-| 问题 | 影响 | 动作 |
-|------|------|------|
-| **缺 CustomerManager** | v3 多租户核心 | 新建 zchat/cli/customer_manager.py |
-| **缺 customer CLI 命令** | 无法按客户管理 agent | app.py 加 `zchat customer create/delete/list` |
-| **缺动态 channel 解析** | channel 列表是静态的 | irc_manager.py + agent_manager.py 改为 per-customer |
-| agent_manager.py | ⚠️ | create() 加 customer_id 参数 |
-| app.py | ⚠️ | agent create 需要 customer context |
-
-## 核心架构 gap
+## 基础设施原语
 
 ```
-当前:
-  Project → AgentManager → Agent（全局 fast-agent/deep-agent）
-
-v3:
-  Project → CustomerManager → Customer A → AgentManager-A → fast-agent-A + deep-agent-A
-                             → Customer B → AgentManager-B → fast-agent-B + deep-agent-B
+Project  → 工作空间配置（IRC server + agent 模板 + routing 配置）
+Channel  → IRC 频道（一个群一个 channel）
+Agent    → Claude Code 实例（连接到 channel，有独立 soul.md）
 ```
 
-## 业务/基础设施分离检查
+**不使用 Customer 作为原语**——Customer 是业务概念，由 Bridge adapter 赋予。
 
-| 类别 | 纯基础设施 | 混合（需拆分） | 纯业务（应在 skill） |
-|------|:-:|:-:|:-:|
-| channel-server | 15 文件 | 5 文件 | 1 文件（sla_app） |
-| zchat-protocol | 8 文件 | 2 文件 | 0 |
-| zchat 主库 | 4 文件 | 2 文件 | 0 |
+## 命令分类（修正）
 
-## 执行优先级
+| 命令 | 分类 | 理由 | 位置 |
+|------|------|------|------|
+| /dispatch agent channel | **基础设施** | agent 加入 channel | channel-server |
+| /hijack | **基础设施** | mode 切换 | channel-server |
+| /release | **基础设施** | mode 切换 | channel-server |
+| /copilot | **基础设施** | mode 切换 | channel-server |
+| /resolve | **基础设施** | 关闭 conversation | channel-server |
+| /abandon | **基础设施** | 关闭 conversation（无 CSAT） | channel-server |
+| /status | **业务** | 查看状态 | agent skill |
+| /review | **业务** | 查看统计 | agent skill |
+| /assign /reassign /squad | **业务** | squad 管理 | agent skill |
 
-### Phase 1: 协议清理（小改，不破坏）
-1. zchat-protocol event.py 删除业务事件
-2. zchat-protocol commands.py 只保留核心命令
-3. channel-server command_handler.py 拆分
+## 配置分层
 
-### Phase 2: 多租户（大改）
-4. zchat 主库新建 customer_manager.py
-5. agent_manager.py 加 customer_id
-6. 动态 channel 解析
-7. CLI customer 子命令
+```
+routing.toml（业务配置）：
+  default_agents = ["fast-agent"]          ← 新 conversation 自动 dispatch 谁
+  escalation_chain = ["deep-agent"]        ← 升级时按什么顺序
+  available_agents = ["fast-agent", "deep-agent"]  ← 白名单（基础设施）
 
-### Phase 3: Bridge 清理
-8. bridge.py 移除 auto-hijack
-9. visibility_router.py 拆分
-10. sla_app.py 移到 skill 配置
+soul.md（业务指令，per-agent）：
+  角色定义、沟通风格、行为规则
+  存在于 agent workspace，每个实例独立
+
+templates/claude/（基础设施模板）：
+  start.sh        ← 启动脚本
+  .env.example     ← 环境变量
+  template.toml    ← 模板配置
+```
+
+## 三个仓库审计
+
+### zchat-protocol（2 处清理）
+
+| 文件 | 动作 |
+|------|------|
+| event.py | 删除 `SLA_BREACH`, `SQUAD_ASSIGNED`, `SQUAD_REASSIGNED` |
+| commands.py | 保留 hijack/release/copilot/resolve/dispatch/abandon；移除 status/review/assign/reassign/squad |
+
+### zchat-channel-server（4 处重构）
+
+| 文件 | 动作 |
+|------|------|
+| engine/command_handler.py | 保留基础设施命令（hijack/release/copilot/resolve/dispatch/abandon）；移除业务命令（status/review/assign/reassign/squad → agent skill） |
+| feishu_bridge/bridge.py | 移除 auto-hijack（注释已关）；简化为纯协议转换 |
+| feishu_bridge/visibility_router.py | 保持当前拆分（visibility_router + feishu_renderer） |
+| plugins/sla_app.py | SLA 时长已可配置（环境变量）；SLA 策略移到 routing.toml 或 skill 配置 |
+
+### zchat 主库（核心改动）
+
+| 改动 | 说明 |
+|------|------|
+| CLI: `zchat channel create/list/delete` | 新增 channel 管理命令 |
+| CLI: `zchat agent join agent channel` | 新增 agent 加入 channel 命令 |
+| agent_manager.py | create() 支持指定 channels；per-channel agent 实例 |
+| irc_manager.py | 动态 channel 解析 |
+| templates/ | soul.md 支持 per-agent-type 差异化（fast vs deep vs admin vs squad） |
+
+## Agent 模板体系
+
+```
+内置模板（zchat/cli/templates/）：
+  claude/          ← 通用 agent 模板
+    soul.md        ← 默认业务指令
+    start.sh       ← 启动脚本
+  
+用户自定义（~/.zchat/templates/）：
+  fast-agent/      ← 快速应答 agent
+    soul.md        ← "简单问题直接答，复杂问题占位"
+  deep-agent/      ← 深度分析 agent
+    soul.md        ← "接收委托，深度分析，reply(edit_of=)"
+  admin-agent/     ← 管理 agent（未来）
+    soul.md        ← admin skill 指令
+  squad-agent/     ← 分队 agent（未来）
+    soul.md        ← squad skill 指令
+```
+
+每种 agent type 有独立的 soul.md 定义行为。启动时复制到 agent workspace。
+
+## 执行计划
+
+### Phase 1: 协议清理 + 命令修正
+1. zchat-protocol: event.py 删业务事件
+2. zchat-protocol: commands.py 调整（保留 dispatch，移除 status/review/assign/reassign/squad）
+3. channel-server: command_handler.py 移除业务命令处理
+
+### Phase 2: Channel 管理
+4. zchat CLI: channel create/list/delete 命令
+5. zchat CLI: agent join/leave channel 命令
+6. channel-server: 统一 channel 管理 API
+
+### Phase 3: Agent 模板差异化
+7. templates/: fast-agent / deep-agent / admin-agent / squad-agent 独立 soul.md
+8. 运行时 per-channel agent 实例
+
+### Phase 4: Bridge 清理
+9. bridge.py: 简化为纯协议转换
+10. 卡片/thread 路由修正
