@@ -160,5 +160,5 @@ def test_load_defaults(tmp_path, monkeypatch):
     assert cfg["server"] == "remote"
     assert cfg["default_runner"] == "claude-channel"
     assert cfg["default_channels"] == ["#general"]
-    assert cfg["mcp_server_cmd"] == ["zchat-channel"]
+    assert cfg["mcp_server_cmd"] == ["zchat-agent-mcp"]
     assert "zellij" in cfg
