@@ -1571,14 +1571,26 @@ def cmd_up(
     cs_dir = str(_Path(__file__).resolve().parent.parent.parent / "zchat-channel-server")
     routing_file = str(_routing_path(pdir))
 
-    def _ensure_tab(tab: str, cmd: str, label: str) -> None:
-        """创建 tab；若 tab 已存在（可能 shell 已死）先关再重建，避免 stale tab 阻塞。"""
+    def _ensure_tab(tab: str, cmd: str, label: str,
+                     kill_pattern: str | None = None,
+                     kill_port: int | None = None) -> None:
+        """创建 tab；若 tab 已存在先关；可选 kill 残留进程/端口后再重建。"""
         if _zj.tab_exists(session, tab):
             try:
                 _zj.close_tab(session, tab)
                 _time.sleep(0.3)
             except Exception:
                 pass
+        # 关 tab 后 child process 可能还没 release 端口/资源，显式 kill
+        if kill_pattern:
+            import subprocess as _sp
+            _sp.run(["pkill", "-f", kill_pattern], check=False,
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+        if kill_port:
+            import subprocess as _sp
+            _sp.run(["fuser", "-k", f"{kill_port}/tcp"], check=False,
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            _time.sleep(0.5)
         _zj.new_tab(session, tab, command=cmd)
         typer.echo(f"{label}: started")
 
@@ -1591,7 +1603,9 @@ def cmd_up(
             f"CS_ROUTING_CONFIG={routing_file}; "
             f"cd {cs_dir} && uv run python -m channel_server 2>&1 | tee {cs_log}"
         )
-        _ensure_tab("cs", cs_cmd, "cs")
+        _ensure_tab("cs", cs_cmd, "cs",
+                    kill_pattern="python.*-m channel_server",
+                    kill_port=9999)
         _time.sleep(2)
 
     # 3. 每个 bot 一个 bridge tab
@@ -1603,7 +1617,8 @@ def cmd_up(
                 f"cd {cs_dir} && uv run python -u -m feishu_bridge "
                 f"--bot {bot_name} --routing {routing_file} 2>&1 | tee {log_file}"
             )
-            _ensure_tab(tab, br_cmd, f"bridge-{bot_name}")
+            _ensure_tab(tab, br_cmd, f"bridge-{bot_name}",
+                        kill_pattern=f"feishu_bridge --bot {bot_name}")
 
     # 4. 每个 channel.entry_agent 缺失的 agent
     if "agents" in parts:
