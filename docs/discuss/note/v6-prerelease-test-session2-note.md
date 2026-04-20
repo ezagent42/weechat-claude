@@ -230,6 +230,52 @@ if __name__ == "__main__":
 - `tests/unit/test_module_entrypoints.py` 对每个 `python -m X` 可调用模块做 smoke test：`subprocess.run([python, -m, X, --help], timeout=3)` 要有 stdout
 - Ralph-loop 的 dead code 扫描加一条：所有 `__main__.py` 都得有 `if __name__ == "__main__"`
 
+### 2.12 真 BUG：V6 `build_config_from_routing` 把 customer chat 错标为 operator
+
+**症状**：cs-customer 群发 "你好"，bridge 日志：
+```
+[feishu-bridge] INFO [operator] ou_ed51...: 你好
+```
+然后消息没有转发到 CS / IRC，客户群也无回复。
+
+**根因**：我的 V6 重构在 `build_config_from_routing` 里写：
+```python
+groups=GroupsConfig(
+    squad_chats=[{"chat_id": c} for c in own_chats],   # ← 错：所有 bot 的 chat 都塞 squad
+    customer_chats=own_chats,
+),
+```
+
+`GroupManager.identify_role` 检查顺序：admin → squad → customer → unknown。squad_chats 匹配在前 → 所有消息被标为 operator。
+
+operator 消息在 bridge 流程里只在"有 active conv 的 squad thread 里"才有效；customer 群发过来本该是 customer 消息。标错就走 `log.debug("operator message in squad %s but no active conversation")` → 静默丢弃。
+
+**修复**：按 `bot_name` 区分：
+```python
+if bot_name == "squad":
+    squad_list = [{"chat_id": c} for c in own_chats]
+else:
+    customer_list = own_chats     # customer / admin 的 chat 都归此
+```
+
+**根本整改**（V6+）：routing.toml `[bots]` 加显式 `role` 字段（generic enum：customer / operator / admin），删 `identify_role` 里那一堆按 chat_id 匹配的分支。一 bot 一 role 就够了。
+
+### 2.13 真 BUG：`zchat up` agent 重建后 zellij 残留双 tab
+
+**症状**：`zellij action query-tab-names` 看到：
+```
+yaosh-fast-001
+yaosh-admin-0
+yaosh-squad-0
+yaosh-fast-001   ← 重复！一个是真的 running，一个是 stale 死 shell
+```
+
+**根因**：我的 cmd_up 清 stale state 逻辑只清了 `mgr._agents` dict 和 state.json，**没有 close 旧 zellij tab**。`mgr.create` 建新 tab 时，旧 tab 还在 zellij 里挂着。
+
+**修复**：清 state 后额外 `_zj.close_tab(session, scoped)`。
+
+**整改**：和 2.8 同方向 —— AgentManager 应提供 `clean_dead_tabs()` 一站式清理；cmd_up 直接调用。
+
 ## 3. 修改汇总（本 session 内）
 
 | 文件 | 改动 |

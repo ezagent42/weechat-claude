@@ -1619,7 +1619,7 @@ def cmd_up(
             # 只跳过真正 running 的；offline / dangling 条目要重建
             if scoped in existing and existing[scoped].get("status") == "running":
                 continue
-            # 清理 stale state 条目以避免 mgr.create 抛 "already exists"
+            # 清理 stale state 条目 + 残留 zellij tab，避免重建后双 tab
             if scoped in existing:
                 try:
                     mgr.stop(scoped, force=True)
@@ -1627,6 +1627,13 @@ def cmd_up(
                     pass
                 mgr._agents.pop(scoped, None)
                 mgr._save_state()
+            # 无论 state 是否有条目，zellij 里可能还有同名死 tab（上次 crash 残留）
+            if _zj.tab_exists(session, scoped):
+                try:
+                    _zj.close_tab(session, scoped)
+                    _time.sleep(0.2)
+                except Exception:
+                    pass
             # 找 bot 拿默认 template
             bot_name = ch.get("bot")
             template = (bots.get(bot_name) or {}).get("default_agent_template", "claude")
