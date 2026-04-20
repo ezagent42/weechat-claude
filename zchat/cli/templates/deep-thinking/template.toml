@@ -1,6 +1,0 @@
-[template]
-name = "deep-thinking"
-description = "Thorough analysis with extended thinking — ideal for architecture and code review"
-
-[hooks]
-pre_stop = "/exit"
