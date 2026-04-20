@@ -276,6 +276,42 @@ yaosh-fast-001   ← 重复！一个是真的 running，一个是 stale 死 shel
 
 **整改**：和 2.8 同方向 —— AgentManager 应提供 `clean_dead_tabs()` 一站式清理；cmd_up 直接调用。
 
+### 2.14 致命 BUG：bridge `_forward_customer` 发 chat_id 当 channel，违反 spec 红线 3
+
+**症状**：cs.log 警告：
+```
+[router] channel 'oc_4842ab45da4093cc77565fbc23dd360f' has no entry_agent;
+message not delivered to any agent
+```
+
+bridge 把 customer 消息转发出来了，但 CS 的 router 拿 chat_id 去 routing.toml 查 channels key → 查不到（routing 里 key 是 `#conv-001`）→ 丢。
+
+**根因**：`bridge._forward_customer` 构造 WS 消息时：
+```python
+self._bridge_client.send(ws_messages.build_message(
+    channel=chat_id,              # ← 错：把 feishu chat_id 直接当 channel 发
+    ...
+))
+```
+
+spec `channel-server-v5.md §2.2 红线 3` 明写："**CS 对 external_chat_id 透明**"——路由表里 channels key 是 channel_id（`#conv-001`），不是 external_chat_id（`oc_xxx`）。bridge 必须自己做映射。
+
+V5 出站（OutboundRouter）已经实现了 channel_id → chat_id 映射；入站路径 `_forward_customer` 漏了对称的 chat_id → channel_id。
+
+**修复**：
+```python
+channel_id = self._external_to_channel.get(chat_id)
+if not channel_id:
+    log.warning("[forward] no channel mapping for chat_id=...")
+    return
+# 后续所有 build_event / build_message 用 channel_id 不用 chat_id
+```
+
+**整改**：
+- `tests/e2e/test_bridge_message_flow.py` 加 case：`_forward_customer(known chat_id)` 发出的 WS msg.channel 必须等于 routing.toml 里对应的 channel_id，NOT chat_id
+- 同样需要检查 `_forward_operator / _forward_admin`（也可能有同 bug）
+- Ralph-loop 再加一条：grep bridge 代码里出现的 `channel=chat_id` —— 应只在 GroupManager 内部，不该在 WS 消息构造里
+
 ## 3. 修改汇总（本 session 内）
 
 | 文件 | 改动 |
