@@ -33,3 +33,4 @@ claude.local.env
 
 # IDE config
 .cursor/
+.local-backup/
