@@ -1,0 +1,67 @@
+{
+  "module": "templates",
+  "files": [
+    "zchat/cli/templates/claude/template.toml",
+    "zchat/cli/templates/claude/start.sh",
+    "zchat/cli/templates/claude/soul.md",
+    "zchat/cli/templates/claude/.env.example",
+    "zchat/cli/templates/fast-agent/template.toml",
+    "zchat/cli/templates/fast-agent/start.sh",
+    "zchat/cli/templates/fast-agent/soul.md",
+    "zchat/cli/templates/fast-agent/.env.example",
+    "zchat/cli/templates/fast-agent/skills/delegate-to-deep/SKILL.md",
+    "zchat/cli/templates/fast-agent/skills/escalate-to-operator/SKILL.md",
+    "zchat/cli/templates/fast-agent/skills/handle-side-from-operator/SKILL.md",
+    "zchat/cli/templates/fast-agent/skills/handle-takeover-mode/SKILL.md",
+    "zchat/cli/templates/deep-agent/template.toml",
+    "zchat/cli/templates/deep-agent/start.sh",
+    "zchat/cli/templates/deep-agent/soul.md",
+    "zchat/cli/templates/deep-agent/.env.example",
+    "zchat/cli/templates/deep-agent/skills/escalate-no-data/SKILL.md",
+    "zchat/cli/templates/deep-agent/skills/handle-delegation/SKILL.md",
+    "zchat/cli/templates/admin-agent/template.toml",
+    "zchat/cli/templates/admin-agent/start.sh",
+    "zchat/cli/templates/admin-agent/soul.md",
+    "zchat/cli/templates/admin-agent/.env.example",
+    "zchat/cli/templates/admin-agent/skills/handle-dispatch-command/SKILL.md",
+    "zchat/cli/templates/admin-agent/skills/handle-natural-language/SKILL.md",
+    "zchat/cli/templates/admin-agent/skills/handle-review-command/SKILL.md",
+    "zchat/cli/templates/admin-agent/skills/handle-status-command/SKILL.md",
+    "zchat/cli/templates/squad-agent/template.toml",
+    "zchat/cli/templates/squad-agent/start.sh",
+    "zchat/cli/templates/squad-agent/soul.md",
+    "zchat/cli/templates/squad-agent/.env.example",
+    "zchat/cli/templates/squad-agent/skills/answer-status-query/SKILL.md",
+    "zchat/cli/templates/squad-agent/skills/handle-help-event/SKILL.md",
+    "zchat/cli/templates/squad-agent/skills/handle-mode-event/SKILL.md"
+  ],
+  "description": "Built-in agent templates (data, not code). Each template dir has template.toml (name/description/hooks.pre_stop), start.sh (bash launcher), .env.example (placeholder env template), soul.md (persona/instructions), optional skills/*/SKILL.md. Loaded by runner.py/template_loader.py",
+  "key_classes_functions": [
+    {"name": "[template] name / description / [hooks] pre_stop", "file": "zchat/cli/templates/claude/template.toml", "line": 1, "purpose": "Minimal template metadata — example: name='claude', pre_stop='/exit'"},
+    {"name": "claude start.sh", "file": "zchat/cli/templates/claude/start.sh", "line": 1, "purpose": "Copy channel-server plugin into workspace, write .claude/settings.local.json with SessionStart ready hook + permissions, build .mcp.json, exec 'claude --permission-mode bypassPermissions --dangerously-load-development-channels server:zchat-agent-mcp'"},
+    {"name": "claude SessionStart ready hook", "file": "zchat/cli/templates/claude/start.sh", "line": 37, "purpose": "touch ${ZCHAT_PROJECT_DIR}/agents/${AGENT_NAME}.ready — AgentManager polls this file for readiness"},
+    {"name": "claude MCP allowed tools", "file": "zchat/cli/templates/claude/start.sh", "line": 48, "purpose": "Allow mcp__zchat-agent-mcp__{reply,join_channel,run_zchat_cli}"},
+    {"name": "5 built-in templates", "file": "zchat/cli/templates/", "line": 1, "purpose": "claude (base), fast-agent, deep-agent, admin-agent, squad-agent — differ in soul.md persona + skills/ instructions; same start.sh pattern"}
+  ],
+  "public_interface": [
+    "Templates consumed by `zchat template list/show/set/create`",
+    "Each template exposes env vars AGENT_NAME, IRC_SERVER, IRC_PORT, IRC_CHANNELS, IRC_TLS, IRC_PASSWORD, WORKSPACE, ZCHAT_PROJECT_DIR, IRC_AUTH_TOKEN, CHANNEL_PKG_DIR, MCP_SERVER_CMD"
+  ],
+  "depends_on": [
+    "runner / template_loader (resolution + rendering)",
+    "agent_manager (env context + spawn)",
+    "bash, jq, claude (external)"
+  ],
+  "tests": [
+    "tests/unit/test_template_loader.py",
+    "tests/unit/test_runner.py",
+    "tests/unit/test_start_sh.py"
+  ],
+  "evidence_file_lines": [
+    "zchat/cli/templates/claude/template.toml:1",
+    "zchat/cli/templates/claude/start.sh:1",
+    "zchat/cli/templates/claude/start.sh:37",
+    "zchat/cli/templates/claude/start.sh:48",
+    "zchat/cli/templates/claude/start.sh:107"
+  ]
+}

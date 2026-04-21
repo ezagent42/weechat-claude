@@ -1,25 +1,46 @@
 {
   "module": "irc_manager",
-  "path": "zchat/cli/irc_manager.py",
-  "lines": 358,
-  "updated_at": "2026-04-17",
-  "functions": [
-    {"name": "check_irc_connectivity", "line": 13, "signature": "def check_irc_connectivity(server: str, port: int, tls: bool = False, timeout: float = 5) -> None", "description": "检查 IRC 服务器可达性，不可达抛 ConnectionError"}
+  "files": [
+    "zchat/cli/irc_manager.py"
   ],
-  "classes": [
-    {
-      "name": "IrcManager",
-      "line": 25,
-      "methods": [
-        "__init__", "irc_config", "daemon_start", "_inject_auth_script",
-        "daemon_stop", "start_weechat", "build_weechat_cmd", "stop_weechat",
-        "status", "_find_weechat_plugin", "_port_in_use", "_is_ergo_running",
-        "_load_state", "_save_state"
-      ]
-    }
+  "description": "IrcManager — lifecycle for local ergo IRC daemon (per-project data dir) and WeeChat zellij tab; builds WeeChat auto-connect command; injects OIDC auth-script when credentials available",
+  "key_classes_functions": [
+    {"name": "check_irc_connectivity", "file": "zchat/cli/irc_manager.py", "line": 13, "purpose": "Raise ConnectionError if server:port unreachable (TLS-aware)"},
+    {"name": "IrcManager", "file": "zchat/cli/irc_manager.py", "line": 25, "purpose": "Manages ergo daemon + WeeChat tab"},
+    {"name": "IrcManager.__init__", "file": "zchat/cli/irc_manager.py", "line": 28, "purpose": "Load state from state.json; store zellij session + project dir"},
+    {"name": "IrcManager.irc_config", "file": "zchat/cli/irc_manager.py", "line": 37, "purpose": "Return cfg['irc'] dict"},
+    {"name": "IrcManager.daemon_start", "file": "zchat/cli/irc_manager.py", "line": 40, "purpose": "Write per-project ergo.yaml (patched port, no IPv6/TLS), copy languages dir, inject auth-script; Popen ergo; record PID"},
+    {"name": "IrcManager._inject_auth_script", "file": "zchat/cli/irc_manager.py", "line": 144, "purpose": "Copy ergo_auth_script.py + auth_script_config.json; patch ergo.yaml auth-script enabled + require-sasl"},
+    {"name": "IrcManager.daemon_stop", "file": "zchat/cli/irc_manager.py", "line": 190, "purpose": "Kill ergo by stored PID only (not by port — avoid hitting unrelated ergo)"},
+    {"name": "IrcManager.start_weechat", "file": "zchat/cli/irc_manager.py", "line": 205, "purpose": "Pre-check connectivity; new zellij tab 'weechat'; record tab name+pane id"},
+    {"name": "IrcManager.build_weechat_cmd", "file": "zchat/cli/irc_manager.py", "line": 230, "purpose": "Compose full WeeChat startup shell command (/server add, SASL if creds, /script load plugin)"},
+    {"name": "IrcManager.stop_weechat", "file": "zchat/cli/irc_manager.py", "line": 287, "purpose": "Send /quit via zellij.send_command; clear state"},
+    {"name": "IrcManager.status", "file": "zchat/cli/irc_manager.py", "line": 304, "purpose": "Report ergo running/port/pid + weechat tab/nick"},
+    {"name": "IrcManager._find_weechat_plugin", "file": "zchat/cli/irc_manager.py", "line": 324, "purpose": "Probe config -> project .weechat/ -> ~/.config/weechat -> ~/.weechat for zchat.py"},
+    {"name": "IrcManager._port_in_use", "file": "zchat/cli/irc_manager.py", "line": 339, "purpose": "lsof -i :port check"}
   ],
-  "click_commands": [],
-  "imports": ["json", "os", "socket", "ssl", "subprocess", "time", "zellij"],
-  "test_file": "tests/unit/test_irc_manager_weechat_cmd.py, tests/unit/test_irc_manager_languages.py, tests/unit/test_irc_check.py",
-  "test_count": 19
+  "public_interface": [
+    "IrcManager (class)",
+    "check_irc_connectivity"
+  ],
+  "depends_on": [
+    "zellij",
+    "auth (get_credentials, get_username, discover_oidc_endpoints, load_cached_token, _global_auth_dir)",
+    "ergo (external binary)",
+    "weechat (external binary)"
+  ],
+  "tests": [
+    "tests/unit/test_irc_manager_languages.py",
+    "tests/unit/test_irc_manager_weechat_cmd.py",
+    "tests/unit/test_irc_check.py",
+    "tests/unit/test_wsl2_proxy_rewrite.py"
+  ],
+  "evidence_file_lines": [
+    "zchat/cli/irc_manager.py:13",
+    "zchat/cli/irc_manager.py:25",
+    "zchat/cli/irc_manager.py:40",
+    "zchat/cli/irc_manager.py:144",
+    "zchat/cli/irc_manager.py:230",
+    "zchat/cli/irc_manager.py:304"
+  ]
 }

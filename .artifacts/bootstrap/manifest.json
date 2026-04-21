@@ -1,103 +1,2363 @@
 {
   "project_root": "/home/yaosh/projects/zchat",
-  "generated_at": "2026-04-17",
-  "version": "0.3.1.dev27",
-  "python_version": "3.13.5",
-  "uv_version": "0.7.15",
   "files": [
-    {"path": "zchat/__init__.py", "lines": 1},
-    {"path": "zchat/_version.py", "lines": 24},
-    {"path": "zchat/cli/__init__.py", "lines": 1},
-    {"path": "zchat/cli/__main__.py", "lines": 4},
-    {"path": "zchat/cli/app.py", "lines": 1503},
-    {"path": "zchat/cli/agent_manager.py", "lines": 404},
-    {"path": "zchat/cli/auth.py", "lines": 272},
-    {"path": "zchat/cli/config_cmd.py", "lines": 106},
-    {"path": "zchat/cli/defaults.py", "lines": 34},
-    {"path": "zchat/cli/doctor.py", "lines": 228},
-    {"path": "zchat/cli/ergo_auth_script.py", "lines": 108},
-    {"path": "zchat/cli/irc_manager.py", "lines": 358},
-    {"path": "zchat/cli/layout.py", "lines": 100},
-    {"path": "zchat/cli/migrate.py", "lines": 114},
-    {"path": "zchat/cli/paths.py", "lines": 159},
-    {"path": "zchat/cli/project.py", "lines": 206},
-    {"path": "zchat/cli/routing.py", "lines": 125},
-    {"path": "zchat/cli/runner.py", "lines": 233},
-    {"path": "zchat/cli/template_loader.py", "lines": 111},
-    {"path": "zchat/cli/update.py", "lines": 176},
-    {"path": "zchat/cli/zellij.py", "lines": 186},
-    {"path": "tests/__init__.py", "lines": 0},
-    {"path": "tests/conftest.py", "lines": 8},
-    {"path": "tests/unit/__init__.py", "lines": 0},
-    {"path": "tests/unit/test_agent_focus_hide.py", "lines": 68},
-    {"path": "tests/unit/test_agent_manager.py", "lines": 394},
-    {"path": "tests/unit/test_auth.py", "lines": 282},
-    {"path": "tests/unit/test_channel_cmd.py", "lines": 347},
-    {"path": "tests/unit/test_config_channel_server.py", "lines": 67},
-    {"path": "tests/unit/test_config_cmd.py", "lines": 128},
-    {"path": "tests/unit/test_defaults.py", "lines": 38},
-    {"path": "tests/unit/test_doctor.py", "lines": 169},
-    {"path": "tests/unit/test_ergo_auth_script.py", "lines": 69},
-    {"path": "tests/unit/test_irc_check.py", "lines": 51},
-    {"path": "tests/unit/test_irc_manager_languages.py", "lines": 364},
-    {"path": "tests/unit/test_irc_manager_weechat_cmd.py", "lines": 99},
-    {"path": "tests/unit/test_layout.py", "lines": 112},
-    {"path": "tests/unit/test_list_commands.py", "lines": 80},
-    {"path": "tests/unit/test_migrate.py", "lines": 103},
-    {"path": "tests/unit/test_paths.py", "lines": 159},
-    {"path": "tests/unit/test_plugin_integration.py", "lines": 42},
-    {"path": "tests/unit/test_project.py", "lines": 164},
-    {"path": "tests/unit/test_project_cli_flow.py", "lines": 61},
-    {"path": "tests/unit/test_project_create_params.py", "lines": 118},
-    {"path": "tests/unit/test_project_use_command.py", "lines": 40},
-    {"path": "tests/unit/test_routing_cli.py", "lines": 206},
-    {"path": "tests/unit/test_runner.py", "lines": 209},
-    {"path": "tests/unit/test_start_sh.py", "lines": 112},
-    {"path": "tests/unit/test_template_loader.py", "lines": 88},
-    {"path": "tests/unit/test_update.py", "lines": 349},
-    {"path": "tests/unit/test_wsl2_proxy_rewrite.py", "lines": 121},
-    {"path": "tests/unit/test_zellij_helpers.py", "lines": 268},
-    {"path": "tests/e2e/conftest.py", "lines": 218},
-    {"path": "tests/e2e/irc_probe.py", "lines": 3},
-    {"path": "tests/e2e/test_agent_dm.py", "lines": 197},
-    {"path": "tests/e2e/test_e2e.py", "lines": 108},
-    {"path": "tests/e2e/test_irc_daemon.py", "lines": 65},
-    {"path": "tests/e2e/test_private_and_system_messages.py", "lines": 42},
-    {"path": "tests/e2e/test_zellij_lifecycle.py", "lines": 82},
-    {"path": "tests/shared/__init__.py", "lines": 0},
-    {"path": "tests/shared/cli_runner.py", "lines": 30},
-    {"path": "tests/shared/irc_probe.py", "lines": 154},
-    {"path": "tests/shared/tmux_helpers.py", "lines": 42},
-    {"path": "tests/shared/zellij_helpers.py", "lines": 46},
-    {"path": "tests/pre_release/__init__.py", "lines": 3},
-    {"path": "tests/pre_release/conftest.py", "lines": 272},
-    {"path": "tests/pre_release/reporting.py", "lines": 566},
-    {"path": "tests/pre_release/test_00_doctor.py", "lines": 30},
-    {"path": "tests/pre_release/test_01_project.py", "lines": 62},
-    {"path": "tests/pre_release/test_02_template.py", "lines": 34},
-    {"path": "tests/pre_release/test_03_irc.py", "lines": 69},
-    {"path": "tests/pre_release/test_04_agent.py", "lines": 137},
-    {"path": "tests/pre_release/test_04a_irc_chat.py", "lines": 56},
-    {"path": "tests/pre_release/test_04b_remote_irc.py", "lines": 44},
-    {"path": "tests/pre_release/test_05_setup.py", "lines": 10},
-    {"path": "tests/pre_release/test_06_auth.py", "lines": 27},
-    {"path": "tests/pre_release/test_07_self_update.py", "lines": 27},
-    {"path": "tests/pre_release/test_08_shutdown.py", "lines": 45},
-    {"path": "tests/pre_release/verify_walkthrough.py", "lines": 97}
+    {
+      "path": ".feishu-credentials.json",
+      "size_bytes": 101,
+      "lines": 4,
+      "extension": ".json"
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "size_bytes": 2611,
+      "lines": 74,
+      "extension": ".yml"
+    },
+    {
+      "path": ".github/workflows/test.yml",
+      "size_bytes": 320,
+      "lines": 17,
+      "extension": ".yml"
+    },
+    {
+      "path": ".gitignore",
+      "size_bytes": 669,
+      "lines": 35,
+      "extension": ""
+    },
+    {
+      "path": ".gitmodules",
+      "size_bytes": 666,
+      "lines": 18,
+      "extension": ""
+    },
+    {
+      "path": ".local-backup/credentials-20260421-094316/admin.json",
+      "size_bytes": 90,
+      "lines": 4,
+      "extension": ".json"
+    },
+    {
+      "path": ".local-backup/credentials-20260421-094316/customer.json",
+      "size_bytes": 90,
+      "lines": 4,
+      "extension": ".json"
+    },
+    {
+      "path": ".local-backup/credentials-20260421-094316/squad.json",
+      "size_bytes": 90,
+      "lines": 4,
+      "extension": ".json"
+    },
+    {
+      "path": ".local-backup/routing-20260421-094316.toml",
+      "size_bytes": 1026,
+      "lines": 43,
+      "extension": ".toml"
+    },
+    {
+      "path": ".zchat/.account",
+      "size_bytes": 6,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": ".zchat/config.json",
+      "size_bytes": 347,
+      "lines": 12,
+      "extension": ".json"
+    },
+    {
+      "path": ".zchat/presence/snapshot.json",
+      "size_bytes": 161,
+      "lines": 9,
+      "extension": ".json"
+    },
+    {
+      "path": ".zchat/sessions/yaosh:claude/.account",
+      "size_bytes": 6,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": ".zchat/sessions/yaosh:claude/config.json",
+      "size_bytes": 347,
+      "lines": 12,
+      "extension": ".json"
+    },
+    {
+      "path": ".zchat/statusline.sh",
+      "size_bytes": 705,
+      "lines": 18,
+      "extension": ".sh"
+    },
+    {
+      "path": "CLAUDE.md",
+      "size_bytes": 7251,
+      "lines": 165,
+      "extension": ".md"
+    },
+    {
+      "path": "LICENSE",
+      "size_bytes": 1066,
+      "lines": 21,
+      "extension": ""
+    },
+    {
+      "path": "Makefile",
+      "size_bytes": 106,
+      "lines": 7,
+      "extension": ""
+    },
+    {
+      "path": "README.md",
+      "size_bytes": 3290,
+      "lines": 105,
+      "extension": ".md"
+    },
+    {
+      "path": "bin/build-plugins",
+      "size_bytes": 1415,
+      "lines": 48,
+      "extension": ""
+    },
+    {
+      "path": "bin/zchat-dev",
+      "size_bytes": 710,
+      "lines": 17,
+      "extension": ""
+    },
+    {
+      "path": "claude.local.env",
+      "size_bytes": 89,
+      "lines": 3,
+      "extension": ".env"
+    },
+    {
+      "path": "claude.local.env.example",
+      "size_bytes": 400,
+      "lines": 8,
+      "extension": ".example"
+    },
+    {
+      "path": "claude.sh",
+      "size_bytes": 15975,
+      "lines": 465,
+      "extension": ".sh"
+    },
+    {
+      "path": "commands.json",
+      "size_bytes": 3208,
+      "lines": 122,
+      "extension": ".json"
+    },
+    {
+      "path": "conversations.db",
+      "size_bytes": 57344,
+      "lines": 64,
+      "extension": ".db"
+    },
+    {
+      "path": "docs/archive/design-decisions.md",
+      "size_bytes": 4088,
+      "lines": 92,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/dev/agent.md",
+      "size_bytes": 1423,
+      "lines": 44,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/dev/architecture.md",
+      "size_bytes": 2105,
+      "lines": 70,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/dev/channel-server.md",
+      "size_bytes": 3238,
+      "lines": 84,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/dev/testing.md",
+      "size_bytes": 946,
+      "lines": 42,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/e2e-manual-test.md",
+      "size_bytes": 1259,
+      "lines": 81,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/guide/constraints.md",
+      "size_bytes": 1894,
+      "lines": 44,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/guide/getting-started.md",
+      "size_bytes": 2722,
+      "lines": 55,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/guide/quickstart.md",
+      "size_bytes": 2827,
+      "lines": 109,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/guide/usage.md",
+      "size_bytes": 3275,
+      "lines": 127,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-06-palette-cleanup-plan.md",
+      "size_bytes": 10574,
+      "lines": 346,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-06-palette-interactive-pane-design.md",
+      "size_bytes": 6787,
+      "lines": 142,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-06-zellij-migration-design.md",
+      "size_bytes": 18284,
+      "lines": 466,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-06-zellij-migration-plan.md",
+      "size_bytes": 42985,
+      "lines": 1346,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-06-zellij-plugin-design.md",
+      "size_bytes": 10166,
+      "lines": 299,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-06-zellij-plugin-plan.md",
+      "size_bytes": 24001,
+      "lines": 804,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-07-test-rewrite-design.md",
+      "size_bytes": 1748,
+      "lines": 38,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-07-test-rewrite-plan.md",
+      "size_bytes": 2887,
+      "lines": 78,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-08-path-refactor-design.md",
+      "size_bytes": 5894,
+      "lines": 130,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/plans/2026-04-08-path-refactor-plan.md",
+      "size_bytes": 3241,
+      "lines": 108,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/releasing.md",
+      "size_bytes": 2740,
+      "lines": 87,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-21-prd-gap-fixes-plan.md",
+      "size_bytes": 41220,
+      "lines": 1285,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-22-docs-split-plan.md",
+      "size_bytes": 35885,
+      "lines": 1078,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-22-nick-init-race-fix.md",
+      "size_bytes": 3569,
+      "lines": 101,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-22-sidecar-architecture-plan.md",
+      "size_bytes": 49329,
+      "lines": 1536,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-23-shared-protocol-refactor.md",
+      "size_bytes": 25918,
+      "lines": 773,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-25-irc-migration.md",
+      "size_bytes": 50194,
+      "lines": 1663,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-25-ux-improvements.md",
+      "size_bytes": 66359,
+      "lines": 2137,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-26-wc-agent-cli-redesign.md",
+      "size_bytes": 21278,
+      "lines": 632,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-27-e2e-pytest-migration.md",
+      "size_bytes": 6984,
+      "lines": 223,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-27-zchat-restructuring.md",
+      "size_bytes": 28411,
+      "lines": 918,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-28-homebrew-distribution.md",
+      "size_bytes": 19154,
+      "lines": 736,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-28-repo-split.md",
+      "size_bytes": 36864,
+      "lines": 1065,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-28-zchat-channel-skills.md",
+      "size_bytes": 16800,
+      "lines": 530,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-29-agent-template-system.md",
+      "size_bytes": 40090,
+      "lines": 1220,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-29-oidc-auth.md",
+      "size_bytes": 47427,
+      "lines": 1420,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-30-project-create-ux-and-agent-auth.md",
+      "size_bytes": 25279,
+      "lines": 730,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-31-pre-release-e2e-tests.md",
+      "size_bytes": 38708,
+      "lines": 1263,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-03-31-tmux-orchestration-redesign.md",
+      "size_bytes": 36908,
+      "lines": 1160,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-04-01-better-skill.md",
+      "size_bytes": 14143,
+      "lines": 416,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-04-01-fix-claude-skill-and-agent-focus.md",
+      "size_bytes": 4855,
+      "lines": 173,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-04-01-fix-nick-and-marketplace.md",
+      "size_bytes": 16287,
+      "lines": 514,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/plans/2026-04-02-better-distribution-plan.md",
+      "size_bytes": 38284,
+      "lines": 1205,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-21-prd-gap-fixes-design.md",
+      "size_bytes": 24337,
+      "lines": 600,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-22-docs-split-design.md",
+      "size_bytes": 9240,
+      "lines": 200,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-22-fix-agent-mcp-config-design.md",
+      "size_bytes": 1430,
+      "lines": 51,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-22-sidecar-architecture-design.md",
+      "size_bytes": 7168,
+      "lines": 156,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-22-zenohd-client-mode-design.md",
+      "size_bytes": 10466,
+      "lines": 294,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-24-ux-improvements-design.md",
+      "size_bytes": 24943,
+      "lines": 683,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-25-irc-migration-design.md",
+      "size_bytes": 23938,
+      "lines": 726,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-26-wc-agent-cli-redesign.md",
+      "size_bytes": 19788,
+      "lines": 618,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-27-e2e-pytest-migration.md",
+      "size_bytes": 14074,
+      "lines": 424,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-27-zchat-repo-split-design.md",
+      "size_bytes": 8805,
+      "lines": 207,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-29-add-local-ergo-design.md",
+      "size_bytes": 2682,
+      "lines": 82,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-29-agent-template-system-design.md",
+      "size_bytes": 9990,
+      "lines": 367,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-29-oidc-auth-design.md",
+      "size_bytes": 11202,
+      "lines": 234,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-30-project-create-ux-and-agent-auth-design.md",
+      "size_bytes": 12207,
+      "lines": 377,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-31-fix-agent-send-and-irc-tests-design.md",
+      "size_bytes": 9078,
+      "lines": 193,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-31-pre-release-e2e-tests-design.md",
+      "size_bytes": 15341,
+      "lines": 360,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-03-31-tmux-orchestration-redesign.md",
+      "size_bytes": 15031,
+      "lines": 367,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-04-01-better-skill-design.md",
+      "size_bytes": 7743,
+      "lines": 120,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-04-01-credentials-vs-nickname-design.md",
+      "size_bytes": 5441,
+      "lines": 175,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-04-01-fix-claude-skill-and-agent-focus-design.md",
+      "size_bytes": 4584,
+      "lines": 123,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-04-01-fix-nick-and-marketplace-design.md",
+      "size_bytes": 9332,
+      "lines": 218,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-04-01-remote-irc-test-coverage-design.md",
+      "size_bytes": 1730,
+      "lines": 47,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-04-02-better-distribution-design.md",
+      "size_bytes": 8347,
+      "lines": 225,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/archive/superpowers/specs/2026-04-02-irc-connectivity-check-design.md",
+      "size_bytes": 2134,
+      "lines": 52,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/001-autoservice-prd.md",
+      "size_bytes": 12428,
+      "lines": 219,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/002-autoservice-user-stories.md",
+      "size_bytes": 12184,
+      "lines": 316,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/003-autoservice-full-journey.html",
+      "size_bytes": 63327,
+      "lines": 420,
+      "extension": ".html"
+    },
+    {
+      "path": "docs/discuss/004-v5-refactor-plan.md",
+      "size_bytes": 33814,
+      "lines": 904,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/00-overview.md",
+      "size_bytes": 15969,
+      "lines": 246,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/01-protocol-primitives.md",
+      "size_bytes": 19768,
+      "lines": 527,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/02-channel-server.md",
+      "size_bytes": 31382,
+      "lines": 795,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/03-bridge-layer.md",
+      "size_bytes": 14943,
+      "lines": 377,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/04-prd-mapping.md",
+      "size_bytes": 13641,
+      "lines": 223,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/05-user-journeys.md",
+      "size_bytes": 24385,
+      "lines": 511,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/06-gap-fixes.md",
+      "size_bytes": 13150,
+      "lines": 317,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/07-migration-plan.md",
+      "size_bytes": 17139,
+      "lines": 434,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/08-implementation-plan.md",
+      "size_bytes": 78865,
+      "lines": 2370,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/09-feishu-bridge.md",
+      "size_bytes": 20838,
+      "lines": 487,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/10-routing-config.md",
+      "size_bytes": 6593,
+      "lines": 184,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/005-v5-channel-server-spec/11-db-consolidation.md",
+      "size_bytes": 4983,
+      "lines": 161,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/006-v6-pre-release-test-plan.md",
+      "size_bytes": 19556,
+      "lines": 569,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/007-v6-prerelease-session2-note.md",
+      "size_bytes": 16270,
+      "lines": 366,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/008-v6-finalize-plan.md",
+      "size_bytes": 11597,
+      "lines": 226,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/009-v6-help-request-notification-design.md",
+      "size_bytes": 6025,
+      "lines": 134,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/010-v6-placeholder-card-edit-design-SUPERSEDED.md",
+      "size_bytes": 6607,
+      "lines": 149,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/011-v7-entry-as-coordinator.md",
+      "size_bytes": 5049,
+      "lines": 131,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/012-v7-roadmap-supervision.md",
+      "size_bytes": 7210,
+      "lines": 203,
+      "extension": ".md"
+    },
+    {
+      "path": "docs/discuss/README.md",
+      "size_bytes": 1952,
+      "lines": 34,
+      "extension": ".md"
+    },
+    {
+      "path": "ergo-inside/.git",
+      "size_bytes": 36,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": "ergo-inside/Caddyfile",
+      "size_bytes": 457,
+      "lines": 30,
+      "extension": ""
+    },
+    {
+      "path": "ergo-inside/README.md",
+      "size_bytes": 1588,
+      "lines": 51,
+      "extension": ".md"
+    },
+    {
+      "path": "ergo-inside/auth_script_config.json",
+      "size_bytes": 53,
+      "lines": 1,
+      "extension": ".json"
+    },
+    {
+      "path": "ergo-inside/backup.sh",
+      "size_bytes": 1510,
+      "lines": 60,
+      "extension": ".sh"
+    },
+    {
+      "path": "ergo-inside/deploy.sh",
+      "size_bytes": 1407,
+      "lines": 40,
+      "extension": ".sh"
+    },
+    {
+      "path": "ergo-inside/ergo.yaml",
+      "size_bytes": 52732,
+      "lines": 1189,
+      "extension": ".yaml"
+    },
+    {
+      "path": "ergo-inside/ergo_auth_script.py",
+      "size_bytes": 3195,
+      "lines": 95,
+      "extension": ".py"
+    },
+    {
+      "path": "ergo-inside/launchd/com.h2os.caddy.plist",
+      "size_bytes": 707,
+      "lines": 22,
+      "extension": ".plist"
+    },
+    {
+      "path": "ergo-inside/launchd/com.h2os.ergo.plist",
+      "size_bytes": 827,
+      "lines": 25,
+      "extension": ".plist"
+    },
+    {
+      "path": "ergo-inside/setup.sh",
+      "size_bytes": 1843,
+      "lines": 62,
+      "extension": ".sh"
+    },
+    {
+      "path": "ergo.yaml",
+      "size_bytes": 52585,
+      "lines": 1190,
+      "extension": ".yaml"
+    },
+    {
+      "path": "ezagent42-marketplace/.claude-plugin/marketplace.json",
+      "size_bytes": 1031,
+      "lines": 39,
+      "extension": ".json"
+    },
+    {
+      "path": "ezagent42-marketplace/.git",
+      "size_bytes": 46,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": "ezagent42-marketplace/.gitignore",
+      "size_bytes": 19,
+      "lines": 2,
+      "extension": ""
+    },
+    {
+      "path": "ezagent42-marketplace/README.md",
+      "size_bytes": 549,
+      "lines": 21,
+      "extension": ".md"
+    },
+    {
+      "path": "homebrew-zchat/.git",
+      "size_bytes": 39,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": "homebrew-zchat/Formula/ergo.rb",
+      "size_bytes": 1037,
+      "lines": 34,
+      "extension": ".rb"
+    },
+    {
+      "path": "homebrew-zchat/Formula/zchat.rb",
+      "size_bytes": 13642,
+      "lines": 291,
+      "extension": ".rb"
+    },
+    {
+      "path": "homebrew-zchat/README.md",
+      "size_bytes": 592,
+      "lines": 30,
+      "extension": ".md"
+    },
+    {
+      "path": "install.sh",
+      "size_bytes": 4993,
+      "lines": 173,
+      "extension": ".sh"
+    },
+    {
+      "path": "pyproject.toml",
+      "size_bytes": 1125,
+      "lines": 49,
+      "extension": ".toml"
+    },
+    {
+      "path": "pytest.ini",
+      "size_bytes": 318,
+      "lines": 9,
+      "extension": ".ini"
+    },
+    {
+      "path": "start.sh",
+      "size_bytes": 1428,
+      "lines": 44,
+      "extension": ".sh"
+    },
+    {
+      "path": "stop.sh",
+      "size_bytes": 424,
+      "lines": 11,
+      "extension": ".sh"
+    },
+    {
+      "path": "tests/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/conftest.py",
+      "size_bytes": 193,
+      "lines": 8,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/REPORT-2026-04-07.md",
+      "size_bytes": 21776,
+      "lines": 402,
+      "extension": ".md"
+    },
+    {
+      "path": "tests/e2e/conftest.py",
+      "size_bytes": 6852,
+      "lines": 218,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/e2e-setup.sh",
+      "size_bytes": 3753,
+      "lines": 110,
+      "extension": ".sh"
+    },
+    {
+      "path": "tests/e2e/irc_probe.py",
+      "size_bytes": 162,
+      "lines": 3,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_admin_commands_via_cli.py",
+      "size_bytes": 5552,
+      "lines": 145,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_agent_dm.py",
+      "size_bytes": 7631,
+      "lines": 197,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_audit_cli_integration.py",
+      "size_bytes": 2773,
+      "lines": 88,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_e2e.py",
+      "size_bytes": 4478,
+      "lines": 108,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_irc_daemon.py",
+      "size_bytes": 2220,
+      "lines": 65,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_private_and_system_messages.py",
+      "size_bytes": 1451,
+      "lines": 42,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_zellij_lifecycle.py",
+      "size_bytes": 2443,
+      "lines": 82,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/.gitignore",
+      "size_bytes": 22,
+      "lines": 3,
+      "extension": ""
+    },
+    {
+      "path": "tests/pre_release/__init__.py",
+      "size_bytes": 102,
+      "lines": 3,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/conftest.py",
+      "size_bytes": 8301,
+      "lines": 272,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/reporting.py",
+      "size_bytes": 21271,
+      "lines": 566,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260417-131912.json",
+      "size_bytes": 30741,
+      "lines": 1061,
+      "extension": ".json"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260417-131912.md",
+      "size_bytes": 5667,
+      "lines": 160,
+      "extension": ".md"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-171942.json",
+      "size_bytes": 30729,
+      "lines": 1061,
+      "extension": ".json"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-171942.md",
+      "size_bytes": 5669,
+      "lines": 160,
+      "extension": ".md"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-172113.json",
+      "size_bytes": 31542,
+      "lines": 1061,
+      "extension": ".json"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-172113.md",
+      "size_bytes": 6364,
+      "lines": 172,
+      "extension": ".md"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-172533.json",
+      "size_bytes": 30146,
+      "lines": 1061,
+      "extension": ".json"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-172533.md",
+      "size_bytes": 4914,
+      "lines": 150,
+      "extension": ".md"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-172817.json",
+      "size_bytes": 30144,
+      "lines": 1061,
+      "extension": ".json"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-172817.md",
+      "size_bytes": 4916,
+      "lines": 150,
+      "extension": ".md"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-173301.json",
+      "size_bytes": 30719,
+      "lines": 1060,
+      "extension": ".json"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-173301.md",
+      "size_bytes": 5665,
+      "lines": 160,
+      "extension": ".md"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-173500.json",
+      "size_bytes": 30137,
+      "lines": 1060,
+      "extension": ".json"
+    },
+    {
+      "path": "tests/pre_release/reports/pre-release-report-20260419-173500.md",
+      "size_bytes": 4911,
+      "lines": 150,
+      "extension": ".md"
+    },
+    {
+      "path": "tests/pre_release/run.sh",
+      "size_bytes": 897,
+      "lines": 25,
+      "extension": ".sh"
+    },
+    {
+      "path": "tests/pre_release/test_00_doctor.py",
+      "size_bytes": 1223,
+      "lines": 30,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_01_project.py",
+      "size_bytes": 1906,
+      "lines": 62,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_02_template.py",
+      "size_bytes": 1050,
+      "lines": 34,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_03_irc.py",
+      "size_bytes": 1958,
+      "lines": 69,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_04_agent.py",
+      "size_bytes": 4541,
+      "lines": 137,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_04a_irc_chat.py",
+      "size_bytes": 1910,
+      "lines": 56,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_04b_remote_irc.py",
+      "size_bytes": 1646,
+      "lines": 44,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_05_setup.py",
+      "size_bytes": 351,
+      "lines": 10,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_06_auth.py",
+      "size_bytes": 761,
+      "lines": 27,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_07_self_update.py",
+      "size_bytes": 711,
+      "lines": 27,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/test_08_shutdown.py",
+      "size_bytes": 1439,
+      "lines": 45,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/verify_walkthrough.py",
+      "size_bytes": 2928,
+      "lines": 97,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/pre_release/walkthrough-steps.sh",
+      "size_bytes": 7826,
+      "lines": 295,
+      "extension": ".sh"
+    },
+    {
+      "path": "tests/pre_release/walkthrough.sh",
+      "size_bytes": 2082,
+      "lines": 67,
+      "extension": ".sh"
+    },
+    {
+      "path": "tests/shared/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/shared/cli_runner.py",
+      "size_bytes": 1042,
+      "lines": 30,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/shared/irc_probe.py",
+      "size_bytes": 5724,
+      "lines": 154,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/shared/tmux_helpers.py",
+      "size_bytes": 1432,
+      "lines": 42,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/shared/zellij_helpers.py",
+      "size_bytes": 1436,
+      "lines": 46,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_agent_focus_hide.py",
+      "size_bytes": 2392,
+      "lines": 68,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_agent_manager.py",
+      "size_bytes": 14655,
+      "lines": 394,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_audit_cli.py",
+      "size_bytes": 3882,
+      "lines": 123,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_auth.py",
+      "size_bytes": 10342,
+      "lines": 282,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_channel_cmd.py",
+      "size_bytes": 16472,
+      "lines": 423,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_config_cmd.py",
+      "size_bytes": 4513,
+      "lines": 128,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_defaults.py",
+      "size_bytes": 1098,
+      "lines": 38,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_doctor.py",
+      "size_bytes": 6748,
+      "lines": 169,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_ergo_auth_script.py",
+      "size_bytes": 2496,
+      "lines": 69,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_irc_check.py",
+      "size_bytes": 1980,
+      "lines": 51,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_irc_manager_languages.py",
+      "size_bytes": 16463,
+      "lines": 364,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_irc_manager_weechat_cmd.py",
+      "size_bytes": 3388,
+      "lines": 99,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_layout.py",
+      "size_bytes": 3479,
+      "lines": 112,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_list_commands.py",
+      "size_bytes": 3099,
+      "lines": 80,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_migrate.py",
+      "size_bytes": 2983,
+      "lines": 103,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_paths.py",
+      "size_bytes": 6611,
+      "lines": 159,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_plugin_integration.py",
+      "size_bytes": 1610,
+      "lines": 42,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_project.py",
+      "size_bytes": 6072,
+      "lines": 164,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_project_cli_flow.py",
+      "size_bytes": 2145,
+      "lines": 61,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_project_create_params.py",
+      "size_bytes": 4107,
+      "lines": 118,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_project_use_command.py",
+      "size_bytes": 1650,
+      "lines": 44,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_routing_cli.py",
+      "size_bytes": 9475,
+      "lines": 284,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_runner.py",
+      "size_bytes": 7125,
+      "lines": 209,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_start_sh.py",
+      "size_bytes": 3137,
+      "lines": 112,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_template_loader.py",
+      "size_bytes": 3583,
+      "lines": 88,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_update.py",
+      "size_bytes": 11927,
+      "lines": 349,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_wsl2_proxy_rewrite.py",
+      "size_bytes": 4871,
+      "lines": 121,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_zellij_helpers.py",
+      "size_bytes": 9745,
+      "lines": 268,
+      "extension": ".py"
+    },
+    {
+      "path": "uv.lock",
+      "size_bytes": 217275,
+      "lines": 1394,
+      "extension": ".lock"
+    },
+    {
+      "path": "weechat-zchat-plugin/.git",
+      "size_bytes": 45,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": "weechat-zchat-plugin/tests/test_weechat_plugin.py",
+      "size_bytes": 2356,
+      "lines": 76,
+      "extension": ".py"
+    },
+    {
+      "path": "weechat-zchat-plugin/zchat.py",
+      "size_bytes": 8582,
+      "lines": 284,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/.claude-plugin/plugin.json",
+      "size_bytes": 189,
+      "lines": 6,
+      "extension": ".json"
+    },
+    {
+      "path": "zchat-channel-server/.feishu-bridge/customer_chats.json",
+      "size_bytes": 78,
+      "lines": 1,
+      "extension": ".json"
+    },
+    {
+      "path": "zchat-channel-server/.git",
+      "size_bytes": 45,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": "zchat-channel-server/.github/workflows/publish.yml",
+      "size_bytes": 306,
+      "lines": 17,
+      "extension": ".yml"
+    },
+    {
+      "path": "zchat-channel-server/.gitignore",
+      "size_bytes": 140,
+      "lines": 12,
+      "extension": ""
+    },
+    {
+      "path": "zchat-channel-server/.mcp.json",
+      "size_bytes": 155,
+      "lines": 8,
+      "extension": ".json"
+    },
+    {
+      "path": "zchat-channel-server/LICENSE",
+      "size_bytes": 1066,
+      "lines": 21,
+      "extension": ""
+    },
+    {
+      "path": "zchat-channel-server/README.md",
+      "size_bytes": 2332,
+      "lines": 81,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat-channel-server/agent_mcp.py",
+      "size_bytes": 25234,
+      "lines": 648,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/commands/broadcast.md",
+      "size_bytes": 1389,
+      "lines": 41,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat-channel-server/commands/dm.md",
+      "size_bytes": 803,
+      "lines": 29,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat-channel-server/commands/join.md",
+      "size_bytes": 682,
+      "lines": 27,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat-channel-server/commands/reply.md",
+      "size_bytes": 993,
+      "lines": 29,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat-channel-server/instructions.md",
+      "size_bytes": 2821,
+      "lines": 55,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat-channel-server/pyproject.toml",
+      "size_bytes": 1542,
+      "lines": 57,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat-channel-server/pytest.ini",
+      "size_bytes": 177,
+      "lines": 7,
+      "extension": ".ini"
+    },
+    {
+      "path": "zchat-channel-server/routing.example.toml",
+      "size_bytes": 1202,
+      "lines": 31,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat-channel-server/src/channel_server/__init__.py",
+      "size_bytes": 129,
+      "lines": 4,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/channel_server/__main__.py",
+      "size_bytes": 4994,
+      "lines": 150,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/channel_server/irc_connection.py",
+      "size_bytes": 6889,
+      "lines": 186,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/channel_server/plugin.py",
+      "size_bytes": 3690,
+      "lines": 106,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/channel_server/router.py",
+      "size_bytes": 9721,
+      "lines": 241,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/channel_server/routing.py",
+      "size_bytes": 3844,
+      "lines": 110,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/channel_server/routing_watcher.py",
+      "size_bytes": 3340,
+      "lines": 103,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/channel_server/ws_server.py",
+      "size_bytes": 3977,
+      "lines": 111,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/__init__.py",
+      "size_bytes": 59,
+      "lines": 1,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/__main__.py",
+      "size_bytes": 1352,
+      "lines": 46,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/bridge.py",
+      "size_bytes": 41869,
+      "lines": 951,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/bridge_api_client.py",
+      "size_bytes": 4071,
+      "lines": 109,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/config.py",
+      "size_bytes": 2349,
+      "lines": 76,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/feishu_renderer.py",
+      "size_bytes": 5803,
+      "lines": 174,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/group_manager.py",
+      "size_bytes": 2052,
+      "lines": 49,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/message_parsers.py",
+      "size_bytes": 11768,
+      "lines": 322,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/outbound.py",
+      "size_bytes": 8995,
+      "lines": 214,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/routing_reader.py",
+      "size_bytes": 5110,
+      "lines": 154,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/sender.py",
+      "size_bytes": 7913,
+      "lines": 216,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/test_client.py",
+      "size_bytes": 9171,
+      "lines": 258,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/feishu_bridge/ws_client.py",
+      "size_bytes": 3380,
+      "lines": 114,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/__init__.py",
+      "size_bytes": 166,
+      "lines": 3,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/activation/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/activation/plugin.py",
+      "size_bytes": 4077,
+      "lines": 123,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/audit/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/audit/plugin.py",
+      "size_bytes": 7792,
+      "lines": 207,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/csat/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/csat/plugin.py",
+      "size_bytes": 2363,
+      "lines": 74,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/mode/__init__.py",
+      "size_bytes": 73,
+      "lines": 1,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/mode/plugin.py",
+      "size_bytes": 1449,
+      "lines": 49,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/resolve/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/resolve/plugin.py",
+      "size_bytes": 1006,
+      "lines": 38,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/sla/__init__.py",
+      "size_bytes": 60,
+      "lines": 1,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/src/plugins/sla/plugin.py",
+      "size_bytes": 8040,
+      "lines": 214,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/e2e/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/e2e/test_bridge_lazy_create.py",
+      "size_bytes": 5669,
+      "lines": 171,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/e2e/test_csat_lifecycle.py",
+      "size_bytes": 3358,
+      "lines": 96,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/e2e/test_help_request_lifecycle.py",
+      "size_bytes": 3933,
+      "lines": 132,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/e2e/test_plugin_pipeline.py",
+      "size_bytes": 5798,
+      "lines": 164,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/conftest.py",
+      "size_bytes": 445,
+      "lines": 17,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_activation_plugin.py",
+      "size_bytes": 2419,
+      "lines": 77,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_agent_mcp.py",
+      "size_bytes": 16814,
+      "lines": 437,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_audit_plugin.py",
+      "size_bytes": 4526,
+      "lines": 134,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_card_action.py",
+      "size_bytes": 10625,
+      "lines": 308,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_client_extended.py",
+      "size_bytes": 8543,
+      "lines": 217,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_csat_plugin.py",
+      "size_bytes": 2872,
+      "lines": 103,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_group_manager.py",
+      "size_bytes": 1245,
+      "lines": 41,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_mode_plugin.py",
+      "size_bytes": 3177,
+      "lines": 96,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_outbound_router.py",
+      "size_bytes": 6211,
+      "lines": 165,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_parsers.py",
+      "size_bytes": 2314,
+      "lines": 69,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_plugin_registry.py",
+      "size_bytes": 5109,
+      "lines": 175,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_resolve_plugin.py",
+      "size_bytes": 820,
+      "lines": 34,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_router.py",
+      "size_bytes": 16724,
+      "lines": 482,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_routing.py",
+      "size_bytes": 4111,
+      "lines": 145,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_routing_reader.py",
+      "size_bytes": 7377,
+      "lines": 240,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_routing_watcher.py",
+      "size_bytes": 5786,
+      "lines": 221,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_sender.py",
+      "size_bytes": 1511,
+      "lines": 42,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_sla_plugin.py",
+      "size_bytes": 9058,
+      "lines": 281,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/tests/unit/test_visibility_router.py",
+      "size_bytes": 1989,
+      "lines": 53,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-channel-server/uv.lock",
+      "size_bytes": 215053,
+      "lines": 1351,
+      "extension": ".lock"
+    },
+    {
+      "path": "zchat-hub-plugin/.cargo/config.toml",
+      "size_bytes": 33,
+      "lines": 2,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat-hub-plugin/Cargo.lock",
+      "size_bytes": 73340,
+      "lines": 2882,
+      "extension": ".lock"
+    },
+    {
+      "path": "zchat-hub-plugin/Cargo.toml",
+      "size_bytes": 71,
+      "lines": 3,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat-hub-plugin/target/.rustc_info.json",
+      "size_bytes": 2009,
+      "lines": 1,
+      "extension": ".json"
+    },
+    {
+      "path": "zchat-hub-plugin/target/flycheck0/stderr",
+      "size_bytes": 453,
+      "lines": 12,
+      "extension": ""
+    },
+    {
+      "path": "zchat-hub-plugin/target/flycheck0/stdout",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ""
+    },
+    {
+      "path": "zchat-hub-plugin/zchat-palette/Cargo.toml",
+      "size_bytes": 171,
+      "lines": 9,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat-hub-plugin/zchat-palette/src/commands.rs",
+      "size_bytes": 6415,
+      "lines": 190,
+      "extension": ".rs"
+    },
+    {
+      "path": "zchat-hub-plugin/zchat-palette/src/fuzzy.rs",
+      "size_bytes": 3393,
+      "lines": 114,
+      "extension": ".rs"
+    },
+    {
+      "path": "zchat-hub-plugin/zchat-palette/src/main.rs",
+      "size_bytes": 14533,
+      "lines": 442,
+      "extension": ".rs"
+    },
+    {
+      "path": "zchat-hub-plugin/zchat-status/Cargo.toml",
+      "size_bytes": 104,
+      "lines": 7,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat-hub-plugin/zchat-status/src/main.rs",
+      "size_bytes": 2104,
+      "lines": 77,
+      "extension": ".rs"
+    },
+    {
+      "path": "zchat-protocol/.git",
+      "size_bytes": 39,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": "zchat-protocol/.github/workflows/publish.yml",
+      "size_bytes": 306,
+      "lines": 17,
+      "extension": ".yml"
+    },
+    {
+      "path": "zchat-protocol/.gitignore",
+      "size_bytes": 81,
+      "lines": 8,
+      "extension": ""
+    },
+    {
+      "path": "zchat-protocol/LICENSE",
+      "size_bytes": 1066,
+      "lines": 21,
+      "extension": ""
+    },
+    {
+      "path": "zchat-protocol/pyproject.toml",
+      "size_bytes": 480,
+      "lines": 21,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat-protocol/tests/test_irc_encoding.py",
+      "size_bytes": 3651,
+      "lines": 125,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-protocol/tests/test_naming.py",
+      "size_bytes": 498,
+      "lines": 15,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-protocol/tests/test_ws_messages.py",
+      "size_bytes": 3559,
+      "lines": 114,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-protocol/uv.lock",
+      "size_bytes": 4655,
+      "lines": 79,
+      "extension": ".lock"
+    },
+    {
+      "path": "zchat-protocol/zchat_protocol/__init__.py",
+      "size_bytes": 370,
+      "lines": 13,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-protocol/zchat_protocol/irc_encoding.py",
+      "size_bytes": 2912,
+      "lines": 94,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-protocol/zchat_protocol/naming.py",
+      "size_bytes": 308,
+      "lines": 11,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat-protocol/zchat_protocol/ws_messages.py",
+      "size_bytes": 2567,
+      "lines": 82,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat.sh",
+      "size_bytes": 306,
+      "lines": 7,
+      "extension": ".sh"
+    },
+    {
+      "path": "zchat/__init__.py",
+      "size_bytes": 52,
+      "lines": 1,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/_version.py",
+      "size_bytes": 537,
+      "lines": 24,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/__init__.py",
+      "size_bytes": 48,
+      "lines": 1,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/__main__.py",
+      "size_bytes": 83,
+      "lines": 4,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/agent_manager.py",
+      "size_bytes": 16060,
+      "lines": 408,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/app.py",
+      "size_bytes": 70581,
+      "lines": 1851,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/audit_cmd.py",
+      "size_bytes": 6196,
+      "lines": 178,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/auth.py",
+      "size_bytes": 9522,
+      "lines": 272,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/config_cmd.py",
+      "size_bytes": 3675,
+      "lines": 106,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/data/config.kdl",
+      "size_bytes": 317,
+      "lines": 12,
+      "extension": ".kdl"
+    },
+    {
+      "path": "zchat/cli/data/defaults.toml",
+      "size_bytes": 663,
+      "lines": 28,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat/cli/data/plugins/.gitkeep",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ""
+    },
+    {
+      "path": "zchat/cli/defaults.py",
+      "size_bytes": 896,
+      "lines": 34,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/doctor.py",
+      "size_bytes": 7770,
+      "lines": 228,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/ergo_auth_script.py",
+      "size_bytes": 3593,
+      "lines": 108,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/irc_manager.py",
+      "size_bytes": 15211,
+      "lines": 358,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/layout.py",
+      "size_bytes": 3484,
+      "lines": 100,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/migrate.py",
+      "size_bytes": 3386,
+      "lines": 114,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/paths.py",
+      "size_bytes": 4684,
+      "lines": 159,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/project.py",
+      "size_bytes": 6240,
+      "lines": 185,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/routing.py",
+      "size_bytes": 7068,
+      "lines": 211,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/runner.py",
+      "size_bytes": 7875,
+      "lines": 233,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/template_loader.py",
+      "size_bytes": 3771,
+      "lines": 111,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/templates/admin-agent/.env.example",
+      "size_bytes": 645,
+      "lines": 21,
+      "extension": ".example"
+    },
+    {
+      "path": "zchat/cli/templates/admin-agent/skills/handle-dispatch-command/SKILL.md",
+      "size_bytes": 1386,
+      "lines": 42,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/admin-agent/skills/handle-natural-language/SKILL.md",
+      "size_bytes": 1257,
+      "lines": 28,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/admin-agent/skills/handle-review-command/SKILL.md",
+      "size_bytes": 1043,
+      "lines": 32,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/admin-agent/skills/handle-status-command/SKILL.md",
+      "size_bytes": 1140,
+      "lines": 36,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/admin-agent/soul.md",
+      "size_bytes": 1584,
+      "lines": 36,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/admin-agent/start.sh",
+      "size_bytes": 3533,
+      "lines": 117,
+      "extension": ".sh"
+    },
+    {
+      "path": "zchat/cli/templates/admin-agent/template.toml",
+      "size_bytes": 141,
+      "lines": 6,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat/cli/templates/claude/.env.example",
+      "size_bytes": 645,
+      "lines": 21,
+      "extension": ".example"
+    },
+    {
+      "path": "zchat/cli/templates/claude/soul.md",
+      "size_bytes": 1135,
+      "lines": 20,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/claude/start.sh",
+      "size_bytes": 3228,
+      "lines": 108,
+      "extension": ".sh"
+    },
+    {
+      "path": "zchat/cli/templates/claude/template.toml",
+      "size_bytes": 113,
+      "lines": 6,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat/cli/templates/deep-agent/.env.example",
+      "size_bytes": 645,
+      "lines": 21,
+      "extension": ".example"
+    },
+    {
+      "path": "zchat/cli/templates/deep-agent/skills/escalate-no-data/SKILL.md",
+      "size_bytes": 1289,
+      "lines": 27,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/deep-agent/skills/handle-delegation/SKILL.md",
+      "size_bytes": 2230,
+      "lines": 53,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/deep-agent/soul.md",
+      "size_bytes": 1296,
+      "lines": 30,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/deep-agent/start.sh",
+      "size_bytes": 3533,
+      "lines": 117,
+      "extension": ".sh"
+    },
+    {
+      "path": "zchat/cli/templates/deep-agent/template.toml",
+      "size_bytes": 162,
+      "lines": 6,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat/cli/templates/fast-agent/.env.example",
+      "size_bytes": 645,
+      "lines": 21,
+      "extension": ".example"
+    },
+    {
+      "path": "zchat/cli/templates/fast-agent/skills/delegate-to-deep/SKILL.md",
+      "size_bytes": 2386,
+      "lines": 49,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/fast-agent/skills/escalate-to-operator/SKILL.md",
+      "size_bytes": 2197,
+      "lines": 48,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/fast-agent/skills/handle-side-from-operator/SKILL.md",
+      "size_bytes": 1847,
+      "lines": 37,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/fast-agent/skills/handle-takeover-mode/SKILL.md",
+      "size_bytes": 1937,
+      "lines": 42,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/fast-agent/soul.md",
+      "size_bytes": 1694,
+      "lines": 35,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/fast-agent/start.sh",
+      "size_bytes": 3867,
+      "lines": 121,
+      "extension": ".sh"
+    },
+    {
+      "path": "zchat/cli/templates/fast-agent/template.toml",
+      "size_bytes": 150,
+      "lines": 6,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat/cli/templates/squad-agent/.env.example",
+      "size_bytes": 645,
+      "lines": 21,
+      "extension": ".example"
+    },
+    {
+      "path": "zchat/cli/templates/squad-agent/skills/answer-status-query/SKILL.md",
+      "size_bytes": 1719,
+      "lines": 48,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/squad-agent/skills/handle-help-event/SKILL.md",
+      "size_bytes": 1594,
+      "lines": 34,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/squad-agent/skills/handle-mode-event/SKILL.md",
+      "size_bytes": 1367,
+      "lines": 33,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/squad-agent/soul.md",
+      "size_bytes": 1624,
+      "lines": 35,
+      "extension": ".md"
+    },
+    {
+      "path": "zchat/cli/templates/squad-agent/start.sh",
+      "size_bytes": 3533,
+      "lines": 117,
+      "extension": ".sh"
+    },
+    {
+      "path": "zchat/cli/templates/squad-agent/template.toml",
+      "size_bytes": 157,
+      "lines": 6,
+      "extension": ".toml"
+    },
+    {
+      "path": "zchat/cli/update.py",
+      "size_bytes": 6299,
+      "lines": 176,
+      "extension": ".py"
+    },
+    {
+      "path": "zchat/cli/zellij.py",
+      "size_bytes": 6616,
+      "lines": 197,
+      "extension": ".py"
+    }
   ],
-  "source_stats": {
-    "total_source_files": 21,
-    "total_source_lines": 4120,
-    "total_test_files": 30,
-    "total_test_lines": 4438
-  },
-  "templates": [
-    {"name": "claude", "path": "zchat/cli/templates/claude/"},
-    {"name": "fast-agent", "path": "zchat/cli/templates/fast-agent/"},
-    {"name": "deep-agent", "path": "zchat/cli/templates/deep-agent/"},
-    {"name": "admin-agent", "path": "zchat/cli/templates/admin-agent/"},
-    {"name": "squad-agent", "path": "zchat/cli/templates/squad-agent/"},
-    {"name": "deep-thinking", "path": "zchat/cli/templates/deep-thinking/"},
-    {"name": "fast-response", "path": "zchat/cli/templates/fast-response/"}
-  ]
+  "summary": {
+    "total_files": 389,
+    "total_lines": 87290,
+    "by_extension": {
+      ".py": 154,
+      ".md": 127,
+      "(no ext)": 24,
+      ".json": 21,
+      ".sh": 18,
+      ".toml": 15,
+      ".example": 6,
+      ".lock": 4,
+      ".yml": 4,
+      ".rs": 4,
+      ".yaml": 2,
+      ".ini": 2,
+      ".plist": 2,
+      ".rb": 2,
+      ".env": 1,
+      ".db": 1,
+      ".kdl": 1,
+      ".html": 1
+    }
+  }
 }

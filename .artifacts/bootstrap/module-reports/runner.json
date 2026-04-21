@@ -1,21 +1,48 @@
 {
   "module": "runner",
-  "path": "zchat/cli/runner.py",
-  "lines": 233,
-  "updated_at": "2026-04-17",
-  "functions": [
-    {"name": "_parse_env_file", "line": 32, "signature": "def _parse_env_file(path: str) -> dict[str, str]", "description": "通过 python-dotenv 解析 .env 文件"},
-    {"name": "_resolve_template_dir", "line": 39, "signature": "def _resolve_template_dir(name: str, user_template_dirs: list[str] | None = None) -> str | None", "description": "按优先级解析模板目录：user_dirs > user_dir > builtin"},
-    {"name": "_load_template_toml", "line": 61, "signature": "def _load_template_toml(template_dir: str) -> dict", "description": "从目录加载 template.toml"},
-    {"name": "resolve_runner", "line": 75, "signature": "def resolve_runner(name: str, global_config: dict, user_template_dirs: list[str] | None = None) -> dict", "description": "解析 runner：合并全局配置 + 模板目录资源"},
-    {"name": "render_env", "line": 144, "signature": "def render_env(template_dir_or_name: str, context: dict) -> dict[str, str]", "description": "渲染 .env.example + overlay .env 用户覆盖"},
-    {"name": "list_runners", "line": 181, "signature": "def list_runners(global_config: dict, user_template_dirs: list[str] | None = None) -> list[dict]", "description": "列出所有可用 runner（config + user + builtin）"}
+  "files": [
+    "zchat/cli/runner.py",
+    "zchat/cli/template_loader.py"
   ],
-  "classes": [
-    {"name": "RunnerNotFoundError", "line": 26, "methods": []}
+  "description": "Template/runner resolution + .env rendering — finds template dir (user > builtin), loads template.toml, renders .env.example with {{placeholders}}, overlays user .env. runner.py is the V6 'runner merges global runners config with template'; template_loader.py is the legacy/simpler API still imported by CLI",
+  "key_classes_functions": [
+    {"name": "RunnerNotFoundError", "file": "zchat/cli/runner.py", "line": 24, "purpose": "Raised when runner/template missing"},
+    {"name": "_parse_env_file", "file": "zchat/cli/runner.py", "line": 32, "purpose": "dotenv_values wrapper filtering None"},
+    {"name": "_resolve_template_dir", "file": "zchat/cli/runner.py", "line": 39, "purpose": "Search user_template_dirs -> paths.templates_dir() -> built-in _BUILTIN_DIR; require template.toml"},
+    {"name": "_load_template_toml", "file": "zchat/cli/runner.py", "line": 61, "purpose": "Load template.toml with default hooks.pre_stop = ''"},
+    {"name": "resolve_runner", "file": "zchat/cli/runner.py", "line": 75, "purpose": "Merge global_config[runners.<name>] with template dir assets; returns dict with command/args/template_dir/start_script/env_template/hooks"},
+    {"name": "render_env", "file": "zchat/cli/runner.py", "line": 144, "purpose": "Render .env.example with placeholder_re = {{\\w+}} → context; overlay template .env AND user_dir .env for built-in overrides"},
+    {"name": "list_runners", "file": "zchat/cli/runner.py", "line": 181, "purpose": "List runners from global config + user dirs + builtin, dedup by name"},
+    {"name": "_BUILTIN_DIR (runner)", "file": "zchat/cli/runner.py", "line": 21, "purpose": "Points to zchat/cli/templates/"},
+    {"name": "TemplateNotFoundError", "file": "zchat/cli/template_loader.py", "line": 14, "purpose": "Legacy exception"},
+    {"name": "resolve_template_dir", "file": "zchat/cli/template_loader.py", "line": 18, "purpose": "User > built-in search; raises TemplateNotFoundError"},
+    {"name": "load_template", "file": "zchat/cli/template_loader.py", "line": 36, "purpose": "Load template.toml dict"},
+    {"name": "render_env (template_loader)", "file": "zchat/cli/template_loader.py", "line": 47, "purpose": "Same placeholder rendering logic as runner.render_env"},
+    {"name": "get_start_script", "file": "zchat/cli/template_loader.py", "line": 76, "purpose": "Return path to template's start.sh"},
+    {"name": "list_templates", "file": "zchat/cli/template_loader.py", "line": 85, "purpose": "List user + built-in templates with 'source' tag; used by `zchat template list`"}
   ],
-  "click_commands": [],
-  "imports": ["re", "tomllib", "pathlib.Path", "dotenv.dotenv_values", "paths"],
-  "test_file": "tests/unit/test_runner.py",
-  "test_count": 18
+  "public_interface": [
+    "RunnerNotFoundError, resolve_runner, render_env, list_runners, _parse_env_file, _resolve_template_dir, _load_template_toml (runner.py)",
+    "TemplateNotFoundError, resolve_template_dir, load_template, render_env, get_start_script, list_templates (template_loader.py)"
+  ],
+  "depends_on": [
+    "dotenv.dotenv_values",
+    "tomllib",
+    "paths (templates_dir)"
+  ],
+  "tests": [
+    "tests/unit/test_runner.py",
+    "tests/unit/test_template_loader.py",
+    "tests/unit/test_start_sh.py"
+  ],
+  "evidence_file_lines": [
+    "zchat/cli/runner.py:21",
+    "zchat/cli/runner.py:39",
+    "zchat/cli/runner.py:75",
+    "zchat/cli/runner.py:144",
+    "zchat/cli/runner.py:181",
+    "zchat/cli/template_loader.py:18",
+    "zchat/cli/template_loader.py:47",
+    "zchat/cli/template_loader.py:85"
+  ]
 }

@@ -1,25 +1,50 @@
 {
   "module": "agent_manager",
-  "path": "zchat/cli/agent_manager.py",
-  "lines": 404,
-  "updated_at": "2026-04-17",
-  "functions": [
-    {"name": "_find_channel_pkg_dir", "line": 23, "signature": "def _find_channel_pkg_dir() -> str | None", "description": "定位 zchat-channel-server 包目录（uv tool / editable / sibling）"}
+  "files": [
+    "zchat/cli/agent_manager.py"
   ],
-  "classes": [
-    {
-      "name": "AgentManager",
-      "line": 56,
-      "methods": [
-        "__init__", "session_name", "scoped", "create", "stop", "restart",
-        "list_agents", "get_status", "_create_workspace", "_build_env_context",
-        "_spawn_tab", "_force_stop", "_cleanup_workspace", "_wait_for_ready",
-        "_auto_confirm_startup", "_check_alive", "send", "_load_state", "_save_state"
-      ]
-    }
+  "description": "AgentManager — create/stop/restart/list/send Claude Code agents, each bound to a zellij tab + workspace dir, tracks lifecycle via state.json and .ready marker",
+  "key_classes_functions": [
+    {"name": "AgentManager", "file": "zchat/cli/agent_manager.py", "line": 56, "purpose": "Main lifecycle class; state persisted to state.json/agents.json"},
+    {"name": "AgentManager.__init__", "file": "zchat/cli/agent_manager.py", "line": 57, "purpose": "Store IRC connection config, project_dir, state_file, mcp_server_cmd; load state"},
+    {"name": "AgentManager.scoped", "file": "zchat/cli/agent_manager.py", "line": 85, "purpose": "Apply scoped_name(name, username) -> {user}-{name}"},
+    {"name": "AgentManager.create", "file": "zchat/cli/agent_manager.py", "line": 88, "purpose": "Connectivity check -> create workspace -> spawn tab -> wait for .ready marker (60s timeout)"},
+    {"name": "AgentManager.stop", "file": "zchat/cli/agent_manager.py", "line": 130, "purpose": "Stop agent; delete ready marker; preserve workspace for restart"},
+    {"name": "AgentManager.restart", "file": "zchat/cli/agent_manager.py", "line": 143, "purpose": "Stop + create with same channels/type"},
+    {"name": "AgentManager.list_agents", "file": "zchat/cli/agent_manager.py", "line": 154, "purpose": "Return all agents w/ refreshed status via tab_exists check"},
+    {"name": "AgentManager.send", "file": "zchat/cli/agent_manager.py", "line": 370, "purpose": "Send text to agent tab (requires .ready marker present)"},
+    {"name": "AgentManager._create_workspace", "file": "zchat/cli/agent_manager.py", "line": 171, "purpose": "Create project_dir/agents/<name>/ or tmp fallback"},
+    {"name": "AgentManager._build_env_context", "file": "zchat/cli/agent_manager.py", "line": 180, "purpose": "Build template placeholder dict — includes irc/workspace/auth_token/channel_pkg_dir"},
+    {"name": "AgentManager._spawn_tab", "file": "zchat/cli/agent_manager.py", "line": 209, "purpose": "Render env -> write .zchat-env -> zellij new_tab command 'source .zchat-env && bash start.sh'"},
+    {"name": "AgentManager._force_stop", "file": "zchat/cli/agent_manager.py", "line": 248, "purpose": "Execute template pre_stop hook in pane; fallback to zellij.close_tab"},
+    {"name": "AgentManager._wait_for_ready", "file": "zchat/cli/agent_manager.py", "line": 298, "purpose": "Poll agents/<name>.ready marker until timeout"},
+    {"name": "AgentManager._auto_confirm_startup", "file": "zchat/cli/agent_manager.py", "line": 310, "purpose": "Background thread — dump-screen polling to auto-send Enter on Claude Code startup prompts (i trust this folder / dangerously-load etc.)"},
+    {"name": "AgentManager._check_alive", "file": "zchat/cli/agent_manager.py", "line": 360, "purpose": "Return 'running' if zellij tab still exists"},
+    {"name": "AgentManager._save_state / _load_state", "file": "zchat/cli/agent_manager.py", "line": 388, "purpose": "JSON state persistence under agents.json"},
+    {"name": "_find_channel_pkg_dir", "file": "zchat/cli/agent_manager.py", "line": 23, "purpose": "Locate zchat-channel-server package dir via uv tool / importlib / sibling dir"},
+    {"name": "DEFAULT_STATE_FILE", "file": "zchat/cli/agent_manager.py", "line": 20, "purpose": "Legacy default: ~/.local/state/zchat/agents.json"}
   ],
-  "click_commands": [],
-  "imports": ["glob", "importlib.metadata", "json", "os", "shlex", "shutil", "subprocess", "tempfile", "threading", "time", "zellij", "irc_manager.check_irc_connectivity", "runner", "zchat_protocol.naming"],
-  "test_file": "tests/unit/test_agent_manager.py",
-  "test_count": 19
+  "public_interface": [
+    "AgentManager (class)",
+    "DEFAULT_STATE_FILE"
+  ],
+  "depends_on": [
+    "zellij",
+    "irc_manager (check_irc_connectivity)",
+    "runner (resolve_runner / render_env / _parse_env_file / _resolve_template_dir / _load_template_toml)",
+    "auth (get_credentials, _global_auth_dir)",
+    "zchat_protocol.naming (scoped_name, AGENT_SEPARATOR)"
+  ],
+  "tests": [
+    "tests/unit/test_agent_manager.py",
+    "tests/unit/test_agent_focus_hide.py"
+  ],
+  "evidence_file_lines": [
+    "zchat/cli/agent_manager.py:56",
+    "zchat/cli/agent_manager.py:88",
+    "zchat/cli/agent_manager.py:209",
+    "zchat/cli/agent_manager.py:248",
+    "zchat/cli/agent_manager.py:310",
+    "zchat/cli/agent_manager.py:370"
+  ]
 }

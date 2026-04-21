@@ -1,6 +1,6 @@
 """audit CLI — 读 audit.json 输出状态和报告。
 
-admin-agent 通过 run_zchat_cli(["audit", "status"]) 或 ["audit", "report"] 获取数据。
+管理型 agent 通过 run_zchat_cli(["audit", "status"]) 或 ["audit", "report"] 取数。
 
 audit.json 由 CS 的 AuditPlugin 持久化。CLI 只读，不写。
 """

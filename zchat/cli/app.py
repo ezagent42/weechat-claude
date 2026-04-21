@@ -1403,7 +1403,7 @@ def cmd_channel_set_entry(
 @bot_app.command("add")
 def cmd_bot_add(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Bot name (logical, e.g. 'customer')"),
+    name: str = typer.Argument(..., help="Bot name (logical identifier used in routing.toml)"),
     app_id: str = typer.Option(..., "--app-id", help="External platform app id"),
     app_secret: Optional[str] = typer.Option(None, "--app-secret",
                                               help="App secret (written to credentials/<name>.json)"),
