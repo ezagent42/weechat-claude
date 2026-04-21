@@ -26,14 +26,21 @@ if [ -n "$CHANNEL_PKG_DIR" ] && [ -d "$CHANNEL_PKG_DIR/.claude-plugin" ]; then
   cp -r "$CHANNEL_PKG_DIR/commands" commands
 fi
 
-# --- Copy soul.md from template ---
+# --- Copy soul.md (人读 source of truth) + CLAUDE.md (Claude Code 自动加载) ---
 TEMPLATE_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$TEMPLATE_DIR/soul.md" ]; then
   cp "$TEMPLATE_DIR/soul.md" ./soul.md
+  cp "$TEMPLATE_DIR/soul.md" ./CLAUDE.md
+fi
+
+# --- Copy skills/ to .claude/skills/ (Claude Code 按 description 自动触发) ---
+mkdir -p .claude
+rm -rf .claude/skills
+if [ -d "$TEMPLATE_DIR/skills" ]; then
+  cp -r "$TEMPLATE_DIR/skills" .claude/skills
 fi
 
 # --- Claude settings with SessionStart hook ---
-mkdir -p .claude
 READY_PATH="${ZCHAT_PROJECT_DIR}/agents/${AGENT_NAME}.ready"
 
 jq -n \
@@ -49,7 +56,9 @@ jq -n \
       allow: [
         "mcp__zchat-agent-mcp__reply",
         "mcp__zchat-agent-mcp__join_channel",
-        "mcp__zchat-agent-mcp__run_zchat_cli"
+        "mcp__zchat-agent-mcp__run_zchat_cli",
+        "mcp__zchat-agent-mcp__list_peers",
+        "Skill"
       ]
     },
     enabledPlugins: {
