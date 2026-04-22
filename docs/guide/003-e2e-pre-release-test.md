@@ -293,6 +293,177 @@ uv run zchat audit report --json | jq
 
 ---
 
+## TC-PR-V7 · Plugin 架构回归套件
+
+V7（2026-04-22）引入 `plugin_loader` 后专项回归。针对 **已经跑过业务场景** 的 prod 项目做，不需要额外搭环境。
+
+### V7-1 · CS 启动时 6 plugin 全注册
+
+**操作**：`zchat down && zchat up` 后 attach 到 zellij 的 `cs` tab。
+
+**预期**（cs.log 前 20 行）：
+
+```
+INFO plugin_loader plugin 'activation' registered
+INFO plugin_loader plugin 'audit' registered
+INFO plugin_loader plugin 'csat' registered
+INFO plugin_loader plugin 'mode' registered
+INFO plugin_loader plugin 'resolve' registered
+INFO plugin_loader plugin 'sla' registered
+INFO boot [boot] registered 6 plugins: ['activation','audit','csat','mode','resolve','sla']
+```
+
+**失败排查**：
+- 缺某 plugin → `src/plugins/<name>/plugin.py` 的 `name` 属性和目录名不一致
+- `pass 2`（deferred）再也没 register → csat `__init__` 的 kw `audit` 没对上签名 DI
+
+### V7-2 · Plugin state 新路径落盘（非 V6 位置）
+
+**前置**：跑过 TC-PR-2.1（客户发过消息）。
+
+**验证**：
+
+```bash
+# 新路径存在 + 有数据
+ls ~/.zchat/projects/prod/plugins/audit/state.json
+jq '.channels["conv-001"].message_count' ~/.zchat/projects/prod/plugins/audit/state.json
+# 期望：数字 ≥1
+
+# V6 老路径不存在（已被迁移或迁移后未被重建）
+test ! -f ~/.zchat/projects/prod/audit.json && echo "OK"
+test ! -f ~/.zchat/projects/prod/activation-state.json && echo "OK"
+```
+
+**失败排查**：若老路径又出现 → 仍有代码在 V6 位置写文件（不应该），grep plugin 源码查 `persist_path|state_file=`。
+
+### V7-3 · CSAT → Audit 签名驱动 DI（跨 plugin 写同一文件）
+
+**前置**：跑完 TC-PR-CSAT（客户给过 5⭐）。
+
+**验证**：
+
+```bash
+# csat_score 必须写入 audit plugin 的 state.json（证明 csat 拿到了 audit 引用）
+jq '.channels["conv-001"].csat_score' ~/.zchat/projects/prod/plugins/audit/state.json
+# 期望：5
+```
+
+**失败排查**：若返回 `null` → `plugin_loader._resolve_init_kwargs` 没把 audit 注入 csat 的 `audit` kw 参数；grep `cs.log` 看 csat 是否是在 pass 1 还是 pass 2 注册。
+
+### V7-4 · plugins.toml 配置覆盖生效
+
+**操作**：改 `~/.zchat/projects/prod/plugins.toml`：
+
+```toml
+[plugins.sla]
+takeover_timeout = 10   # 从 180 改到 10
+help_timeout = 10
+```
+
+`zchat down && zchat up` 重启，然后：
+1. 点 squad 卡片 "接管"
+2. **不做任何事**等 10 秒
+
+**预期**：
+- `cs.log`: `[sla] channel 'conv-001': takeover SLA breach after 10s`（**10s，不是 180s**）
+- 自动 emit `/release` → mode 回 copilot
+
+**失败排查**：若仍 180 秒 → config 没透进 SlaPlugin。手动：
+
+```bash
+cd zchat-channel-server
+uv run python -c "from plugins.sla.plugin import SlaPlugin; p = SlaPlugin({'takeover_timeout': 10}, None, None); print(p._timeout_seconds)"
+# 期望：10.0
+```
+
+**测完改回 180**：
+
+```toml
+[plugins.sla]
+takeover_timeout = 180
+help_timeout = 180
+```
+
+### V7-5 · CS 重启后 plugin state 恢复
+
+**前置**：跑过若干轮对话 + ≥1 takeover + ≥1 resolve + ≥1 csat。
+
+**操作**：
+
+```bash
+zchat audit status --json | jq '.aggregates' > /tmp/before.json
+
+zchat down && sleep 2 && zchat up
+sleep 10
+
+zchat audit status --json | jq '.aggregates' > /tmp/after.json
+
+diff /tmp/before.json /tmp/after.json && echo "OK: audit state survived restart"
+```
+
+**预期**：`diff` 无输出，aggregates 完全一致。
+
+**失败排查**：
+- 数据归零 → audit plugin 的 `_load` 读错路径（或 data_dir 被错误 override）
+- 部分字段丢 → write-to-tmp + atomic rename 被打断，看有没有 `.tmp` 残留文件
+
+### V7-6 · 临时禁用 plugin 生效
+
+**操作**：改 `plugins.toml` 加 `enabled = false`：
+
+```toml
+[plugins.activation]
+enabled = false
+```
+
+`zchat down && zchat up`，然后：
+
+**验证**：
+- `cs.log`: `plugin 'activation' disabled via plugins.toml; skip`
+- `[boot] registered 5 plugins: [...]`（5，不是 6，且列表无 activation）
+- 后续 customer 在 dormant channel 发消息 → **不再** emit `customer_returned` event（activation 没加载）
+
+**测完还原**：删掉那一段或改 `enabled = true`。
+
+### V7-7 · V6 → V7 数据迁移演练（可选，非 prod 环境）
+
+**目的**：验证老用户升级路径，不在 prod 直接跑（会污染 prod 数据）。在新建测试项目做：
+
+```bash
+zchat project create v7-migrate-test
+# 模拟 V6 残留
+cat > ~/.zchat/projects/v7-migrate-test/audit.json <<'EOF'
+{"channels": {"legacy-conv": {"state": "resolved", "csat_score": 4, "message_count": 10, "takeovers": []}}}
+EOF
+
+# 迁移
+cd ~/.zchat/projects/v7-migrate-test
+mkdir -p plugins/audit
+mv audit.json plugins/audit/state.json
+
+# 验证 V7 能读
+cd ~/projects/zchat/zchat-channel-server
+uv run python -c "
+import asyncio
+from channel_server.plugin import PluginRegistry
+from channel_server.plugin_loader import load_plugins, load_plugins_toml
+async def check():
+    r = PluginRegistry(); n = lambda *a, **k: None
+    load_plugins(registry=r, plugins_toml={},
+                 routing_path='$HOME/.zchat/projects/v7-migrate-test/routing.toml',
+                 injections={'emit_event': n, 'emit_command': n})
+    status = r.get_plugin('audit').query('status', {'channel': 'legacy-conv'})
+    assert status['csat_score'] == 4, f'FAIL: {status}'
+    print('OK: V6 → V7 readable')
+asyncio.run(check())
+"
+
+# 清理
+rm -rf ~/.zchat/projects/v7-migrate-test
+```
+
+---
+
 ## 验收门槛
 
 | TC | 通过判据 |
@@ -307,6 +478,12 @@ uv run zchat audit report --json | jq
 | LazyCreate A-D | 4 步全过 |
 | RoutingDynamic | 2s 内 reload |
 | 3.x | 4 个 admin 命令全部触发对应 skill |
+| V7-1 | cs.log 有 6 plugin registered + boot 汇总 |
+| V7-2 | state.json 在 `plugins/audit/` 新路径 |
+| V7-3 | audit state.json 里 csat_score 被 csat 写入 |
+| V7-4 | sla takeover 按 plugins.toml 配置 10s 超时 |
+| V7-5 | `zchat down && zchat up` 后 aggregates 不变 |
+| V7-6 | `enabled=false` 后 5 plugins + 无 customer_returned |
 
 跑完贴 `cs.log` + 三 `bridge-*.log` 给开发审计。
 

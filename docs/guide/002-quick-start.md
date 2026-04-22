@@ -77,6 +77,28 @@ zchat channel create admin     --bot admin    --external-chat oc_admin_xxx     -
 zchat channel create squad-001 --bot squad    --external-chat oc_squad_xxx     --entry-agent yaosh-squad-0
 ```
 
+## 3.5. （可选）Plugin 配置 · `plugins.toml`
+
+V7 起 CS 的 6 个官方 plugin (mode/sla/resolve/audit/activation/csat) 由 `channel_server.plugin_loader` 在启动时 config-driven 自动发现和注册，**无需任何配置开箱即用**。
+
+如需调整 plugin 行为（改 SLA timer 阈值、临时禁用某 plugin、override data_dir），在项目目录下加 `plugins.toml`：
+
+```bash
+cat > ~/.zchat/projects/prod/plugins.toml <<'TOML'
+[plugins.sla]
+takeover_timeout = 180   # /hijack 后自动 /release 超时（秒）
+help_timeout = 180       # @operator 求助等待超时（秒）
+
+[plugins.activation]
+# enabled = false        # 需要时显式禁用
+
+[plugins.audit]
+# data_dir = "/custom/path"   # 覆盖默认 <project>/plugins/audit/
+TOML
+```
+
+默认 plugin state 落盘 `~/.zchat/projects/<proj>/plugins/<name>/state.json`。详见 `007-plugin-guide.md`。
+
 ## 4. 一键启动
 
 ```bash
@@ -97,6 +119,18 @@ agent fast-001: started in #conv-001 (type=fast-agent)
 agent admin-0: started in #admin (type=admin-agent)
 agent squad-0: started in #squad-001 (type=squad-agent)
 up: complete
+```
+
+**CS tab 里能看到 plugin loader 日志**（验证 V7 机制生效）：
+
+```
+[channel_server.plugin_loader] INFO plugin 'activation' registered
+[channel_server.plugin_loader] INFO plugin 'audit' registered
+[channel_server.plugin_loader] INFO plugin 'csat' registered
+[channel_server.plugin_loader] INFO plugin 'mode' registered
+[channel_server.plugin_loader] INFO plugin 'resolve' registered
+[channel_server.plugin_loader] INFO plugin 'sla' registered
+[channel_server.boot] INFO [boot] registered 6 plugins: [...]
 ```
 
 ## 5. 进入 zellij 监控
