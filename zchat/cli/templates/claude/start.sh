@@ -53,7 +53,8 @@ jq -n \
       ]
     },
     enabledPlugins: {
-      "zchat@ezagent42": true
+      "zchat@ezagent42": true,
+      "dev-loop-skills@ezagent42": true
     }
   }' > .claude/settings.local.json
 

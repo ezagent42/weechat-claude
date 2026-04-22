@@ -204,6 +204,7 @@ class AgentManager:
             context["channel_pkg_dir"] = channel_pkg
         else:
             context["channel_pkg_dir"] = ""
+        context["mcp_server_cmd"] = self.mcp_server_cmd
         return context
 
     def _spawn_tab(self, name: str, workspace: str, agent_type: str,
