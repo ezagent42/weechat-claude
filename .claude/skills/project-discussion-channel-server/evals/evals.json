@@ -1,0 +1,38 @@
+{
+  "skill_name": "project-discussion-channel-server",
+  "evals": [
+    {
+      "id": 1,
+      "name": "code-structure-irc-bridge",
+      "prompt": "channel-server 里 IRC 消息是怎么传到 Claude Code 的？从 IRC 事件到 MCP notification 的完整链路是什么？",
+      "expected_output": "应该描述完整链路：on_pubmsg/on_privmsg -> detect_mention -> asyncio.Queue -> poll_irc_queue -> inject_message -> JSONRPCNotification，每一步都有 file:line 引用，并运行 test-cs_server.sh 验证",
+      "assertions": [
+        {"text": "回答包含 server.py 的 file:line 引用（至少 3 个不同的行号）", "type": "contains_evidence"},
+        {"text": "回答提到 asyncio.Queue 桥接机制", "type": "technical_accuracy"},
+        {"text": "回答包含实际的测试运行输出", "type": "test_evidence"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "bug-triage-chunk-overflow",
+      "prompt": "有用户报告说发送包含大量 emoji 的消息时，IRC 消息被截断了一部分内容丢失。chunk_message 的分片逻辑是不是有 bug？emoji 是 4 字节的 UTF-8，会不会超过 390 字节限制？",
+      "expected_output": "应该读取 message.py 的 chunk_message 实现，分析其 UTF-8 字节计算逻辑，运行 test_chunk_message_cjk 等测试验证，给出是否是 bug 的判断及代码证据",
+      "assertions": [
+        {"text": "回答引用 message.py:27 的 chunk_message 函数", "type": "contains_evidence"},
+        {"text": "回答分析了 UTF-8 字节计算是否正确处理 4 字节字符", "type": "technical_accuracy"},
+        {"text": "回答运行了 test-cs_message.sh 并展示输出", "type": "test_evidence"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "pipeline-info-e2e-setup",
+      "prompt": "我想给 channel-server 写 E2E 测试。测试框架是什么？E2E 目录在哪？有没有现成的 fixture 可以复用？需要什么外部服务？怎么跑 E2E？",
+      "expected_output": "应该返回完整的 pipeline 信息：pytest + pytest-asyncio, tests/e2e/ 目录（当前空），无现成 fixture，需要 ergo IRC server，运行命令，以及参考 zchat 主库的 fixture 模式建议",
+      "assertions": [
+        {"text": "回答包含测试框架信息（pytest + pytest-asyncio）", "type": "technical_accuracy"},
+        {"text": "回答提到 E2E 目录当前为空", "type": "technical_accuracy"},
+        {"text": "回答列出了外部依赖（ergo IRC server）", "type": "technical_accuracy"}
+      ]
+    }
+  ]
+}

@@ -21,19 +21,14 @@ def _generate_session_name(project_name: str) -> str:
     return f"zchat-{project_name}"
 
 
-def create_project_config(name: str, server: str = "local",
-                          nick: str = "", channels: str | None = None,
-                          env_file: str = "",
-                          default_runner: str | None = None,
-                          mcp_server_cmd: list[str] | None = None,
-                          # Legacy params kept for backward compat
-                          port: int = 6667, tls: bool = False,
-                          password: str = "",
-                          default_type: str = "claude"):
-    """Create project directory and write config.toml."""
+def generate_default_config(name: str, server: str = "127.0.0.1",
+                            port: int = 6667, nick: str = "",
+                            channels: str | None = None,
+                            env_file: str = "",
+                            default_runner: str | None = None,
+                            mcp_server_cmd: list[str] | None = None) -> str:
+    """Generate default config as TOML text (no file I/O)."""
     from zchat.cli.defaults import default_channels, default_runner as _default_runner, default_mcp_server_cmd
-    pdir = paths.project_dir(name)
-    pdir.mkdir(parents=True, exist_ok=True)
     if channels is None:
         channels = ",".join(default_channels())
     channels_list = [ch.strip() for ch in channels.split(",") if ch.strip()]
@@ -54,9 +49,29 @@ def create_project_config(name: str, server: str = "local",
             "session": session,
         },
     }
+    return tomli_w.dumps(config)
 
-    with open(pdir / "config.toml", "wb") as f:
-        tomli_w.dump(config, f)
+
+def create_project_config(name: str, server: str = "local",
+                          nick: str = "", channels: str | None = None,
+                          env_file: str = "",
+                          default_runner: str | None = None,
+                          mcp_server_cmd: list[str] | None = None,
+                          # Legacy params kept for backward compat
+                          port: int = 6667, tls: bool = False,
+                          password: str = "",
+                          default_type: str = "claude"):
+    """Create project directory and write config.toml + empty routing.toml."""
+    from zchat.cli.routing import init_routing
+    pdir = paths.project_dir(name)
+    pdir.mkdir(parents=True, exist_ok=True)
+    text = generate_default_config(
+        name, server=server, nick=nick, channels=channels,
+        env_file=env_file, default_runner=default_runner,
+        mcp_server_cmd=mcp_server_cmd,
+    )
+    (pdir / "config.toml").write_text(text)
+    init_routing(pdir)
 
 
 def list_projects() -> list[str]:
@@ -157,3 +172,14 @@ def set_config_value(name: str, key: str, value: str):
 
     with open(config_path, "wb") as f:
         tomli_w.dump(cfg, f)
+
+
+# ---------------------------------------------------------------------------
+# Channel name helper (纯工具函数，保留向后兼容)
+# ---------------------------------------------------------------------------
+
+def normalize_channel_name(name: str) -> str:
+    """Ensure channel name starts with '#'."""
+    if not name.startswith("#"):
+        return f"#{name}"
+    return name

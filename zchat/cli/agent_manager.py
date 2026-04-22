@@ -1,6 +1,7 @@
 """Agent lifecycle management: create workspace, spawn zellij tab, track state."""
 
 import glob as _glob
+from importlib.metadata import distribution as _distribution
 import json
 import os
 import shlex
@@ -12,7 +13,7 @@ import time
 
 from zchat.cli import zellij
 from zchat.cli.irc_manager import check_irc_connectivity
-from zchat.cli.runner import resolve_runner, render_env, _parse_env_file, _resolve_template_dir, _load_template_toml
+from zchat.cli.runner import render_env, _parse_env_file, _resolve_template_dir, _load_template_toml
 from zchat_protocol.naming import scoped_name, AGENT_SEPARATOR
 
 
@@ -20,16 +21,36 @@ DEFAULT_STATE_FILE = os.path.expanduser("~/.local/state/zchat/agents.json")
 
 
 def _find_channel_pkg_dir() -> str | None:
-    """Locate zchat-channel-server package dir in its uv tool venv."""
+    """Locate zchat-channel-server package dir."""
+    # Try uv tool dir first (production install)
     result = _sp.run(["uv", "tool", "dir"], capture_output=True, text=True)
-    if result.returncode != 0:
-        return None
-    tool_dir = result.stdout.strip()
-    patterns = _glob.glob(
-        os.path.join(tool_dir, "zchat-channel-server", "lib", "python*",
-                     "site-packages", "zchat_channel_server")
-    )
-    return patterns[0] if patterns else None
+    if result.returncode == 0:
+        tool_dir = result.stdout.strip()
+        patterns = _glob.glob(
+            os.path.join(tool_dir, "zchat-channel-server", "lib", "python*",
+                         "site-packages", "zchat_channel_server")
+        )
+        if patterns:
+            return patterns[0]
+
+    # Fallback: editable install — find via importlib
+    try:
+        dist = _distribution("zchat-channel-server")
+        for f in dist.files or []:
+            if f.name == "server.py" or f.name == "__init__.py":
+                resolved = f.locate()
+                if resolved and resolved.parent.exists():
+                    return str(resolved.parent)
+    except Exception:
+        pass
+
+    # Fallback: check sibling directory (dev workspace)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    cs_dir = os.path.join(project_root, "zchat-channel-server")
+    if os.path.isdir(cs_dir) and os.path.isfile(os.path.join(cs_dir, "server.py")):
+        return cs_dir
+
+    return None
 
 
 class AgentManager:
@@ -41,7 +62,7 @@ class AgentManager:
                  zellij_session: str = "zchat",
                  state_file: str = DEFAULT_STATE_FILE,
                  project_dir: str = "",
-                 mcp_server_cmd: str = "zchat-channel"):
+                 mcp_server_cmd: list[str] | None = None):
         self.irc_server = irc_server
         self.irc_port = irc_port
         self.irc_tls = irc_tls
@@ -198,6 +219,10 @@ class AgentManager:
             merged.update(env)
             env = merged
 
+        # 项目配置的 mcp_server_cmd 最终覆盖（最高优先级）
+        if self.mcp_server_cmd:
+            env["MCP_SERVER_CMD"] = " ".join(self.mcp_server_cmd)
+
         # Resolve start script from template directory
         tpl_dir = _resolve_template_dir(agent_type)
         if tpl_dir:
@@ -225,7 +250,7 @@ class AgentManager:
         agent = self._agents.get(name)
         if not agent:
             return
-        wname = agent.get("tab_name") or agent.get("window_name")
+        wname = agent.get("tab_name")
         if not wname:
             return
         if not zellij.tab_exists(self._session_name, wname):
@@ -302,12 +327,15 @@ class AgentManager:
 
             deadline = time.time() + timeout
             # Patterns that appear in Claude Code startup prompts
+            # （新版措辞含 "I am using this for local development" / --dangerously-load-... 提示）
             confirm_patterns = [
                 "i trust this folder",
                 "local development",
                 "enter to confirm",
                 "development channels",
-                "experimental",
+                "development-channels",   # --dangerously-load-development-channels 提示
+                "dangerously-load",        # 兜底通用
+                "i am using this",         # 新版 claude 主选项措辞
             ]
             confirmed: set[str] = set()
             while time.time() < deadline:
@@ -333,8 +361,8 @@ class AgentManager:
         agent = self._agents.get(name)
         if not agent:
             return "offline"
-        # Support both new (tab_name) and legacy (window_name) state
-        tab_name = agent.get("tab_name") or agent.get("window_name")
+        # tab_name in state
+        tab_name = agent.get("tab_name")
         if tab_name:
             return "running" if zellij.tab_exists(self._session_name, tab_name) else "offline"
         return "offline"
@@ -351,7 +379,7 @@ class AgentManager:
             ready_path = os.path.join(self.project_dir, "agents", f"{name}.ready")
             if not os.path.isfile(ready_path):
                 raise ValueError(f"{name} is not ready (still starting up)")
-        tab_name = agent.get("tab_name") or agent.get("window_name")
+        tab_name = agent.get("tab_name")
         pane_id = zellij.get_pane_id(self._session_name, tab_name)
         if not pane_id:
             raise ValueError(f"tab not found for {name}")

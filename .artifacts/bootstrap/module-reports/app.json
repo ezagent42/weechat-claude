@@ -1,63 +1,80 @@
 {
-  "module_name": "app",
-  "module_path": "zchat/cli/app.py",
-  "description": "Main CLI application: Typer command tree for agent lifecycle management (app.py:2)",
-  "key_interfaces": [
-    {"name": "app", "file": "app.py", "line": 32, "description": "Root Typer app with subcommands: project, irc, agent, setup, template, auth, config"},
-    {"name": "main", "file": "app.py", "line": 193, "description": "@app.callback: resolve project, spawn background update check, enter main session if no subcommand"},
-    {"name": "_get_config", "file": "app.py", "line": 52, "description": "Get project config from typer context, exit if no project selected"},
-    {"name": "_get_irc_config", "file": "app.py", "line": 94, "description": "Resolve IRC connection details from project + global config (rejects old format)"},
-    {"name": "_get_irc_manager", "file": "app.py", "line": 136, "description": "Create IrcManager from project context"},
-    {"name": "_get_agent_manager", "file": "app.py", "line": 151, "description": "Create AgentManager from project context with full IRC + auth config"},
-    {"name": "_enter_main_session", "file": "app.py", "line": 385, "description": "Enter/create the zchat main Zellij session (hub for all projects)"},
-    {"name": "_launch_project_session", "file": "app.py", "line": 443, "description": "Ensure project Zellij session is running, then switch/attach"},
-    {"name": "_create_project_zellij_session", "file": "app.py", "line": 476, "description": "Create new Zellij session: start ergo if local, build layout, write config.kdl"},
-    {"name": "_get_commands_json", "file": "app.py", "line": 309, "description": "Return list-commands output as JSON for zchat-palette plugin"},
-    {"name": "_write_config_kdl", "file": "app.py", "line": 355, "description": "Generate config.kdl with Ctrl-K palette keybinding and plugin paths"},
-    {"name": "_ensure_plugins", "file": "app.py", "line": 233, "description": "Copy bundled .wasm plugins to ~/.zchat/plugins/ if missing or outdated"},
-    {"name": "_version_callback", "file": "app.py", "line": 171, "description": "Print version and exit when --version/-V is passed"},
-    {"name": "cmd_project_create", "file": "app.py", "line": 524, "description": "Create new project with interactive or non-interactive server/channel/type selection"},
-    {"name": "cmd_project_list", "file": "app.py", "line": 665, "description": "List all projects with default marker"},
-    {"name": "cmd_project_use", "file": "app.py", "line": 677, "description": "Set default project and launch/switch to its Zellij session"},
-    {"name": "cmd_project_remove", "file": "app.py", "line": 687, "description": "Remove project after checking for running agents"},
-    {"name": "cmd_auth_login", "file": "app.py", "line": 756, "description": "Authenticate via OIDC device code flow or set local username"},
-    {"name": "cmd_auth_status", "file": "app.py", "line": 797, "description": "Show current auth status"},
-    {"name": "cmd_auth_logout", "file": "app.py", "line": 839, "description": "Clear cached auth tokens"},
-    {"name": "cmd_template_list", "file": "app.py", "line": 855, "description": "List available agent templates"},
-    {"name": "cmd_set", "file": "app.py", "line": 736, "description": "Set a project config value by dotted key"}
+  "module": "app",
+  "files": [
+    "zchat/cli/app.py",
+    "zchat/cli/__main__.py",
+    "zchat/cli/__init__.py",
+    "zchat/__init__.py",
+    "zchat/_version.py"
   ],
-  "additional_files": [
-    {"file": "zchat/cli/__init__.py", "description": "Package init: docstring only (line 1)"},
-    {"file": "zchat/cli/__main__.py", "description": "Allow running as python -m zchat.cli (line 1-4)"}
+  "description": "Typer CLI entry point — declares all sub-apps (project/irc/agent/auth/template/config/channel/bot/audit/setup) and wires commands to manager classes",
+  "key_classes_functions": [
+    {"name": "app (typer.Typer)", "file": "zchat/cli/app.py", "line": 34, "purpose": "Root Typer app; all subcommands registered via add_typer"},
+    {"name": "main (callback)", "file": "zchat/cli/app.py", "line": 211, "purpose": "Root callback — resolves project, loads config, triggers background update check; enters zellij main session when no subcommand"},
+    {"name": "_get_config", "file": "zchat/cli/app.py", "line": 59, "purpose": "Fetch config from ctx.obj, exit if no project selected"},
+    {"name": "_get_irc_config", "file": "zchat/cli/app.py", "line": 101, "purpose": "Resolve IRC connection details — rejects legacy [irc] section format"},
+    {"name": "_get_irc_manager", "file": "zchat/cli/app.py", "line": 149, "purpose": "Construct IrcManager from resolved config"},
+    {"name": "_get_agent_manager", "file": "zchat/cli/app.py", "line": 164, "purpose": "Construct AgentManager (pulls username from auth, irc from resolved config)"},
+    {"name": "_enter_main_session", "file": "zchat/cli/app.py", "line": 402, "purpose": "Launch/attach the 'zchat' hub zellij session, emits layout.kdl + config.kdl"},
+    {"name": "_launch_project_session", "file": "zchat/cli/app.py", "line": 462, "purpose": "Switch/attach to project's zellij session (legacy V5 --attach flow)"},
+    {"name": "_create_project_zellij_session", "file": "zchat/cli/app.py", "line": 495, "purpose": "Detached-create of a project session with layout.kdl and config.kdl"},
+    {"name": "_spawn_update_check", "file": "zchat/cli/app.py", "line": 195, "purpose": "Daemonize zchat.cli.update --background-check for daily update poll"},
+    {"name": "_resolve_static_choices", "file": "zchat/cli/app.py", "line": 290, "purpose": "Resolve zellij palette plugin choice sources ('servers', 'projects')"},
+    {"name": "_get_commands_json", "file": "zchat/cli/app.py", "line": 326, "purpose": "Walk Typer click group to emit JSON command registry (for palette plugin)"},
+    {"name": "_write_config_kdl", "file": "zchat/cli/app.py", "line": 372, "purpose": "Generate zellij config.kdl with Ctrl-k -> zchat-palette.wasm binding"},
+    {"name": "cmd_project_create", "file": "zchat/cli/app.py", "line": 543, "purpose": "project create — interactive server/channels/type prompts + global config server registration"},
+    {"name": "cmd_project_use", "file": "zchat/cli/app.py", "line": 696, "purpose": "Set default project; optional --attach for V5 behavior"},
+    {"name": "cmd_auth_login", "file": "zchat/cli/app.py", "line": 795, "purpose": "OIDC device code flow (default) or --method local"},
+    {"name": "cmd_irc_daemon_start", "file": "zchat/cli/app.py", "line": 981, "purpose": "Start local ergo via IrcManager.daemon_start"},
+    {"name": "cmd_irc_start", "file": "zchat/cli/app.py", "line": 1001, "purpose": "Start WeeChat in zellij via IrcManager.start_weechat"},
+    {"name": "cmd_agent_create", "file": "zchat/cli/app.py", "line": 1046, "purpose": "Create agent; optional --channel for routing.toml entry_agent registration"},
+    {"name": "cmd_agent_join", "file": "zchat/cli/app.py", "line": 1204, "purpose": "Add agent to registered channel — updates agent state + routing entry_agent"},
+    {"name": "cmd_channel_create", "file": "zchat/cli/app.py", "line": 1274, "purpose": "Register channel in routing.toml with optional bot/external-chat/entry-agent"},
+    {"name": "cmd_bot_add", "file": "zchat/cli/app.py", "line": 1403, "purpose": "Register bot in routing.toml + write credentials/<name>.json; supports --supervises"},
+    {"name": "cmd_up", "file": "zchat/cli/app.py", "line": 1519, "purpose": "V6 orchestrator — starts ergo + WeeChat + cs + N bridges + missing entry_agents from routing.toml"},
+    {"name": "cmd_shutdown", "file": "zchat/cli/app.py", "line": 1673, "purpose": "Stop all agents + WeeChat + ergo + zellij session"},
+    {"name": "cmd_doctor", "file": "zchat/cli/app.py", "line": 1705, "purpose": "Delegate to zchat.cli.doctor.run_doctor"},
+    {"name": "cmd_list_commands", "file": "zchat/cli/app.py", "line": 1841, "purpose": "Hidden command — dump all CLI commands as JSON for palette plugin discovery"},
+    {"name": "_ARG_SOURCES", "file": "zchat/cli/app.py", "line": 1827, "purpose": "Static registry mapping command-arg names to palette data sources"}
   ],
-  "dependencies": ["project", "agent_manager", "irc_manager", "auth", "update", "config_cmd", "paths", "defaults", "template_loader", "layout", "zellij"],
-  "test_results": {
-    "command": "uv run pytest tests/unit/test_list_commands.py tests/unit/test_plugin_integration.py -v",
-    "passed": 11,
-    "failed": 0,
-    "skipped": 0
-  },
-  "user_flows": [
-    {
-      "name": "CLI entry point",
-      "entry": "app.py:193",
-      "steps": [
-        "resolve project (explicit > .zchat marker > default)",
-        "load project config if project exists",
-        "spawn background update check if not checked today",
-        "if no subcommand, enter main zchat Zellij session"
-      ]
-    },
-    {
-      "name": "project use (launch session)",
-      "entry": "app.py:677",
-      "steps": [
-        "set_default_project",
-        "_launch_project_session: load config, resolve session name",
-        "if inside Zellij: switch_session (create first if needed)",
-        "if outside: create session + attach via os.execvp",
-        "_create_project_zellij_session: start ergo, build weechat cmd, write layout.kdl + config.kdl, ensure_session"
-      ]
-    }
+  "public_interface": [
+    "app",
+    "project_app, irc_app, irc_daemon_app, agent_app, setup_app, template_app, auth_app, config_app, channel_app, bot_app",
+    "cmd_* functions (all Typer commands)"
+  ],
+  "depends_on": [
+    "project",
+    "agent_manager",
+    "irc_manager",
+    "zellij",
+    "layout",
+    "auth",
+    "routing",
+    "template_loader",
+    "config_cmd",
+    "defaults",
+    "doctor",
+    "update",
+    "audit_cmd",
+    "paths",
+    "typer",
+    "click"
+  ],
+  "tests": [
+    "tests/unit/test_agent_focus_hide.py",
+    "tests/unit/test_channel_cmd.py",
+    "tests/unit/test_list_commands.py",
+    "tests/unit/test_project_cli_flow.py",
+    "tests/unit/test_project_create_params.py",
+    "tests/unit/test_project_use_command.py"
+  ],
+  "evidence_file_lines": [
+    "zchat/cli/app.py:34",
+    "zchat/cli/app.py:210",
+    "zchat/cli/app.py:402",
+    "zchat/cli/app.py:1519",
+    "zchat/cli/app.py:1673",
+    "zchat/cli/app.py:1827",
+    "zchat/cli/__main__.py:2"
   ]
 }

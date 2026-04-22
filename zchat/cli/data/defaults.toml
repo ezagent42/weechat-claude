@@ -5,7 +5,7 @@
 [defaults]
 channels = ["#general"]
 runner = "claude-channel"
-mcp_server_cmd = ["zchat-channel"]
+mcp_server_cmd = ["zchat-agent-mcp"]
 
 # Server presets shown during `project create`.
 # Each preset becomes a selectable option.

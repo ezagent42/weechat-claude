@@ -8,8 +8,12 @@ from zchat.cli.irc_manager import check_irc_connectivity
 
 def test_unreachable_server_raises():
     """Unreachable host raises ConnectionError."""
-    with pytest.raises(ConnectionError, match="Cannot reach IRC server"):
-        check_irc_connectivity("192.0.2.1", 1, timeout=0.5)
+    with patch(
+        "zchat.cli.irc_manager.socket.create_connection",
+        side_effect=OSError("timed out"),
+    ):
+        with pytest.raises(ConnectionError, match="Cannot reach IRC server"):
+            check_irc_connectivity("192.0.2.1", 1, timeout=0.5)
 
 
 def test_reachable_server_succeeds():

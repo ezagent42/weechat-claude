@@ -1,0 +1,56 @@
+{
+  "module": "doctor_update",
+  "files": [
+    "zchat/cli/doctor.py",
+    "zchat/cli/update.py",
+    "zchat/cli/audit_cmd.py"
+  ],
+  "description": "Environment diagnostics (doctor), self-update state/check/upgrade (update), and audit.json reader (audit_cmd). audit_cmd is the admin-agent-facing read-only CLI for CS-produced audit artifacts",
+  "key_classes_functions": [
+    {"name": "WEECHAT_PLUGIN_URL", "file": "zchat/cli/doctor.py", "line": 15, "purpose": "GitHub raw URL for zchat.py WeeChat plugin"},
+    {"name": "_weechat_autoload_dir / _weechat_plugin_installed", "file": "zchat/cli/doctor.py", "line": 24, "purpose": "Probe ~/.local/share/weechat and ~/.weechat for python/autoload"},
+    {"name": "_VERSION_CMDS", "file": "zchat/cli/doctor.py", "line": 41, "purpose": "Registry of --version flags per external tool"},
+    {"name": "_check_command", "file": "zchat/cli/doctor.py", "line": 53, "purpose": "shutil.which + subprocess --version, strip prefixes"},
+    {"name": "run_doctor", "file": "zchat/cli/doctor.py", "line": 74, "purpose": "Iterate required+optional checks (uv/python/zellij/claude/channel/ergo/weechat/plugin/pytest/port/submodules), print status, exit 1 if required missing"},
+    {"name": "setup_weechat", "file": "zchat/cli/doctor.py", "line": 197, "purpose": "Download zchat.py plugin to WeeChat autoload dir"},
+    {"name": "UPDATE_STATE_FILE / _ZCHAT_REPO / _CHANNEL_REPO", "file": "zchat/cli/update.py", "line": 12, "purpose": "Constants for update check state + remote repos"},
+    {"name": "load_update_state / save_update_state", "file": "zchat/cli/update.py", "line": 26, "purpose": "JSON state persistence with _DEFAULT_STATE merge"},
+    {"name": "should_check_today", "file": "zchat/cli/update.py", "line": 48, "purpose": "Compare last_check date to today UTC"},
+    {"name": "_check_remote_git / _check_remote_pypi", "file": "zchat/cli/update.py", "line": 61, "purpose": "git ls-remote for main/dev branches; pypi JSON for release"},
+    {"name": "check_for_updates", "file": "zchat/cli/update.py", "line": 87, "purpose": "Update remote_ref for zchat+channel_server; compute update_available"},
+    {"name": "_build_install_args / run_upgrade", "file": "zchat/cli/update.py", "line": 123, "purpose": "`uv tool install --force` with rollback on failure"},
+    {"name": "_background_check_main", "file": "zchat/cli/update.py", "line": 160, "purpose": "Entry for `python -m zchat.cli.update --background-check [--auto-upgrade]`"},
+    {"name": "audit_app (Typer)", "file": "zchat/cli/audit_cmd.py", "line": 18, "purpose": "Sub-typer for `zchat audit`"},
+    {"name": "_resolve_audit_path", "file": "zchat/cli/audit_cmd.py", "line": 21, "purpose": "CS_DATA_DIR env > project_dir/audit.json > ./audit.json"},
+    {"name": "_load_state", "file": "zchat/cli/audit_cmd.py", "line": 40, "purpose": "Read audit.json with fallback {channels: {}}"},
+    {"name": "_compute_aggregates", "file": "zchat/cli/audit_cmd.py", "line": 49, "purpose": "Calc total channels/takeovers/resolved/escalation→resolve rate/csat mean"},
+    {"name": "cmd_audit_status / cmd_audit_report / cmd_audit_export", "file": "zchat/cli/audit_cmd.py", "line": 78, "purpose": "CLI outputs for admin-agent consumption"}
+  ],
+  "public_interface": [
+    "run_doctor, setup_weechat (doctor.py)",
+    "load_update_state, save_update_state, should_check_today, check_for_updates, run_upgrade, UPDATE_STATE_FILE (update.py)",
+    "audit_app (audit_cmd.py)"
+  ],
+  "depends_on": [
+    "subprocess, urllib.request",
+    "paths (update_state)",
+    "project (list_projects, load_project_config, resolve_project)",
+    "typer"
+  ],
+  "tests": [
+    "tests/unit/test_doctor.py",
+    "tests/unit/test_update.py",
+    "tests/unit/test_audit_cli.py"
+  ],
+  "evidence_file_lines": [
+    "zchat/cli/doctor.py:15",
+    "zchat/cli/doctor.py:74",
+    "zchat/cli/doctor.py:197",
+    "zchat/cli/update.py:12",
+    "zchat/cli/update.py:87",
+    "zchat/cli/update.py:134",
+    "zchat/cli/update.py:160",
+    "zchat/cli/audit_cmd.py:18",
+    "zchat/cli/audit_cmd.py:49"
+  ]
+}

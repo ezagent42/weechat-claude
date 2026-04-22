@@ -1,6 +1,7 @@
 """KDL layout generation for Zellij sessions."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from zchat.cli import paths
@@ -37,9 +38,11 @@ def generate_layout(
     lines.append("        }")
     lines.append("        children")
     plugins = _plugins_dir()
-    lines.append('        pane size=1 borderless=true {')
-    lines.append(f'            plugin location="file:{plugins}/zchat-status.wasm"')
-    lines.append("        }")
+    wasm_path = os.path.join(plugins, "zchat-status.wasm")
+    if os.path.isfile(wasm_path):
+        lines.append('        pane size=1 borderless=true {')
+        lines.append(f'            plugin location="file:{wasm_path}"')
+        lines.append("        }")
     lines.append('        pane size=2 borderless=true {')
     lines.append('            plugin location="zellij:status-bar"')
     lines.append("        }")
@@ -68,7 +71,7 @@ def generate_layout(
         if agent.get("status") not in ("running", "starting"):
             continue
         ws = agent.get("workspace", "")
-        tab_name = agent.get("tab_name") or agent.get("window_name") or name
+        tab_name = agent.get("tab_name") or name
         lines.append(f'    tab name="{tab_name}" {{')
         if ws:
             cmd = f"cd {ws} && source .zchat-env && bash start.sh"

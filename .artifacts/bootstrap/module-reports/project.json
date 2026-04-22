@@ -1,47 +1,78 @@
 {
-  "module_name": "project",
-  "module_path": "zchat/cli/project.py",
-  "description": "Project management: create, list, use, remove, resolve project configurations (project.py:2)",
-  "key_interfaces": [
-    {"name": "project_dir", "file": "project.py", "line": 14, "description": "Return project directory path as string (legacy compat wrapper)"},
-    {"name": "create_project_config", "file": "project.py", "line": 24, "description": "Create project directory and write config.toml with server, runner, channels, session"},
-    {"name": "list_projects", "file": "project.py", "line": 62, "description": "Return sorted list of project names from projects directory"},
-    {"name": "get_default_project", "file": "project.py", "line": 69, "description": "Return default project name from ~/.zchat/default file"},
-    {"name": "set_default_project", "file": "project.py", "line": 76, "description": "Write project name to ~/.zchat/default file"},
-    {"name": "resolve_project", "file": "project.py", "line": 81, "description": "Resolve project: explicit arg > .zchat marker file walk > default"},
-    {"name": "load_project_config", "file": "project.py", "line": 94, "description": "Load and validate config.toml (rejects old [irc]/[tmux] format), fills defaults"},
-    {"name": "remove_project", "file": "project.py", "line": 123, "description": "Remove project directory via shutil.rmtree"},
-    {"name": "state_file_path", "file": "project.py", "line": 130, "description": "Return path to project state.json"},
-    {"name": "set_config_value", "file": "project.py", "line": 135, "description": "Set a dotted key in project config.toml with type coercion (bool, int, string)"},
-    {"name": "_generate_session_name", "file": "project.py", "line": 19, "description": "Generate Zellij session name: zchat-{project_name}"}
+  "module": "project",
+  "files": [
+    "zchat/cli/project.py",
+    "zchat/cli/paths.py",
+    "zchat/cli/defaults.py",
+    "zchat/cli/config_cmd.py",
+    "zchat/cli/migrate.py",
+    "zchat/cli/data/defaults.toml",
+    "zchat/cli/data/config.kdl"
   ],
-  "dependencies": ["paths", "defaults"],
-  "test_results": {
-    "command": "uv run pytest tests/unit/test_project.py tests/unit/test_project_create_params.py -v",
-    "passed": 22,
-    "failed": 0,
-    "skipped": 0
-  },
-  "user_flows": [
-    {
-      "name": "create project",
-      "entry": "project.py:24",
-      "steps": [
-        "create project directory via paths.project_dir",
-        "resolve default channels/runner/mcp_server_cmd from defaults module",
-        "generate session name as zchat-{name}",
-        "build config dict with server, runner, channels, etc",
-        "write config.toml via tomli_w"
-      ]
-    },
-    {
-      "name": "resolve project",
-      "entry": "project.py:81",
-      "steps": [
-        "if explicit name provided, return it",
-        "walk up from CWD looking for .zchat marker file",
-        "fall back to get_default_project"
-      ]
-    }
+  "description": "Project/config/path/defaults layer — CRUD on ~/.zchat/projects/<name>/config.toml; central path resolution; global config.toml with [servers.*] + [update]; legacy tmux→zellij migrator",
+  "key_classes_functions": [
+    {"name": "project_dir", "file": "zchat/cli/project.py", "line": 14, "purpose": "Legacy string wrapper over paths.project_dir(name)"},
+    {"name": "_generate_session_name", "file": "zchat/cli/project.py", "line": 19, "purpose": "Return 'zchat-<project>' zellij session name"},
+    {"name": "generate_default_config", "file": "zchat/cli/project.py", "line": 24, "purpose": "Pure-function TOML generator (no I/O) for project config.toml"},
+    {"name": "create_project_config", "file": "zchat/cli/project.py", "line": 55, "purpose": "Make project dir, write config.toml, call init_routing (creates empty routing.toml)"},
+    {"name": "list_projects", "file": "zchat/cli/project.py", "line": 77, "purpose": "Enumerate projects/ subdirs"},
+    {"name": "get_default_project / set_default_project", "file": "zchat/cli/project.py", "line": 84, "purpose": "Read/write ~/.zchat/default file"},
+    {"name": "resolve_project", "file": "zchat/cli/project.py", "line": 96, "purpose": "Explicit > .zchat marker file (walk up cwd) > default"},
+    {"name": "load_project_config", "file": "zchat/cli/project.py", "line": 109, "purpose": "Load config.toml; reject legacy [irc]/[tmux] sections with clear error; fill defaults"},
+    {"name": "remove_project", "file": "zchat/cli/project.py", "line": 138, "purpose": "shutil.rmtree project dir"},
+    {"name": "state_file_path", "file": "zchat/cli/project.py", "line": 145, "purpose": "Path to project state.json"},
+    {"name": "set_config_value", "file": "zchat/cli/project.py", "line": 150, "purpose": "Set dotted key in project config.toml with type coercion (bool/int/str)"},
+    {"name": "normalize_channel_name", "file": "zchat/cli/project.py", "line": 181, "purpose": "Ensure channel starts with '#'"},
+    {"name": "zchat_home", "file": "zchat/cli/paths.py", "line": 14, "purpose": "~/.zchat or $ZCHAT_HOME"},
+    {"name": "_resolve_subdir", "file": "zchat/cli/paths.py", "line": 19, "purpose": "env > config [paths] > defaults.toml [paths]"},
+    {"name": "plugins_dir / templates_dir / projects_dir", "file": "zchat/cli/paths.py", "line": 59, "purpose": "Top-level dirs with override support"},
+    {"name": "global_config_path / auth_file / update_state / default_project_file", "file": "zchat/cli/paths.py", "line": 79, "purpose": "Canonical global file paths"},
+    {"name": "project_dir / project_config / project_state / project_env_file / project_kdl_config", "file": "zchat/cli/paths.py", "line": 103, "purpose": "Per-project paths"},
+    {"name": "ergo_data_dir / weechat_home / zellij_layout_dir", "file": "zchat/cli/paths.py", "line": 128, "purpose": "Component-specific paths"},
+    {"name": "agent_workspace / agent_ready_marker / legacy_agent_state", "file": "zchat/cli/paths.py", "line": 147, "purpose": "Agent-scope paths"},
+    {"name": "load_defaults", "file": "zchat/cli/defaults.py", "line": 11, "purpose": "Load+cache data/defaults.toml"},
+    {"name": "default_channels / default_runner / default_mcp_server_cmd / server_presets", "file": "zchat/cli/defaults.py", "line": 20, "purpose": "Accessors for defaults.toml fields"},
+    {"name": "load_global_config / save_global_config", "file": "zchat/cli/config_cmd.py", "line": 19, "purpose": "Read/write ~/.zchat/config.toml; merge hard-coded _DEFAULTS for [update]"},
+    {"name": "resolve_server", "file": "zchat/cli/config_cmd.py", "line": 41, "purpose": "Resolve server ref to {host,port,tls,password} — name from [servers.*] or hostname with preset match or plain default"},
+    {"name": "ensure_server_in_global", "file": "zchat/cli/config_cmd.py", "line": 68, "purpose": "Add [servers.<name>] if missing; save to disk"},
+    {"name": "get_config_value / set_config_value", "file": "zchat/cli/config_cmd.py", "line": 82, "purpose": "Dotted-key access for global config dict"},
+    {"name": "migrate_config_if_needed", "file": "zchat/cli/migrate.py", "line": 12, "purpose": "Old [tmux]/[irc]/[agents] -> new flat schema + [zellij] section; writes .bak"},
+    {"name": "migrate_state_if_needed", "file": "zchat/cli/migrate.py", "line": 59, "purpose": "Rename window_name -> tab_name, drop pane_id, migrate irc state"},
+    {"name": "_simplify_session_name", "file": "zchat/cli/migrate.py", "line": 109, "purpose": "zchat-{uuid}-{name} -> zchat-{name}"}
+  ],
+  "public_interface": [
+    "project_dir, project_state, project_config, projects_dir",
+    "create_project_config, list_projects, get_default_project, set_default_project, resolve_project, load_project_config, remove_project, state_file_path, set_config_value, normalize_channel_name",
+    "zchat_home, plugins_dir, templates_dir, global_config_path, auth_file, update_state, default_project_file, zellij_layout_dir, agent_workspace, agent_ready_marker, legacy_agent_state, ergo_data_dir, weechat_home",
+    "load_defaults, default_channels, default_runner, default_mcp_server_cmd, server_presets",
+    "load_global_config, save_global_config, resolve_server, ensure_server_in_global, get_config_value, set_config_value",
+    "migrate_config_if_needed, migrate_state_if_needed"
+  ],
+  "depends_on": [
+    "tomllib, tomli_w",
+    "routing (init_routing — called from create_project_config)"
+  ],
+  "tests": [
+    "tests/unit/test_project.py",
+    "tests/unit/test_project_cli_flow.py",
+    "tests/unit/test_project_create_params.py",
+    "tests/unit/test_project_use_command.py",
+    "tests/unit/test_paths.py",
+    "tests/unit/test_defaults.py",
+    "tests/unit/test_config_cmd.py",
+    "tests/unit/test_migrate.py"
+  ],
+  "evidence_file_lines": [
+    "zchat/cli/project.py:14",
+    "zchat/cli/project.py:55",
+    "zchat/cli/project.py:109",
+    "zchat/cli/project.py:181",
+    "zchat/cli/paths.py:14",
+    "zchat/cli/paths.py:103",
+    "zchat/cli/defaults.py:11",
+    "zchat/cli/config_cmd.py:19",
+    "zchat/cli/config_cmd.py:41",
+    "zchat/cli/migrate.py:12",
+    "zchat/cli/migrate.py:59"
   ]
 }

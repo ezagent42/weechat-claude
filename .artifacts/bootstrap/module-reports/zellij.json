@@ -1,43 +1,47 @@
 {
-  "module_name": "zellij",
-  "module_path": "zchat/cli/zellij.py",
-  "description": "Thin Zellij CLI helpers shared across CLI modules (zellij.py:1)",
-  "key_interfaces": [
-    {"name": "_run", "file": "zellij.py", "line": 8, "description": "Run a zellij action command with optional session flag"},
-    {"name": "_run_global", "file": "zellij.py", "line": 17, "description": "Run a top-level zellij command (not action)"},
-    {"name": "ensure_session", "file": "zellij.py", "line": 26, "description": "Create or verify session exists; handles EXITED sessions by deleting and recreating"},
-    {"name": "session_exists", "file": "zellij.py", "line": 60, "description": "Check if a Zellij session exists (strips ANSI escape codes)"},
-    {"name": "new_tab", "file": "zellij.py", "line": 75, "description": "Create a new tab with optional command and cwd"},
-    {"name": "close_tab", "file": "zellij.py", "line": 86, "description": "Close tab by finding tab_id from list-panes then closing"},
-    {"name": "list_tabs", "file": "zellij.py", "line": 102, "description": "List tabs via list-tabs --json"},
-    {"name": "list_panes", "file": "zellij.py", "line": 113, "description": "List all panes via list-panes --all --json"},
-    {"name": "send_command", "file": "zellij.py", "line": 124, "description": "Send text to pane using write-chars + send-keys Enter"},
-    {"name": "send_keys", "file": "zellij.py", "line": 130, "description": "Send special keys (Enter, Ctrl-C, etc.)"},
-    {"name": "dump_screen", "file": "zellij.py", "line": 135, "description": "Dump pane screen content as text"},
-    {"name": "tab_exists", "file": "zellij.py", "line": 153, "description": "Check if tab exists via list-panes matching tab_name"},
-    {"name": "get_pane_id", "file": "zellij.py", "line": 159, "description": "Get terminal pane ID for a tab in 'terminal_N' format"},
-    {"name": "go_to_tab", "file": "zellij.py", "line": 168, "description": "Switch to a tab by name"},
-    {"name": "switch_session", "file": "zellij.py", "line": 173, "description": "Switch to another Zellij session"},
-    {"name": "kill_session", "file": "zellij.py", "line": 178, "description": "Kill a Zellij session"},
-    {"name": "subscribe_pane", "file": "zellij.py", "line": 144, "description": "Start subscribe process for streaming pane reads, returns Popen"}
+  "module": "zellij",
+  "files": [
+    "zchat/cli/zellij.py",
+    "zchat/cli/layout.py"
   ],
-  "dependencies": [],
-  "test_results": {
-    "command": "uv run pytest tests/unit/test_zellij_helpers.py -v",
-    "passed": 22,
-    "failed": 0,
-    "skipped": 0
-  },
-  "user_flows": [
-    {
-      "name": "ensure session lifecycle",
-      "entry": "zellij.py:26",
-      "steps": [
-        "check session_exists (parse list-sessions, strip ANSI)",
-        "if exists + EXITED, delete-session then recreate",
-        "if exists + not EXITED, return session name",
-        "if not exists, create with optional layout + config via --new-session-with-layout or attach --create-background"
-      ]
-    }
+  "description": "Thin subprocess wrappers over `zellij action` + KDL layout generator; used by AgentManager / IrcManager / app.py to manage tabs, panes, sessions, layouts",
+  "key_classes_functions": [
+    {"name": "_run / _run_global", "file": "zchat/cli/zellij.py", "line": 9, "purpose": "Run 'zellij action ...' or top-level zellij subcommands; capture output"},
+    {"name": "ensure_session", "file": "zchat/cli/zellij.py", "line": 27, "purpose": "Create/attach session; handle EXITED state by delete-session+recreate; Popen for layout-based creation"},
+    {"name": "_session_exited", "file": "zchat/cli/zellij.py", "line": 54, "purpose": "Parse `zellij list-sessions` ANSI-stripped for EXITED marker"},
+    {"name": "session_exists", "file": "zchat/cli/zellij.py", "line": 66, "purpose": "Predicate over `zellij list-sessions`"},
+    {"name": "new_tab", "file": "zchat/cli/zellij.py", "line": 81, "purpose": "`zellij action new-tab --name X -- bash -c cmd`"},
+    {"name": "close_tab", "file": "zchat/cli/zellij.py", "line": 92, "purpose": "Look up tab_id via list_panes then close-tab --tab-id; fallback to go-to-tab + close"},
+    {"name": "list_tabs / list_panes", "file": "zchat/cli/zellij.py", "line": 108, "purpose": "Return JSON. list_panes handles multi-schema (list vs dict-with-panes) with safe fallback"},
+    {"name": "send_command", "file": "zchat/cli/zellij.py", "line": 141, "purpose": "write-chars + send-keys Enter (type + submit)"},
+    {"name": "send_keys", "file": "zchat/cli/zellij.py", "line": 147, "purpose": "Raw send-keys (Enter, Ctrl-C, etc.)"},
+    {"name": "dump_screen", "file": "zchat/cli/zellij.py", "line": 152, "purpose": "Capture pane screen text (used by auto-confirm watcher)"},
+    {"name": "subscribe_pane", "file": "zchat/cli/zellij.py", "line": 161, "purpose": "Popen to stream pane events (unverified whether currently called in main flow)", "unverified": true},
+    {"name": "tab_exists / get_pane_id", "file": "zchat/cli/zellij.py", "line": 170, "purpose": "Lookups over list_panes"},
+    {"name": "go_to_tab / switch_session / kill_session", "file": "zchat/cli/zellij.py", "line": 185, "purpose": "Navigation + teardown"},
+    {"name": "_escape_kdl", "file": "zchat/cli/layout.py", "line": 10, "purpose": "Escape backslash+quote for KDL string literal"},
+    {"name": "generate_layout", "file": "zchat/cli/layout.py", "line": 20, "purpose": "Build layout.kdl string: default_tab_template with tab-bar / zchat-status.wasm / status-bar; always-first 'chat' tab running WeeChat; 'ctl' tab; restore tabs for previously-running agents"},
+    {"name": "write_layout", "file": "zchat/cli/layout.py", "line": 89, "purpose": "Write generated KDL to <project>/layout.kdl"}
+  ],
+  "public_interface": [
+    "ensure_session, session_exists, new_tab, close_tab, list_tabs, list_panes, send_command, send_keys, dump_screen, subscribe_pane, tab_exists, get_pane_id, go_to_tab, switch_session, kill_session",
+    "generate_layout, write_layout"
+  ],
+  "depends_on": [
+    "subprocess",
+    "paths (for plugins_dir)",
+    "zellij (external binary)"
+  ],
+  "tests": [
+    "tests/unit/test_zellij_helpers.py",
+    "tests/unit/test_layout.py"
+  ],
+  "evidence_file_lines": [
+    "zchat/cli/zellij.py:27",
+    "zchat/cli/zellij.py:81",
+    "zchat/cli/zellij.py:119",
+    "zchat/cli/zellij.py:141",
+    "zchat/cli/layout.py:20",
+    "zchat/cli/layout.py:89"
   ]
 }

@@ -1,17 +1,63 @@
 {
-  "suite": "unit",
-  "command": "uv run pytest tests/unit/ -q --tb=short",
-  "exit_code": 1,
-  "passed": 236,
-  "failed": 1,
-  "skipped": 0,
-  "failures": [
+  "project_root": "/home/yaosh/projects/zchat",
+  "timestamp": "2026-04-21T12:05:49Z",
+  "test_runs": [
     {
-      "nodeid": "tests/unit/test_irc_check.py::test_unreachable_server_raises",
-      "reason": "pre-existing bug — check_irc_connectivity does not raise ConnectionError on unreachable server",
-      "type": "code_bug"
+      "command": "uv run pytest tests/unit -v",
+      "exit_code": 0,
+      "duration_seconds": 12.8,
+      "passed": 325,
+      "failed": 0,
+      "skipped": 0,
+      "stdout_tail": "est_wsl2_proxy_rewrite.py::TestProxyRewrite::test_non_localhost_proxy_unchanged PASSED [ 93%]\ntests/unit/test_zellij_helpers.py::test_session_exists_true PASSED       [ 93%]\ntests/unit/test_zellij_helpers.py::test_session_exists_false PASSED      [ 93%]\ntests/unit/test_zellij_helpers.py::test_session_exists_failure PASSED    [ 94%]\ntests/unit/test_zellij_helpers.py::test_ensure_session_creates_background PASSED [ 94%]\ntests/unit/test_zellij_helpers.py::test_ensure_session_with_layout PASSED [ 94%]\ntests/unit/test_zellij_helpers.py::test_ensure_session_already_exists PASSED [ 95%]\ntests/unit/test_zellij_helpers.py::test_new_tab_with_command PASSED      [ 95%]\ntests/unit/test_zellij_helpers.py::test_new_tab_minimal PASSED           [ 95%]\ntests/unit/test_zellij_helpers.py::test_send_command_uses_paste_then_enter PASSED [ 96%]\ntests/unit/test_zellij_helpers.py::test_list_panes_parses_json PASSED    [ 96%]\ntests/unit/test_zellij_helpers.py::test_list_panes_returns_empty_on_error PASSED [ 96%]\ntests/unit/test_zellij_helpers.py::test_list_panes_returns_empty_on_bad_json PASSED [ 96%]\ntests/unit/test_zellij_helpers.py::test_tab_exists_true PASSED           [ 97%]\ntests/unit/test_zellij_helpers.py::test_tab_exists_false PASSED          [ 97%]\ntests/unit/test_zellij_helpers.py::test_get_pane_id_extracts_terminal_id PASSED [ 97%]\ntests/unit/test_zellij_helpers.py::test_get_pane_id_returns_none_when_missing PASSED [ 98%]\ntests/unit/test_zellij_helpers.py::test_dump_screen_without_full PASSED  [ 98%]\ntests/unit/test_zellij_helpers.py::test_dump_screen_with_full_flag PASSED [ 98%]\ntests/unit/test_zellij_helpers.py::test_dump_screen_file_not_found PASSED [ 99%]\ntests/unit/test_zellij_helpers.py::test_close_tab_uses_tab_id PASSED     [ 99%]\ntests/unit/test_zellij_helpers.py::test_close_tab_fallback_navigate PASSED [ 99%]\ntests/unit/test_zellij_helpers.py::test_kill_session PASSED              [100%]\n\n============================= 325 passed in 9.93s ==============================\n",
+      "stderr_tail": ""
+    },
+    {
+      "command": "uv run pytest tests/e2e -v -m e2e",
+      "exit_code": -1,
+      "duration_seconds": 300,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "stdout_tail": "",
+      "stderr_tail": "TIMEOUT after 300 seconds"
+    },
+    {
+      "command": "uv run pytest tests -v",
+      "exit_code": -1,
+      "duration_seconds": 300,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "stdout_tail": "",
+      "stderr_tail": "TIMEOUT after 300 seconds"
+    },
+    {
+      "command": "cd zchat-channel-server && uv run pytest tests/ -v",
+      "exit_code": 1,
+      "duration_seconds": 17.5,
+      "passed": 191,
+      "failed": 4,
+      "skipped": 0,
+      "stdout_tail": "f/internal/well_known_types.py:91\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/pb/google/protobuf/internal/well_known_types.py:91: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).\n    _EPOCH_DATETIME_NAIVE = datetime.datetime.utcfromtimestamp(0)\n\n.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:26\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:26: DeprecationWarning: There is no current event loop\n    loop = asyncio.get_event_loop()\n\n.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:67\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:67: DeprecationWarning: websockets.InvalidStatusCode is deprecated\n    def _parse_ws_conn_exception(e: websockets.InvalidStatusCode):\n\n.venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED tests/e2e/test_csat_lifecycle.py::test_csat_full_lifecycle - assert No...\nFAILED tests/e2e/test_csat_lifecycle.py::test_csat_multiple_channels - assert...\nFAILED tests/e2e/test_help_request_lifecycle.py::test_operator_responds_in_time\nFAILED tests/e2e/test_help_request_lifecycle.py::test_operator_no_response_emits_timeout\n================== 4 failed, 191 passed, 4 warnings in 12.94s ==================\n",
+      "stderr_tail": ""
+    },
+    {
+      "command": "cd zchat-protocol && uv run pytest tests/ -v",
+      "exit_code": 0,
+      "duration_seconds": 1.0,
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0,
+      "stdout_tail": "\ntests/test_naming.py::test_separator_is_dash PASSED                      [ 46%]\ntests/test_naming.py::test_scoped_name_adds_prefix PASSED                [ 50%]\ntests/test_naming.py::test_scoped_name_always_prepends_even_if_already_prefixed PASSED [ 53%]\ntests/test_ws_messages.py::test_build_message_minimum PASSED             [ 56%]\ntests/test_ws_messages.py::test_build_message_with_message_id PASSED     [ 59%]\ntests/test_ws_messages.py::test_message_has_no_visibility_field PASSED   [ 62%]\ntests/test_ws_messages.py::test_build_command PASSED                     [ 65%]\ntests/test_ws_messages.py::test_build_command_no_args PASSED             [ 68%]\ntests/test_ws_messages.py::test_build_event PASSED                       [ 71%]\ntests/test_ws_messages.py::test_build_event_no_data PASSED               [ 75%]\ntests/test_ws_messages.py::test_build_register PASSED                    [ 78%]\ntests/test_ws_messages.py::test_build_register_no_capabilities PASSED    [ 81%]\ntests/test_ws_messages.py::test_parse_known_types PASSED                 [ 84%]\ntests/test_ws_messages.py::test_parse_unknown_type_raises PASSED         [ 87%]\ntests/test_ws_messages.py::test_parse_dict_or_str PASSED                 [ 90%]\ntests/test_ws_messages.py::test_parse_invalid_type_raises_typeerror PASSED [ 93%]\ntests/test_ws_messages.py::test_parse_no_type_field_raises PASSED        [ 96%]\ntests/test_ws_messages.py::test_wstype_constants PASSED                  [100%]\n\n=============================== warnings summary ===============================\n.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:1428\n  /home/yaosh/projects/zchat/zchat-protocol/.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f\"Unknown config option: {key}\\n\")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n======================== 32 passed, 1 warning in 0.14s =========================\n",
+      "stderr_tail": ""
     }
   ],
-  "captured_at": "2026-04-14",
-  "notes": "Updated after adding 38 new unit tests for issues #40/#41/#42/ctrl-c (was 198 on 2026-04-10)"
+  "summary": {
+    "total_suites": 5,
+    "total_passed": 548,
+    "total_failed": 4,
+    "total_skipped": 0,
+    "all_passed": false
+  }
 }

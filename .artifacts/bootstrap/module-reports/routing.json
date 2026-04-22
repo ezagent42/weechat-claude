@@ -1,0 +1,43 @@
+{
+  "module": "routing",
+  "files": [
+    "zchat/cli/routing.py"
+  ],
+  "description": "Read/write routing.toml — V6 dynamic runtime config with [bots.*] and [channels.*]; written by CLI (bot/channel/agent), consumed by channel-server and bridge",
+  "key_classes_functions": [
+    {"name": "routing_path", "file": "zchat/cli/routing.py", "line": 35, "purpose": "Return <project>/routing.toml Path"},
+    {"name": "load_routing", "file": "zchat/cli/routing.py", "line": 40, "purpose": "Load routing.toml (or empty dict with bots/channels keys if missing)"},
+    {"name": "save_routing", "file": "zchat/cli/routing.py", "line": 52, "purpose": "Atomic write via .tmp + replace"},
+    {"name": "init_routing", "file": "zchat/cli/routing.py", "line": 62, "purpose": "Create empty routing.toml on project create"},
+    {"name": "add_bot", "file": "zchat/cli/routing.py", "line": 73, "purpose": "Register [bots.<name>] with app_id + optional credential_file / default_agent_template / lazy_create_enabled / supervises; raise on duplicate"},
+    {"name": "list_bots", "file": "zchat/cli/routing.py", "line": 102, "purpose": "Flatten bots dict into list with 'name' field"},
+    {"name": "remove_bot", "file": "zchat/cli/routing.py", "line": 108, "purpose": "Silent remove"},
+    {"name": "bot_exists", "file": "zchat/cli/routing.py", "line": 117, "purpose": "Predicate"},
+    {"name": "add_channel", "file": "zchat/cli/routing.py", "line": 126, "purpose": "Register [channels.<id>] with optional bot/external_chat_id/entry_agent; validates bot exists"},
+    {"name": "list_channels", "file": "zchat/cli/routing.py", "line": 154, "purpose": "Flatten channels into list with channel_id field"},
+    {"name": "channel_exists", "file": "zchat/cli/routing.py", "line": 160, "purpose": "Predicate"},
+    {"name": "join_agent", "file": "zchat/cli/routing.py", "line": 165, "purpose": "Set entry_agent if empty (first-agent-wins) or as_entry=True; never stores channel→agents roster"},
+    {"name": "set_entry_agent", "file": "zchat/cli/routing.py", "line": 191, "purpose": "Explicit override of entry_agent"},
+    {"name": "remove_channel", "file": "zchat/cli/routing.py", "line": 205, "purpose": "Silent remove"}
+  ],
+  "public_interface": [
+    "routing_path, load_routing, save_routing, init_routing",
+    "add_bot, list_bots, remove_bot, bot_exists",
+    "add_channel, list_channels, channel_exists, remove_channel",
+    "join_agent, set_entry_agent"
+  ],
+  "depends_on": [
+    "tomllib, tomli_w"
+  ],
+  "tests": [
+    "tests/unit/test_routing_cli.py",
+    "tests/unit/test_channel_cmd.py"
+  ],
+  "evidence_file_lines": [
+    "zchat/cli/routing.py:35",
+    "zchat/cli/routing.py:73",
+    "zchat/cli/routing.py:126",
+    "zchat/cli/routing.py:165",
+    "zchat/cli/routing.py:191"
+  ]
+}

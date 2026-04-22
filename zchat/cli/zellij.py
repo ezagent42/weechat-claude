@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 
 
 def _run(args: list[str], session: str | None = None, **kwargs) -> subprocess.CompletedProcess:
@@ -34,14 +35,19 @@ def ensure_session(name: str, layout: str | None = None, config: str | None = No
             _run_global(["delete-session", name])
         else:
             return name
-    cmd: list[str] = []
+    args: list[str] = []
     if config:
-        cmd += ["--config", config]
+        args += ["--config", config]
     if layout:
-        cmd += ["--new-session-with-layout", layout, "--session", name]
+        args += ["--new-session-with-layout", layout, "--session", name]
+        # Build full command — Popen doesn't block like subprocess.run
+        full_cmd = ["zellij"] + args
+        subprocess.Popen(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Wait briefly for session to initialize
+        time.sleep(2)
     else:
-        cmd += ["attach", "--create-background", name]
-    _run_global(cmd)
+        args += ["attach", "--create-background", name]
+        _run_global(args)
     return name
 
 
@@ -111,14 +117,25 @@ def list_tabs(session: str) -> list[dict]:
 
 
 def list_panes(session: str | None = None) -> list[dict]:
-    """list-panes --all --json."""
+    """list-panes --all --json.
+
+    Zellij 版本间 schema 不统一：可能是 list[dict] 也可能是 {"panes": [...]}。
+    非预期 schema 一律返回 [] 以保证下游迭代安全。
+    """
     r = _run(["list-panes", "--all", "--json"], session=session)
     if r.returncode != 0:
         return []
     try:
-        return json.loads(r.stdout)
+        data = json.loads(r.stdout)
     except json.JSONDecodeError:
         return []
+    if isinstance(data, list):
+        return [p for p in data if isinstance(p, dict)]
+    if isinstance(data, dict):
+        inner = data.get("panes") or data.get("items") or []
+        if isinstance(inner, list):
+            return [p for p in inner if isinstance(p, dict)]
+    return []
 
 
 def send_command(session: str, pane_id: str, text: str) -> None:
@@ -139,15 +156,6 @@ def dump_screen(session: str, pane_id: str, full: bool = False) -> str:
         args.append("--full")
     r = _run(args, session=session)
     return r.stdout if r.returncode == 0 else ""
-
-
-def subscribe_pane(session: str, pane_id: str) -> subprocess.Popen:
-    """Start subscribe process, return Popen for streaming reads."""
-    return subprocess.Popen(
-        ["zellij", "--session", session, "subscribe",
-         "--pane-id", pane_id, "--format", "json"],
-        stdout=subprocess.PIPE, text=True,
-    )
 
 
 def tab_exists(session: str, tab_name: str) -> bool:
