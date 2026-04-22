@@ -5,255 +5,236 @@ description: "Project knowledge Q&A skill for zchat-channel-server (MCP bridge I
 
 # zchat-channel-server 项目知识库
 
-> 由 Skill 0 (project-builder) 于 2026-04-14 自动生成。
+> 由 Skill 0 (project-builder) 于 2026-04-22 规范化生成（V6 finalize 后）。
 > 这是一个**行为引擎**——指导如何查询和回答，数据存储在 `.artifacts/` 中。
 
 ## 项目概览
 
-- **项目根目录**：zchat-channel-server/（zchat 的 git submodule）
-- **语言/框架**：Python 3.13 + MCP (mcp[cli]) + irc library + asyncio
-- **测试框架**：pytest 9.0.2 + pytest-asyncio (asyncio_mode=auto)
-- **模块数**：2 (cs_server + cs_message)
-- **Artifact 空间**：.artifacts/（zchat 根目录，所有 cs-* 前缀 artifact）
-- **Skill 6 可用**：是（plugin cache path）
-- **Artifact ID 前缀**：`cs-`（所有 channel-server artifact 必须以此开头）
+- **项目根目录**：`zchat-channel-server/`（zchat 主库的 git submodule；独立 repo: `ezagent42/claude-zchat-channel`）
+- **语言/框架**：Python 3.12+ + asyncio + MCP (mcp[cli]) + irc ≥20 + websockets + lark-oapi
+- **测试框架**：pytest + pytest-asyncio（`asyncio_mode=auto`）+ pytest-order + pytest-timeout
+- **模块数**：6 (agent_mcp / channel_server / feishu_bridge / meta / plugins / tests)
+- **Artifact 空间**：主库 `.artifacts/`（所有 CS 相关 artifact 必须以 `cs-` 前缀）
+- **Skill 6 可用**：是（artifact-registry 脚本在主库 `~/.claude/skills/artifact-registry/`）
+- **当前 dev 分支**：`refactor/v4 = dev`（V6 finalize HEAD = 726540d）
 
 ## 问答流程
 
-被问到 channel-server 相关问题时，按以下步骤回答。目标是**每个回答都有实证**，不编造。
+被问到 channel-server 相关问题时按步骤回答，每个回答都要有实证，不编造。
 
 ### Step 0: 检测更新（自动刷新）
 
-每次回答前，检查是否有新的代码变更需要刷新索引：
+1. 查主库 `.artifacts/` 中 ID 以 `cs-` 开头的 `code-diff` 和 `e2e-report`，找比 2026-04-22 更新的条目
+2. 有新 cs-code-diff → 重读受影响源文件 + 重跑对应 test-runner
+3. 有新 cs-e2e-report → 更新覆盖认知
+4. 无新增 → 跳过
 
-1. 查询 `.artifacts/` 中 ID 以 `cs-` 开头的 `code-diff` 和 `e2e-report`，找出比 2026-04-14 更新的条目
-2. 如果有新的 cs-* code-diff：
-   - 读取 diff 内容，识别受影响的模块（cs_server 或 cs_message）
-   - 对受影响的模块：**重新读取源文件**（更新 file:line 引用）
-   - 对受影响的模块：**重新运行 test-runner**（更新基线结果）
-   - 用新数据回答，而不是依赖过时的索引
-3. 如果有新的 cs-* e2e-report：
-   - 读取 report 了解哪些测试新增/修复
-   - 更新覆盖认知
+路径失效 → 运行 `scripts/refresh-index.sh`。
 
-如果没有新 artifact，跳过此步骤直接进入 Step 1。
+### Step 1: 解析问题 → 定位模块
 
-**异常处理**：如果索引中的文件路径不存在（文件已移动/重命名），重新扫描 `zchat-channel-server/` 下的 `.py` 文件查找。
+查下方"模块索引"或"用户流程→模块映射"。
 
-### Step 1: 解析问题 -> 定位模块
+### Step 2: 读代码
 
-查阅下方"模块索引"，找到问题涉及的模块：
-- **IRC 连接、MCP server、事件处理、sys 消息、slash 命令** → cs_server
-- **@mention 检测、消息分片、IRC 字符限制** → cs_message
-
-如果不确定涉及哪个模块，查"用户流程->模块映射"表。
-
-### Step 2: 读取代码
-
-根据索引中的文件路径，用 Read 工具读取**当前**代码。引用具体的 file:line。
-
-关键文件路径：
-- `zchat-channel-server/server.py` — 主 MCP server（321 行）
-- `zchat-channel-server/message.py` — 消息工具（63 行）
+Read 当前源文件（不是 bootstrap 快照），引用 file:line。
 
 ### Step 3: 跑测试验证
 
-运行对应的 test-runner 脚本，捕获**当前**输出作为证据：
-
 ```bash
-bash .claude/skills/project-discussion-channel-server/scripts/test-cs_server.sh
-bash .claude/skills/project-discussion-channel-server/scripts/test-cs_message.sh
-bash .claude/skills/project-discussion-channel-server/scripts/test-all.sh
+bash scripts/test-<module>.sh
 ```
 
-### Step 4: 查询已有知识
+### Step 4: 查已有知识
 
-查询 `.artifacts/` 中 `cs-*` 前缀的相关 artifact：
-- 被驳回的 eval-doc（status=archived）——已知边界/FAQ
-- e2e-report——最近的测试结果和修复历史
-- code-diff——最近的代码变更
-- coverage-matrix——测试覆盖现状
+查 `.artifacts/` 中 `cs-*` 前缀的 artifact：
+- archived eval-doc（已知边界/FAQ）
+- e2e-report（最近测试历史）
+- code-diff（最近代码变更）
 
+**有 Skill 6**：
 ```bash
-SKILL6=/home/yaosh/.claude/plugins/cache/ezagent42/dev-loop-skills/0.1.0/skills/skill-6-artifact-registry/scripts
-bash "$SKILL6/query.sh" --project-root /home/yaosh/projects/zchat --type eval-doc --status archived
+bash ~/.claude/skills/artifact-registry/scripts/query.sh \
+  --project-root /home/yaosh/projects/zchat \
+  --type eval-doc --status archived
 ```
 
 ### Step 5: 组织回答
 
-回答格式：
-1. 直接回答问题
-2. 附上证据：file:line 引用 + 测试输出
-3. 如果在 `.artifacts/` 中找到相关的被驳回 eval-doc，引用它作为已知边界
+1. 直接回答
+2. 附证据：file:line + 测试输出
+3. 相关 archived eval-doc 作已知边界
 
-如果无法确认某个断言，标注为 `[unverified]` 而不是猜测。
+无法确认的断言标 `[unverified]`，不猜。
 
-### Step 6: 分流判断（自然延伸，非独立模式）
+### Step 6: 分流判断（仅当涉及 eval-doc/issue）
 
-如果本次讨论涉及 `.artifacts/` 中的 cs-* eval-doc 或 issue（比如用户带着一个问题来讨论"这是不是 bug"），在 Step 5 回答后继续：
+基于代码证据判 bug / 非 bug / 信息不足 → 人确认 →
 
-1. **明确提出分析结论**：基于代码证据和测试结果，给出判断
-2. **询问人是否确认**结论
-3. **人确认后执行对应操作**：
+**是 bug**：保留 issue open；进 Phase 3 生成 test-plan。
 
-**结论是 bug**：
-- Issue 保持 open
-- 告知用户：eval-doc 将进入 Phase 3（Skill 2 生成 test-plan）
-
-**结论不是 bug**：
+**不是 bug**：
 ```bash
-SKILL6=/home/yaosh/.claude/plugins/cache/ezagent42/dev-loop-skills/0.1.0/skills/skill-6-artifact-registry/scripts
-bash "$SKILL6/update-status.sh" --project-root /home/yaosh/projects/zchat --id <cs-eval-doc-id> --status archived
+bash scripts/close-issue.sh --issue-url <url> --reason "<说明>"
+bash ~/.claude/skills/artifact-registry/scripts/update-status.sh \
+  --project-root /home/yaosh/projects/zchat --id cs-eval-doc-xyz --status archived
 ```
-同时在 eval-doc 的 frontmatter 中追加：
-```yaml
-rejection_reason: "<具体原因，引用代码证据>"
-rejected_at: "2026-04-14"
-```
-
-如果讨论**不涉及**任何 eval-doc/issue，Step 5 回答完即结束。
+eval-doc frontmatter 加 `rejection_reason` + `rejected_at`。Git commit 追踪。
 
 ---
 
 ## 自我演进
 
 ### 动态层：自动刷新（Step 0）
-
-- **新 cs-* code-diff** -> 重新读取受影响模块的源文件 + 重新跑 test-runner
-- **新 cs-* e2e-report** -> 更新覆盖认知
-- **文件路径失效** -> 扫描 `zchat-channel-server/` 重建索引
+- 新 cs-code-diff → 重读源 + 重跑 test-runner
+- 新 cs-e2e-report → 更新覆盖认知
+- 路径失效 → `scripts/refresh-index.sh`
 
 ### 知识层：artifact 积累
+- 驳回结论：eval-doc archived + rejection_reason
+- Bug 修复历史：eval-doc → test-plan → e2e-report 链路
+- 覆盖变化：新 e2e-report 更新 coverage-matrix
 
-- **驳回结论** -> eval-doc archived + rejection_reason
-- **Bug 修复历史** -> eval-doc -> test-plan -> e2e-report 链条
-- **覆盖变化** -> 新 e2e-report 更新 coverage-matrix
-
-### 何时需要重新 bootstrap
-
-- 大规模重构（server.py 拆分为多个模块）
-- 新增全新的 Python 模块
+### 何时需要重跑 Skill 0
+- CS 大规模重构（跨模块重命名/合并）
+- 新增独立模块（不在现有 6 个路径下）
 - 测试框架更换
 
 ---
 
 ## 模块索引
 
-| 模块 | 路径 | 职责 | 测试命令 | 基线结果 | 用户流程 |
-|------|------|------|---------|---------|---------|
-| cs_server | `zchat-channel-server/server.py` + `commands/` + `instructions.md` | MCP server 桥接 IRC <-> Claude Code：IRC 连接、事件处理、MCP tool 注册、sys 消息分发、指令模板 | `cd zchat-channel-server && uv run pytest tests/unit/test_legacy.py -v` | 5/5 passed | MCP启动, @mention通知, 私信通知, sys消息, reply tool, join tool, slash commands |
-| cs_message | `zchat-channel-server/message.py` | IRC 消息工具：@mention 检测/清理、消息分 chunk（UTF-8 字节安全，CJK 兼容） | `cd zchat-channel-server && uv run pytest tests/unit/test_message.py -v` | 7/7 passed | mention检测, 消息分片 |
+| 模块 | 路径 | 职责 | 测试命令 | 基线 | 用户流程 |
+|------|------|------|---------|------|---------|
+| agent_mcp | `agent_mcp.py`（根目录单文件）| MCP stdio server — 每个 Claude Code agent 一实例，暴露 4 tools (reply/join_channel/list_peers/run_zchat_cli) + 订阅 IRC pubmsg/privmsg/sys → 注入为 JSONRPCNotification | `bash scripts/test-agent_mcp.sh` | 15 passed | Claude reply 回 IRC；agent 发现同 channel peers |
+| channel_server | `src/channel_server/` (8 files) | V4 核心路由：router + irc_connection + ws_server + plugin framework + routing.toml 加载/热加载。纯基础设施，不写业务语义 | `bash scripts/test-channel_server.sh` | 47 passed | bridge→CS→IRC 入站；IRC→CS→bridge 出站；命令分派；NAMES 熔断 |
+| feishu_bridge | `src/feishu_bridge/` (13 files) | V6 飞书适配：CardAwareClient WSS 入站 + BridgeAPIClient WS 连 CS + ChannelMapper + supervises 镜像 + lazy_create + CSAT 卡片 | `bash scripts/test-feishu_bridge.sh` | 67 passed | 飞书消息入站；squad 卡片+thread；lazy_create channel；CSAT 回流 |
+| meta | `pyproject.toml` + `.claude-plugin/` + `commands/` + CI | 3 个 entry script + wheel 打包 + Claude Code plugin 元数据 (4 个 slash command) + GH Actions publish | — (无测试) | — | `zchat-channel-server` / `zchat-feishu-bridge` / `zchat-agent-mcp` 安装入口 |
+| plugins | `src/plugins/` (13 files, 6 plugin 目录) | 6 个业务 plugin 挂到 PluginRegistry：mode / sla / resolve / audit / activation / csat。通过 emit_event 解耦，不互相 import | `bash scripts/test-plugins.sh` | 50 passed | /hijack-/release / /resolve / CSAT 评分 / 求助超时 timer / 客户回访识别 |
+| tests | `tests/unit/` (22 files) + `tests/e2e/` (4 files) | 两层测试：unit (~180 case 无外部依赖) + e2e (@pytest.mark.e2e) | `bash scripts/test-all.sh` / `scripts/test-e2e.sh` | **191 passed** (179 unit + 12 e2e) | 所有代码验证 |
+
+## 6 个官方 plugin 速览（`src/plugins/`）
+
+| Plugin | 命令 | 订阅事件 | emit event | 持久化 |
+|---|---|---|---|---|
+| mode | `/hijack` `/release` `/copilot` | — | `mode_changed` | 内存 dict |
+| sla | — | `mode_changed` (takeover timer) + `on_ws_message` (side 检测 @operator 启动 help timer) | `sla_breach` / `help_requested` / `help_timeout` | 内存 asyncio.Task dict |
+| resolve | `/resolve` | — | `channel_resolved` | 无状态 |
+| audit | — | `on_ws_message` + `mode_changed` / `channel_resolved` | — (只收集) | `audit.json` 落盘 |
+| activation | — | `on_ws_message` (更新 last_activity) + `channel_resolved` (标 dormant) | `customer_returned` | `activation-state.json` 落盘 |
+| csat | — | `channel_resolved` / `csat_score` | `csat_request` / `csat_recorded` | 转调 `audit.record_csat` |
+
+注：plugin 之间**不互相 import**；csat 持有 audit 引用靠 `__main__.py` DI 注入（`plugins/csat/plugin.py:28`）。详见主库 `docs/guide/007-plugin-guide.md`。
 
 ## 详细模块描述
 
-详见 `references/module-details.md`（从 `.artifacts/bootstrap/module-reports/cs_*.json` 汇总生成）。
+详见 `references/module-details.md`（从 6 个 `module-reports/*.json` 聚合）。
 
-### cs_server 摘要
+## 用户流程 → 模块映射
 
-MCP server（server.py:290 `main()`）通过 `setup_irc()` (server.py:76) 在守护线程中运行 IRC reactor，`asyncio.Queue` 桥接到 MCP async 循环。`poll_irc_queue()` (server.py:63) 消费消息并通过 `inject_message()` (server.py:43) 以 `notifications/claude/channel` 方法注入 Claude Code。注册两个 MCP tool：`reply` (server.py:270) 和 `join_channel` (server.py:280)。
-
-### cs_message 摘要
-
-纯工具模块，无外部依赖。`detect_mention()` (message.py:12) 检测 @agent 提及，`clean_mention()` (message.py:17) 清理，`chunk_message()` (message.py:27) 按 390 字节上限分片（预留 IRC header 空间），支持 CJK 多字节字符。
-
-## 用户流程 -> 模块映射
-
-| 用户流程 | 操作步骤 | 涉及模块 | 入口 file:line | E2E 覆盖 |
-|---------|---------|---------|---------------|---------|
-| MCP server 启动并连接 IRC | `entry_point()` -> `main()` -> `setup_irc()` | cs_server | server.py:315 | ❌ |
-| Channel @mention -> Claude 通知 | IRC pubmsg -> `on_pubmsg()` -> `detect_mention()` -> queue -> `inject_message()` | cs_server, cs_message | server.py:112 | ❌ |
-| Private message -> Claude 通知 | IRC privmsg -> `on_privmsg()` -> queue -> `inject_message()` | cs_server | server.py:133 | ❌ |
-| 系统消息处理 (stop/join/status) | IRC privmsg -> `decode_sys_from_irc()` -> `_handle_sys_message()` | cs_server | server.py:186 | ❌ |
-| MCP tool: reply (发送 IRC 消息) | Claude calls reply -> `_handle_reply()` -> `chunk_message()` -> `privmsg()` | cs_server, cs_message | server.py:270 | ❌ |
-| MCP tool: join_channel | Claude calls join_channel -> `_handle_join_channel()` -> `connection.join()` | cs_server | server.py:280 | ❌ |
-| /zchat:broadcast 广播消息 | User invokes slash command -> calls reply for each channel | cs_server | commands/broadcast.md:1 | ❌ |
-| /zchat:dm 私聊消息 | User invokes slash command -> calls reply with user nick | cs_server | commands/dm.md:1 | ❌ |
+| 用户流程 | 涉及模块 | 入口 file:line | E2E 覆盖 |
+|---------|---------|---------------|---------|
+| 飞书客户消息入站 → agent 回复 | feishu_bridge + channel_server + agent_mcp | `feishu_bridge/bridge.py::_forward` → CS `router.py::_handle_message` → `agent_mcp.py::on_pubmsg` | ⚠️ pre_release 手工 |
+| agent reply → 回流飞书 | agent_mcp + channel_server + feishu_bridge | `agent_mcp.py::_handle_reply` → CS `router.py::forward_inbound_irc` → bridge `_on_bridge_event` | ⚠️ |
+| /hijack 接管 | plugins.mode | `plugins/mode/plugin.py::on_command` | ❌ |
+| /release 释放 | plugins.mode | 同上 | ❌ |
+| takeover 180s SLA 超时 | plugins.sla | `plugins/sla/plugin.py::_timer_task` | ✅ `test_help_request_lifecycle.py` |
+| @operator 求助 → help_requested | plugins.sla | `plugins/sla/plugin.py::on_ws_message` | ✅ 同上 |
+| help 180s 超时 → help_timeout | plugins.sla | `plugins/sla/plugin.py::_help_timer_task` | ✅ 同上 |
+| /resolve 结案 | plugins.resolve + csat | `plugins/resolve/plugin.py::on_command` → `plugins/csat/plugin.py::on_ws_event` | ✅ `test_csat_lifecycle.py` |
+| CSAT 客户点星 | plugins.csat + feishu_bridge | `plugins/csat/plugin.py::on_ws_event` (csat_score) + bridge card recall/resend | ✅ |
+| Supervisor 卡片 + thread 镜像 | feishu_bridge (supervises) | `feishu_bridge/bridge.py::_handle_supervised_message` | ⚠️ pre_release |
+| lazy_create 拉 bot 入新群 | feishu_bridge + CLI subprocess | `feishu_bridge/bridge.py::_on_bot_added` → `zchat channel create` | ✅ `test_bridge_lazy_create.py` |
+| agent 发现同 channel peers | agent_mcp (list_peers tool) | `agent_mcp.py::_handle_list_peers` | ❌ |
 
 ## 测试 Pipeline 信息
 
-供 Skill 3 (test-code-writer) 查询，了解如何在此项目中追加 E2E 测试用例。
+供 Skill 3 (test-code-writer) 参考：
 
-- **测试框架**：pytest 9.0.2 + pytest-asyncio (asyncio_mode=auto)
-- **E2E 测试目录**：zchat-channel-server/tests/e2e/（当前为空，仅 __init__.py）
-- **E2E conftest 位置**：(不存在，需要创建)
-- **已有 fixture 列表**：(无)
-- **fixture 模式**：channel-server E2E 测试需要 IRC server (ergo) + MCP stdio 模拟。建议参考 zchat 主库的 `tests/e2e/conftest.py` 模式：session-scoped fixture
-- **测试命名规范**：`test_{action}_{target}`（如 test_sys_message_irc_roundtrip, test_detect_mention）
-- **证据采集工具**：需要 IRC 客户端连接验证消息到达（参考 zchat 主库的 IrcProbe）
-- **证据采集方式**：IRC PRIVMSG 验证消息到达 + MCP stdio 输出捕获
-- **E2E 标记/marker**：`@pytest.mark.e2e`（已在 pytest.ini 注册）
-- **运行 E2E 的命令**：`cd zchat-channel-server && uv run pytest tests/e2e/ -v -m e2e`
-- **关键外部依赖**：irc>=20.0, mcp[cli]>=1.2.0, zchat-protocol>=0.1.0
+- **测试框架**：pytest + pytest-asyncio (`asyncio_mode=auto`，不用 `@pytest.mark.asyncio`)
+- **E2E 目录**：`tests/e2e/` (4 files, ~12 test)
+- **E2E conftest**：`tests/conftest.py`（强制 `sys.path.insert(0, "src")` 以免根目录 plugins 污染）
+- **Markers**：`e2e` / `prerelease`（pytest.ini 声明）
+- **Fixture 模式**：
+  - unit 普遍用 `AsyncMock` / `MagicMock` stub 飞书 / IRC / WS
+  - e2e 起真 CS 实例（`__main__._main()`）+ fake bridge WS client
+- **测试命名**：`tests/unit/test_<module>_plugin.py` / `test_<module>.py`；e2e 用 `test_<flow>_lifecycle.py`
+- **证据采集**：pytest -v stdout + e2e 的 fixture 日志
+- **运行 e2e**：`cd zchat-channel-server && uv run pytest tests/e2e/ -v -m e2e`（无 `-m e2e` 则跳过）
 
 ## Test Runners
 
-| 脚本 | 模块 | 命令 | 基线结果 |
-|------|------|------|---------|
-| scripts/test-cs_server.sh | cs_server | `cd zchat-channel-server && uv run pytest tests/unit/test_legacy.py -v` | 5/5 passed |
-| scripts/test-cs_message.sh | cs_message | `cd zchat-channel-server && uv run pytest tests/unit/test_message.py -v` | 7/7 passed |
-| scripts/test-all.sh | (全局) | `cd zchat-channel-server && uv run pytest tests/unit/ -v` | 12/12 passed |
+| 脚本 | 模块 | 命令 | 基线 |
+|------|------|------|------|
+| `scripts/test-agent_mcp.sh` | agent_mcp | `cd zchat-channel-server && uv run pytest tests/unit/test_agent_mcp.py -v` | 15 passed |
+| `scripts/test-channel_server.sh` | channel_server | `... test_router test_routing test_routing_watcher test_plugin_registry -v` | 47 passed |
+| `scripts/test-feishu_bridge.sh` | feishu_bridge | `... test_outbound_router test_group_manager test_routing_reader test_sender test_parsers test_client_extended test_card_action test_visibility_router -v` | 67 passed |
+| `scripts/test-plugins.sh` | plugins | `... test_mode_plugin test_sla_plugin test_resolve_plugin test_audit_plugin test_activation_plugin test_csat_plugin -v` | 50 passed |
+| `scripts/test-all.sh` | (全量) | `cd zchat-channel-server && uv run pytest tests/ -v` | **191 passed** (179 unit + 12 e2e) |
+| `scripts/test-e2e.sh` | (E2E only) | `cd zchat-channel-server && uv run pytest tests/e2e/ -v -m e2e` | 12 passed |
 
 ## Artifact 交互
 
-所有 channel-server artifact ID 以 `cs-` 开头。
+### 有 Skill 6 时（推荐）
 
-查询 artifact：
 ```bash
-SKILL6=/home/yaosh/.claude/plugins/cache/ezagent42/dev-loop-skills/0.1.0/skills/skill-6-artifact-registry/scripts
-bash "$SKILL6/query.sh" --project-root /home/yaosh/projects/zchat --type eval-doc --status archived
+# 查已驳回的 cs-eval-doc
+bash ~/.claude/skills/artifact-registry/scripts/query.sh \
+  --project-root /home/yaosh/projects/zchat --type eval-doc --id-prefix cs- --status archived
+
+# 注册新 cs-artifact（ID 必须 cs- 前缀）
+bash ~/.claude/skills/artifact-registry/scripts/register.sh \
+  --project-root /home/yaosh/projects/zchat \
+  --type eval-doc --name "CS 新讨论" --producer skill-5 \
+  --path .artifacts/eval-docs/eval-cs-xxx.md --status draft
+
+# 更新状态
+bash ~/.claude/skills/artifact-registry/scripts/update-status.sh \
+  --project-root /home/yaosh/projects/zchat --id cs-eval-doc-xxx --status archived
 ```
 
-注册新 artifact：
-```bash
-bash "$SKILL6/register.sh" --project-root /home/yaosh/projects/zchat \
-  --type eval-doc --name "cs-eval-{phase}" --producer skill-1 \
-  --path .artifacts/eval-docs/cs-eval-{phase}.md --status open
-```
+### 无 Skill 6 时（fallback）
 
-更新状态：
-```bash
-bash "$SKILL6/update-status.sh" --project-root /home/yaosh/projects/zchat \
-  --id cs-eval-{phase} --status archived
-```
+- 查询：`ls .artifacts/eval-docs/ | grep ^eval-cs-`
+- 创建：写入对应子目录带 YAML frontmatter（`type / producer / status / created_at`）
+- 更新：编辑 frontmatter
 
-关联 artifact：
-```bash
-bash "$SKILL6/link.sh" --project-root /home/yaosh/projects/zchat \
-  --from cs-eval-{phase} --to cs-plan-{phase}
-```
-
-### Artifact 命名约定
-
-| Phase | eval-doc | test-plan | code-diff | e2e-report |
-|-------|----------|-----------|-----------|------------|
-| Phase 1 | cs-eval-protocol | cs-plan-protocol | cs-diff-protocol | cs-report-protocol |
-| Phase 2 | cs-eval-engine | cs-plan-engine | cs-diff-engine | cs-report-engine |
-| Phase 3 | cs-eval-bridge | cs-plan-bridge | cs-diff-bridge | cs-report-bridge |
-| Phase 4 | cs-eval-server | cs-plan-server | cs-diff-server | cs-report-server |
-| Phase 5 | cs-eval-cli | cs-plan-cli | cs-diff-cli | cs-report-cli |
+**规矩**：所有 CS 相关 artifact ID 必须以 `cs-` 前缀，便于和主库 / protocol 的条目分隔。
 
 ## 自验证记录
 
-Skill 1 生成后，所有 test-runner 已运行并与基线比对通过。
+2026-04-22 Step 8 自验证 — 每个 test-runner 实际跑过对照基线。
 
 | test-runner | 基线结果 | 验证结果 | 匹配 |
 |-------------|---------|---------|------|
-| test-cs_server.sh | 5/5 passed | 5/5 passed (exit 0) | ✅ |
-| test-cs_message.sh | 7/7 passed | 7/7 passed (exit 0) | ✅ |
-| test-all.sh | 12/12 passed | 12/12 passed (exit 0) | ✅ |
-
-验证时间：2026-04-14，全部 3 个 test-runner 已运行并通过。
+| test-agent_mcp.sh | 15 passed | 15 passed | ✅ |
+| test-channel_server.sh | 47 passed | 47 passed | ✅ |
+| test-feishu_bridge.sh | 67 passed | 67 passed | ✅ |
+| test-plugins.sh | 50 passed | 50 passed | ✅ |
+| test-all.sh (unit + e2e) | 191 passed | 191 passed | ✅ |
+| test-e2e.sh (仅 e2e) | 12 passed | 12 passed | ✅ |
 
 ## 环境依赖
 
 | 依赖 | 状态 | 说明 |
 |------|------|------|
-| ergo IRC server | 必需 (E2E) | E2E 测试需要 IRC 连接，unit test 不需要 |
-| uv >=0.7 | 必需 | 依赖管理 + 测试运行 |
-| Python >=3.11 | 必需 | pyproject.toml 要求 |
-| mcp[cli] >=1.2.0 | 必需 | MCP server 框架 |
-| irc >=20.0 | 必需 | IRC 客户端库 |
-| zchat-protocol >=0.1.0 | 必需 | 协议规范（editable path ../zchat-protocol） |
-| tmux | 可选 | channel-server 不直接依赖，但 zchat 主库 E2E 需要 |
-| asciinema | 可选 | pre-release 录制 |
-| docker | 可选 | 当前无测试依赖 |
+| uv | 必需 | 依赖管理 |
+| Python 3.12+ | 必需 | CS 运行时 |
+| zchat-protocol | 必需 | submodule，提供 irc_encoding + ws_messages |
+| ergo 或外部 IRC server | 必需（运行时）| CS 要连 IRC |
+| lark-oapi ≥1.4 | 必需（运行 feishu_bridge 时）| 飞书 WSS + REST SDK |
+| 飞书 app credential | 必需（运行 bridge 时）| `~/.zchat/projects/<proj>/credentials/<bot>.json` |
+| pytest + pytest-asyncio + pytest-order + pytest-timeout | 必需（测试）| 见 pyproject.toml [test-deps] |
+
+## 关联文档
+
+主库 `docs/guide/` 相关章节：
+- **007-plugin-guide.md** — Plugin 机制 + 6 个官方 plugin 实现剖析 + 外部系统对接示例（Shopify exporter）
+- 001 architecture — 完整三层架构图 + 12 步消息生命周期
+- 003 e2e-pre-release-test — 真机验收 TC（含 CS 部分）
+- 006 routing-config — routing.toml schema（bridge + CS 共用）
+
+CS 自身：
+- `instructions.md` — MCP server Claude Code 默认加载的指令
+- `docs/dev/` — 架构 / IRC 事件 / 测试层（CS repo 自己的）
+- `docs/discuss/` — 设计讨论（CS repo 自己的）
