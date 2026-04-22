@@ -81,6 +81,18 @@ def global_config_path() -> Path:
     return zchat_home() / "config.toml"
 
 
+# REMOVED 2026-04-22: auth_file() accessor.
+#   Returned: zchat_home() / "auth.json"
+#   Reason : 0 production callers — `zchat/cli/auth.py` builds the path inline
+#            via _global_auth_dir() / AUTH_FILE constant, never routed through
+#            this accessor. Only test_paths.py asserted equality with itself.
+#   Restore: when consolidating auth path resolution into paths.py, re-add:
+#       def auth_file() -> Path:
+#           return zchat_home() / "auth.json"
+#   then refactor zchat/cli/auth.py to call paths.auth_file() instead of the
+#   ad-hoc _global_auth_dir() construction.
+
+
 def update_state() -> Path:
     """Update check state file."""
     return zchat_home() / "update.json"
@@ -115,6 +127,18 @@ def project_env_file(name: str) -> Path:
     return project_dir(name) / "claude.local.env"
 
 
+# REMOVED 2026-04-22: project_kdl_config(name) accessor.
+#   Returned: project_dir(name) / "config.kdl"
+#   Reason : 0 callers — both app.py and layout.py build the path inline with
+#            os.path.join(project_dir, "config.kdl"). The per-project Zellij
+#            KDL is currently emitted as part of the layout pipeline, not
+#            referenced through paths.py.
+#   Restore: if consolidating Zellij config path resolution, re-add:
+#       def project_kdl_config(name: str) -> Path:
+#           return project_dir(name) / "config.kdl"
+#   and refactor layout.py / app.py call sites to use it.
+
+
 def ergo_data_dir(name: str) -> Path:
     """Per-project ergo IRC daemon data directory."""
     return project_dir(name) / "ergo"
@@ -144,3 +168,14 @@ def agent_ready_marker(project: str, agent: str) -> Path:
     return project_dir(project) / "agents" / f"{agent}.ready"
 
 
+# REMOVED 2026-04-22: legacy_agent_state() accessor.
+#   Returned: ~/.local/state/zchat/agents.json
+#   Reason : V3-era state location outside ZCHAT_HOME. V4+ moved state under
+#            ZCHAT_HOME/projects/<name>/state.json. Migration path is gone
+#            (see migrate.py removal — V6 load_project_config raises SystemExit
+#            on legacy formats rather than auto-migrating).
+#   Restore: not recommended. If migration support is reintroduced, re-add:
+#       def legacy_agent_state() -> Path:
+#           return Path("~/.local/state/zchat/agents.json").expanduser()
+#   together with a fresh migrate_state_to_v7() routine in a new migrate
+#   module.

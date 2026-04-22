@@ -73,6 +73,25 @@ def render_env(name: str, context: dict) -> dict[str, str]:
     return rendered
 
 
+# REMOVED 2026-04-22: get_start_script(name) helper.
+#   Returned: absolute path to <template_dir>/start.sh (raises FileNotFoundError
+#            if missing).
+#   Reason : 0 callers — agent_manager._spawn_tab builds this path inline with
+#            os.path.join(tpl_dir, "start.sh"). The helper was redundant
+#            indirection.
+#   Restore: when externalizing per-template start command discovery (e.g. if
+#            templates start to declare arbitrary entry scripts via
+#            template.toml), re-introduce as:
+#                def get_start_script(name: str) -> str:
+#                    tpl_dir = resolve_template_dir(name)
+#                    spec = _load_template_toml(tpl_dir).get('entry', 'start.sh')
+#                    script = Path(tpl_dir) / spec
+#                    if not script.is_file():
+#                        raise FileNotFoundError(...)
+#                    return str(script)
+#            and route agent_manager through it.
+
+
 def list_templates() -> list[dict]:
     """List all available templates (user + built-in, deduplicated)."""
     seen = set()

@@ -1,11 +1,33 @@
-"""Runner module: merges global config [runners.X] with template directory assets.
+"""Runner module: template environment rendering for agent startup.
 
-A *runner* is the combination of:
-  - Global config entry ``[runners.<name>]`` (command, args, env overrides)
-  - Template directory files (start.sh, .env.example, soul.md, template.toml)
+Currently exposes only ``render_env`` plus internal helpers
+(``_resolve_template_dir`` / ``_parse_env_file`` / ``_load_template_toml``).
+``agent_manager`` calls these directly when launching an agent.
 
-When the global config has no ``[runners]`` section the module falls back to
-the template_loader behaviour so that existing setups keep working.
+REMOVED 2026-04-22: the public runner-resolution surface — ``resolve_runner()``
+and ``list_runners()`` — together with the ``[runners.<name>]`` global-config
+section those functions consumed.
+
+  Reason : 0 production callers. agent_manager uses ``_resolve_template_dir``
+           directly; ``zchat template list`` uses ``template_loader.list_templates``.
+           ``list_runners`` was never registered as a Typer command. This was a
+           designed-but-never-wired extension point for user-defined runners
+           (e.g. ``[runners.local-llama] command = "ollama"``).
+
+  Restore plan (V7+ if custom-runner support is needed):
+    1. Re-add ``resolve_runner(name, global_config, user_template_dirs)`` —
+       merges ``global_config['runners'][name]`` (command/args/hooks override)
+       on top of the resolved template directory and returns a runner spec
+       dict consumed by agent_manager.
+    2. Re-add ``list_runners(global_config, user_template_dirs)`` — enumerates
+       config-defined + template-discovered + builtin runners.
+    3. Register a Typer subcommand ``zchat runner add/list/remove`` in app.py
+       (Allen never did this step).
+    4. Refactor ``agent_manager._spawn_tab`` to call ``resolve_runner`` instead
+       of ``_resolve_template_dir`` directly so global-config overrides take
+       effect.
+
+  See git blame for ``03ef642 feat: add runner module`` for the original design.
 """
 
 from __future__ import annotations
