@@ -122,7 +122,7 @@ V6 支持：`supervises`（监管他人 channel → squad 卡片 + thread 镜像
 
 ## plugins
 
-**职责**：6 个官方业务 plugin，通过 `BasePlugin` 接口挂入 `PluginRegistry`。全部在 `channel_server.__main__` 初始化时注册。`plugins/` 是 **namespace package**（`extend_path`），支持与根目录 `plugins/` 合并以便部署期第三方 plugin 扩展。业务语义集中在此层：
+**职责**：6 个官方业务 plugin，通过 `BasePlugin` 接口挂入 `PluginRegistry`。V7（2026-04-22）起由 `channel_server.plugin_loader.load_plugins` 在启动时 **config-driven 自动发现 + 签名驱动 DI 注册**，无需在 `__main__` 手动 register。`plugins/` 是 **namespace package**（`extend_path`），loader 额外扫用户目录 `~/.zchat/plugins/` 以支持第三方 plugin 扩展。业务语义集中在此层：
 - `mode` — copilot ↔ takeover 切换
 - `resolve` — 结案命令
 - `sla` — 双 timer 守护（takeover 超时 + help 超时）
