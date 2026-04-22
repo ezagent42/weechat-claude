@@ -92,6 +92,16 @@
       "summary": "bridge↔bridge event 转发 + title 群名 + takeover 释放按钮 + CSAT recall+resend"
     },
     {
+      "id": "eval-doc-013",
+      "type": "eval-doc",
+      "path": ".artifacts/eval-docs/eval-r2-r5-cleanup-013.md",
+      "feature": "r2-r5-deep-cleanup",
+      "status": "resolved",
+      "produces": [],
+      "spec": "docs/discuss/008-v6-finalize-plan.md",
+      "summary": "5 轮 ralph-loop 死代码深度清理，527/0 全绿，~1000 行净减"
+    },
+    {
       "id": "e2e-report-v6-finalize-001",
       "type": "e2e-report",
       "path": ".artifacts/e2e-reports/report-v6-finalize-001.md",
