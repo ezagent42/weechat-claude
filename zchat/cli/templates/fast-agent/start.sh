@@ -34,7 +34,7 @@ if [ -f "$TEMPLATE_DIR/soul.md" ]; then
 fi
 
 # --- Copy skills/ to .claude/skills/ (Claude Code 按 description 自动触发) ---
-mkdir -p .claude
+mkdir -p .claude .remember/logs   # .remember: 消 global remember plugin 的 hook-errors.log 警告
 rm -rf .claude/skills
 if [ -d "$TEMPLATE_DIR/skills" ]; then
   cp -r "$TEMPLATE_DIR/skills" .claude/skills
