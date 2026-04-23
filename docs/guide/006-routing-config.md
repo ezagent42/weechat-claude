@@ -19,7 +19,7 @@
 ## 2. 字段规范（V7 ground truth）
 
 > **V7 起 routing.toml 不再写 `app_id`**。`app_id` 与 `app_secret` 都从 `credential_file` 指向的 JSON 读取。
-> 旧 routing.toml 里残留的 `app_id` 字段会被 CS/bridge 静默忽略，无需手动迁移（升级即可）。
+> 升级时若 routing.toml 里残留 `app_id` 字段，CS/bridge 会**抛 `ValueError` 启动失败**（不是静默忽略），错误信息会指出"删 `app_id = ...` 一行"。手动清理后才能继续。
 
 ```toml
 # ┌──────────────────────────────────────────────────────────────────┐
