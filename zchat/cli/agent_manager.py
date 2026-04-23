@@ -330,7 +330,17 @@ class AgentManager:
 
         Uses dump-screen polling instead of subscribe to avoid leaving
         orphan zellij processes that block the parent from exiting.
+
+        Dedup by screen-content hash (not pattern): Claude Code can show
+        consecutive prompts that share wording (e.g., both --dangerously-skip
+        and --dangerously-load prompts contain "local development"). Dedup
+        by pattern would miss the second one.
         """
+        import hashlib
+
+        def _screen_digest(text: str) -> str:
+            return hashlib.sha1(text.encode("utf-8", "ignore")).hexdigest()
+
         def _watch():
             pane_id = None
             # Wait briefly for tab to be ready
@@ -343,32 +353,41 @@ class AgentManager:
                 return
 
             deadline = time.time() + timeout
-            # Patterns that appear in Claude Code startup prompts
-            # （新版措辞含 "I am using this for local development" / --dangerously-load-... 提示）
+            # Patterns that appear in Claude Code startup prompts (all lowercased)
             confirm_patterns = [
                 "i trust this folder",
                 "local development",
                 "enter to confirm",
                 "development channels",
-                "development-channels",   # --dangerously-load-development-channels 提示
-                "dangerously-load",        # 兜底通用
-                "i am using this",         # 新版 claude 主选项措辞
+                "development-channels",   # --dangerously-load-development-channels
+                "dangerously-load",
+                "dangerously-skip",
+                "i am using this",
+                "press enter to continue",
+                "press enter to accept",
+                "prompt injection risks",  # 新版 load-channels 的警告措辞
             ]
-            confirmed: set[str] = set()
+            last_confirmed_digest: str | None = None
             while time.time() < deadline:
                 screen = zellij.dump_screen(self._session_name, pane_id).lower()
                 if not screen:
                     time.sleep(1)
                     continue
-                for pattern in confirm_patterns:
-                    if pattern in screen and pattern not in confirmed:
-                        zellij.send_keys(self._session_name, pane_id, "Enter")
-                        confirmed.add(pattern)
-                        time.sleep(1)
-                        break
-                # Stop polling once Claude Code is ready (INSERT mode visible)
+                # Stop polling once Claude Code is ready (INSERT mode visible
+                # in status bar — banner like "prompt injection risks" still
+                # counts as pre-ready if no INSERT yet).
                 if "insert" in screen:
                     break
+                digest = _screen_digest(screen[-2000:])   # 屏幕尾部就够，头部滚动无关
+                if digest == last_confirmed_digest:
+                    # Screen hasn't changed since last confirm — waiting for next
+                    time.sleep(1)
+                    continue
+                if any(p in screen for p in confirm_patterns):
+                    zellij.send_keys(self._session_name, pane_id, "Enter")
+                    last_confirmed_digest = digest
+                    time.sleep(1.5)
+                    continue
                 time.sleep(1)
 
         thread = threading.Thread(target=_watch, daemon=True)

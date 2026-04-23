@@ -33,7 +33,7 @@ if [ -f "$TEMPLATE_DIR/soul.md" ]; then
 fi
 
 # --- Claude settings with SessionStart hook ---
-mkdir -p .claude
+mkdir -p .claude .remember/logs   # .remember: 消 global remember plugin 的 hook-errors.log 警告
 READY_PATH="${ZCHAT_PROJECT_DIR}/agents/${AGENT_NAME}.ready"
 
 jq -n \
